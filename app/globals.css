@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f6f5;
+  --surface: #ffffff;
+  --foreground: #17201c;
+  --muted: #68736e;
+  --line: #e3e8e5;
+  --brand: #176b52;
+  --brand-dark: #10523e;
+  --brand-soft: #eaf4ef;
+  --accent: #c9a86a;
+  --sidebar: #13241d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+select,
+label[for] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+a,
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled) {
+  cursor: pointer;
+}
+
+::selection {
+  color: #fff;
+  background: var(--brand);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(23, 107, 82, 0.22);
+  outline-offset: 2px;
+}
+
+.scrollbar-subtle {
+  scrollbar-color: #c9d2cd transparent;
+  scrollbar-width: thin;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: #c9d2cd;
+}
+
+.matrix-grid {
+  background-image:
+    linear-gradient(to right, rgba(92, 111, 101, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(92, 111, 101, 0.12) 1px, transparent 1px);
+  background-size: 25% 25%;
+}
+
+.soft-grid {
+  background-image: radial-gradient(rgba(23, 107, 82, 0.12) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
