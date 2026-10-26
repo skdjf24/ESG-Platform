@@ -1,0 +1,37 @@
+import { notFound } from "next/navigation";
+import { StepFour } from "@/components/workbench/step-four";
+import { StepOne } from "@/components/workbench/step-one";
+import { StepPlaceholder } from "@/components/workbench/step-placeholder";
+import { StepThree } from "@/components/workbench/step-three";
+import { StepTwo } from "@/components/workbench/step-two";
+import { WorkbenchShell } from "@/components/workbench/workbench-shell";
+
+export default async function ReportStepPage({
+  params,
+}: {
+  params: Promise<{ projectId: string; step: string }>;
+}) {
+  const { projectId, step: stepParam } = await params;
+  const step = Number(stepParam);
+
+  if (projectId !== "hualan-2025" || !Number.isInteger(step) || step < 1 || step > 8) {
+    notFound();
+  }
+
+  return (
+    <WorkbenchShell currentStep={step}>
+      {step === 1 ? <StepOne /> : null}
+      {step === 2 ? <StepTwo /> : null}
+      {step === 3 ? <StepThree /> : null}
+      {step === 4 ? <StepFour /> : null}
+      {step >= 5 ? <StepPlaceholder step={step as 5 | 6 | 7 | 8} /> : null}
+    </WorkbenchShell>
+  );
+}
+
+export function generateStaticParams() {
+  return Array.from({ length: 8 }, (_, index) => ({
+    projectId: "hualan-2025",
+    step: String(index + 1),
+  }));
+}
