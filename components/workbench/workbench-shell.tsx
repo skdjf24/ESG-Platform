@@ -13,10 +13,17 @@ import {
   X,
 } from "lucide-react";
 import { BrandMark } from "@/components/ui/brand-mark";
+import { useProjectData } from "@/components/project/project-data-provider";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { enterprise, reportProject, reportSteps } from "@/lib/data/mock-data";
+import { reportSteps } from "@/lib/data/mock-data";
 
 function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNavigate?: () => void }) {
+  const { project, dirty, saveProject } = useProjectData();
+  const shortLabel = project.enterprise.shortName.slice(0, 2).toUpperCase();
+  const handleNavigate = () => {
+    if (dirty && currentStep <= 5) void saveProject(currentStep as 1 | 2 | 3 | 4 | 5, "步骤切换自动保存");
+    onNavigate?.();
+  };
   return (
     <>
       <div className="flex h-[68px] items-center border-b border-white/10 px-5">
@@ -27,15 +34,15 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
           <ChevronLeft className="size-3.5" />返回项目首页
         </Link>
         <div className="flex items-start gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold text-emerald-100">HL</div>
+          <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold text-emerald-100">{shortLabel}</div>
           <div className="min-w-0">
-            <div className="truncate text-xs font-semibold text-white">华澜新材料</div>
-            <div className="mt-1 truncate text-[10px] text-white/45">2025 年度 ESG 报告</div>
+            <div className="truncate text-xs font-semibold text-white">{project.enterprise.shortName}</div>
+            <div className="mt-1 truncate text-[10px] text-white/45">{project.report.year} 年度 ESG 报告</div>
           </div>
         </div>
         <div className="mt-4">
-          <div className="mb-2 flex justify-between text-[10px] text-white/50"><span>编制进度</span><span>{reportProject.progress}%</span></div>
-          <ProgressBar value={reportProject.progress} className="bg-white/10 [&>div]:bg-[#62c39d]" />
+          <div className="mb-2 flex justify-between text-[10px] text-white/50"><span>编制进度</span><span>{project.report.progress}%</span></div>
+          <ProgressBar value={project.report.progress} className="bg-white/10 [&>div]:bg-[#62c39d]" />
         </div>
       </div>
 
@@ -48,8 +55,8 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
             return (
               <li key={step.number}>
                 <Link
-                  onClick={onNavigate}
-                  href={`/reports/${reportProject.id}/step/${step.number}`}
+                  onClick={handleNavigate}
+                  href={`/reports/${project.projectId}/step/${step.number}`}
                   className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${active ? "bg-white/11 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.08)]" : "text-white/58 hover:bg-white/[0.06] hover:text-white/85"}`}
                 >
                   {active ? <span className="absolute -left-3 top-2.5 h-8 w-[3px] rounded-r-full bg-[#6fd5ab]" /> : null}
@@ -70,7 +77,7 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
       <div className="border-t border-white/10 p-4">
         <div className="rounded-xl bg-white/[0.05] p-3">
           <div className="flex items-center gap-2 text-[11px] font-medium text-white/75"><FileText className="size-3.5 text-emerald-200" />项目信息</div>
-          <div className="mt-2 text-[10px] leading-4 text-white/40">报告期：2025.01.01—12.31<br />负责人：{reportProject.owner}</div>
+          <div className="mt-2 text-[10px] leading-4 text-white/40">报告期：{project.report.reportingPeriod.start.replaceAll("-", ".")}—{project.report.reportingPeriod.end.slice(5).replaceAll("-", ".")}<br />负责人：{project.report.owner}</div>
         </div>
       </div>
     </>
@@ -79,6 +86,7 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
 
 export function WorkbenchShell({ currentStep, children }: { currentStep: number; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { project, dirty, saving } = useProjectData();
   const current = reportSteps.find((step) => step.number === currentStep) ?? reportSteps[0];
 
   return (
@@ -103,13 +111,13 @@ export function WorkbenchShell({ currentStep, children }: { currentStep: number;
             <button onClick={() => setMobileOpen(true)} className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#e1e6e3] text-[#4f5e56] lg:hidden" aria-label="打开步骤导航"><Menu className="size-[18px]" /></button>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[10px] text-[#8a938e]">
-                <span className="hidden sm:inline">{enterprise.shortName} 2025 ESG 报告</span><span className="hidden sm:inline">/</span><span>Step {currentStep}</span>
+                <span className="hidden sm:inline">{project.enterprise.shortName} {project.report.year} ESG 报告</span><span className="hidden sm:inline">/</span><span>Step {currentStep}</span>
               </div>
               <div className="mt-0.5 truncate text-xs font-semibold text-[#26332c] sm:text-sm">{current.title}</div>
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
-            <div className="mr-1 hidden items-center gap-1.5 text-[10px] text-[#83908a] sm:flex"><Check className="size-3 text-[#2b8a65]" />{currentStep === 5 ? '浏览器本地编制' : '已保存 14:32'}</div>
+            <div className="mr-1 hidden items-center gap-1.5 text-[10px] text-[#83908a] sm:flex"><Check className="size-3 text-[#2b8a65]" />{saving ? "正在保存…" : dirty ? "有未保存更改" : project.lastSavedAt ? "项目数据已保存" : "本地项目草稿"}</div>
             <button className="hidden size-9 place-items-center rounded-lg text-[#65716b] hover:bg-[#f1f4f2] sm:grid" aria-label="帮助"><CircleHelp className="size-[17px]" /></button>
             <button className="relative grid size-9 place-items-center rounded-lg text-[#65716b] hover:bg-[#f1f4f2]" aria-label="通知"><Bell className="size-[17px]" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-amber-500 ring-2 ring-white" /></button>
             <button className="ml-1 flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 hover:bg-[#f3f5f4]">

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ProjectDataProvider } from "@/components/project/project-data-provider";
 import { StepFour } from "@/components/workbench/step-four";
 import { StepFive } from "@/components/workbench/step-five";
 import { StepOne } from "@/components/workbench/step-one";
@@ -20,14 +21,16 @@ export default async function ReportStepPage({
   }
 
   return (
-    <WorkbenchShell currentStep={step}>
-      {step === 1 ? <StepOne /> : null}
-      {step === 2 ? <StepTwo /> : null}
-      {step === 3 ? <StepThree /> : null}
-      {step === 4 ? <StepFour /> : null}
-      {step === 5 ? <StepFive /> : null}
-      {step >= 6 ? <StepPlaceholder step={step as 6 | 7 | 8} /> : null}
-    </WorkbenchShell>
+    <ProjectDataProvider projectId={projectId}>
+      <WorkbenchShell currentStep={step}>
+        {step === 1 ? <StepOne /> : null}
+        {step === 2 ? <StepTwo /> : null}
+        {step === 3 ? <StepThree /> : null}
+        {step === 4 ? <StepFour /> : null}
+        {step === 5 ? <StepFive /> : null}
+        {step >= 6 ? <StepPlaceholder step={step as 6 | 7 | 8} /> : null}
+      </WorkbenchShell>
+    </ProjectDataProvider>
   );
 }
 

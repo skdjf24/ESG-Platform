@@ -16,8 +16,8 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { esgTopics } from "@/lib/data/mock-data";
 import type { EsgCategory } from "@/lib/types/esg";
+import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -45,27 +45,35 @@ const methodOptions: Array<{
 ];
 
 export function StepTwo() {
+  const { project, editProject } = useProjectData();
+  const topics = project.topics;
   const [filter, setFilter] = useState<Filter>("全部");
   const [query, setQuery] = useState("");
-  const [method, setMethod] = useState<Method>("综合评估");
-  const [includedIds, setIncludedIds] = useState(() => new Set(esgTopics.map((topic) => topic.id)));
-  const [confirmed, setConfirmed] = useState(true);
+  const method = project.materiality.method;
+  const includedIds = new Set(project.materiality.includedTopicIds);
+  const confirmed = project.materiality.confirmed;
 
   const filteredTopics = useMemo(
-    () => esgTopics.filter((topic) => (filter === "全部" || topic.category === filter) && topic.name.includes(query.trim())),
-    [filter, query],
+    () => topics.filter((topic) => (filter === "全部" || topic.category === filter) && topic.name.includes(query.trim())),
+    [filter, query, topics],
   );
-  const assessedTopics = esgTopics.filter((topic) => includedIds.has(topic.id));
+  const assessedTopics = topics.filter((topic) => includedIds.has(topic.id));
   const priorityTopics = assessedTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3);
 
   function toggleTopic(id: string) {
-    setIncludedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    setConfirmed(false);
+    const topic = topics.find((item) => item.id === id);
+    const removing = includedIds.has(id);
+    const affected = topic ? project.disclosureRequirements.filter((item) => item.topic === topic.name).length : 0;
+    if (removing && affected && !window.confirm(`调整“${topic?.name}”将使 ${affected} 项披露要求进入待复核状态，已有正文不会被删除。是否继续？`)) return;
+    editProject((current) => ({
+      ...current,
+      materiality: {
+        ...current.materiality,
+        includedTopicIds: removing ? current.materiality.includedTopicIds.filter((item) => item !== id) : [...current.materiality.includedTopicIds, id],
+        confirmed: false,
+        confirmedAt: undefined,
+      },
+    }));
   }
 
   return (
@@ -121,7 +129,7 @@ export function StepTwo() {
                   onClick={() => setFilter(item)}
                   className={`h-8 rounded-lg px-3 text-[11px] font-semibold transition ${filter === item ? "bg-[#183d30] text-white" : "bg-[#f3f6f4] text-[#647169] hover:bg-[#e9eeeb]"}`}
                 >
-                  {item === "全部" ? `全部 ${esgTopics.length}` : `${item} ${esgTopics.filter((topic) => topic.category === item).length}`}
+                  {item === "全部" ? `全部 ${topics.length}` : `${item} ${topics.filter((topic) => topic.category === item).length}`}
                 </button>
               ))}
             </div>
@@ -166,7 +174,7 @@ export function StepTwo() {
               return (
                 <button
                   key={option.name}
-                  onClick={() => setMethod(option.name)}
+                  onClick={() => editProject((current) => ({ ...current, materiality: { ...current.materiality, method: option.name, confirmed: false, confirmedAt: undefined } }))}
                   className={`w-full rounded-xl border p-3.5 text-left transition ${active ? "border-[#73a48f] bg-[#f0f7f4] shadow-[0_0_0_2px_rgba(23,107,82,.05)]" : "border-[#e2e7e4] bg-white hover:border-[#b9c9c1]"}`}
                 >
                   <div className="flex items-start gap-3">
@@ -278,11 +286,11 @@ export function StepTwo() {
             <p className="mt-1">排序基于已录入评分，仅供整理参考，不代表系统自动作出重要性判断。</p>
           </div>
           <label className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#e2e7e4] p-3 text-[10px] leading-5 text-[#59675f]">
-            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-1 size-3.5 accent-[#176b52]" />
+            <input type="checkbox" checked={confirmed} onChange={(event) => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: event.target.checked, confirmedAt: event.target.checked ? new Date().toISOString() : undefined } }))} className="mt-1 size-3.5 accent-[#176b52]" />
             <span>我已复核评估依据与评分，并确认上述重要性评估结果。</span>
           </label>
           <button
-            onClick={() => setConfirmed(true)}
+            onClick={() => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: true, confirmedAt: new Date().toISOString() } }))}
             className={`mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${confirmed ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-[#176b52] text-white hover:bg-[#105c46]"}`}
           >
             {confirmed ? <><CheckCircle2 className="size-4" />已由用户确认</> : <><ClipboardCheck className="size-4" />确认评估结果</>}

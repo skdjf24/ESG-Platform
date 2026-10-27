@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Building2,
   CalendarDays,
@@ -17,8 +16,9 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { enterprise, esgTopics, frameworks, historicalReports, reportProject } from "@/lib/data/mock-data";
+import { frameworks } from "@/lib/data/mock-data";
 import type { EsgCategory, ListingStatus } from "@/lib/types/esg";
+import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -34,13 +34,22 @@ const categoryMeta: Record<EsgCategory, { label: string; className: string }> = 
 };
 
 export function StepOne() {
-  const [listingStatus, setListingStatus] = useState<ListingStatus>(enterprise.listingStatus);
-  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>(reportProject.frameworks);
-  const [topics, setTopics] = useState(esgTopics);
+  const { project, editProject, saveProject, dirty, saving } = useProjectData();
+  const { enterprise, report, topics, boundary } = project;
+  const listingStatus = enterprise.listingStatus;
+  const selectedFrameworks = report.frameworks;
 
   const toggleFramework = (framework: string) => {
-    setSelectedFrameworks((current) => current.includes(framework) ? current.filter((item) => item !== framework) : [...current, framework]);
+    editProject((current) => ({ ...current, report: { ...current.report, frameworks: current.report.frameworks.includes(framework) ? current.report.frameworks.filter((item) => item !== framework) : [...current.report.frameworks, framework] } }));
   };
+
+  function removeTopic(topicId: string) {
+    const topic = topics.find((item) => item.id === topicId);
+    if (!topic) return;
+    const affected = project.disclosureRequirements.filter((item) => item.topic === topic.name).length;
+    if (affected && !window.confirm(`移除“${topic.name}”将影响 ${affected} 项披露要求。已有正文和映射不会删除，但会标记为待复核。是否继续？`)) return;
+    editProject((current) => ({ ...current, topics: current.topics.filter((item) => item.id !== topicId) }));
+  }
 
   return (
     <div className="animate-fade-up">
@@ -49,7 +58,7 @@ export function StepOne() {
         title="创建报告与企业基础画像"
         description="确认本年度报告的企业信息、编制边界与参考框架，并建立可继续调整的初始 ESG 议题池。"
         completed
-        action={<button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#506057] hover:bg-[#f7f9f8]"><FileCheck2 className="size-4 text-[#176b52]" />基础信息已保存</button>}
+        action={<button disabled={saving} onClick={() => void saveProject(1, "Step 1 基础信息保存")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#506057] hover:bg-[#f7f9f8] disabled:opacity-50"><FileCheck2 className="size-4 text-[#176b52]" />{saving ? "保存中…" : dirty ? "保存基础信息" : "基础信息已保存"}</button>}
       />
 
       <Notice tone="warning" title="披露义务由企业自行确认">
@@ -60,12 +69,12 @@ export function StepOne() {
         <div className="space-y-5">
           <SectionCard title="企业基本信息" description="用于报告抬头、披露范围及后续章节引用。">
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="企业全称" icon={<Building2 className="size-3.5" />}><input className={fieldClass} defaultValue={enterprise.name} /></Field>
-              <Field label="统一社会信用代码"><input className={fieldClass} defaultValue={enterprise.unifiedSocialCreditCode} /></Field>
-              <Field label="总部所在地" icon={<MapPin className="size-3.5" />}><input className={fieldClass} defaultValue={enterprise.headquarters} /></Field>
-              <Field label="员工人数" icon={<Users className="size-3.5" />}><div className="relative"><input className={`${fieldClass} pr-12`} type="number" defaultValue={enterprise.employeeCount} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8b9590]">人</span></div></Field>
-              <Field label="报告期" icon={<CalendarDays className="size-3.5" />}><div className="flex items-center gap-2"><input className={fieldClass} defaultValue="2025-01-01" /><span className="text-[#a0aaa4]">—</span><input className={fieldClass} defaultValue="2025-12-31" /></div></Field>
-              <Field label="报告联系人"><div className="grid grid-cols-[.8fr_1.2fr] gap-2"><input className={fieldClass} defaultValue={enterprise.reportingContact.name} /><input className={fieldClass} defaultValue={enterprise.reportingContact.department} /></div></Field>
+              <Field label="企业全称" icon={<Building2 className="size-3.5" />}><input aria-label="企业全称" className={fieldClass} value={enterprise.name} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, name: event.target.value } }))} /></Field>
+              <Field label="统一社会信用代码"><input aria-label="统一社会信用代码" className={fieldClass} value={enterprise.unifiedSocialCreditCode} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, unifiedSocialCreditCode: event.target.value } }))} /></Field>
+              <Field label="总部所在地" icon={<MapPin className="size-3.5" />}><input aria-label="总部所在地" className={fieldClass} value={enterprise.headquarters} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, headquarters: event.target.value } }))} /></Field>
+              <Field label="员工人数" icon={<Users className="size-3.5" />}><div className="relative"><input aria-label="员工人数" className={`${fieldClass} pr-12`} type="number" value={enterprise.employeeCount} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, employeeCount: Number(event.target.value) || 0 } }))} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8b9590]">人</span></div></Field>
+              <Field label="报告年度与报告期" icon={<CalendarDays className="size-3.5" />}><div className="grid grid-cols-[90px_1fr_12px_1fr] items-center gap-2"><input aria-label="报告年度" className={fieldClass} type="number" value={report.year} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, year: Number(event.target.value) || current.report.year } }))} /><input aria-label="报告期开始" className={fieldClass} value={report.reportingPeriod.start} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, start: event.target.value } } }))} /><span className="text-[#a0aaa4]">—</span><input aria-label="报告期结束" className={fieldClass} value={report.reportingPeriod.end} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, end: event.target.value } } }))} /></div></Field>
+              <Field label="报告联系人"><div className="grid grid-cols-[.8fr_1.2fr] gap-2"><input aria-label="报告联系人姓名" className={fieldClass} value={enterprise.reportingContact.name} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, reportingContact: { ...current.enterprise.reportingContact, name: event.target.value } } }))} /><input aria-label="报告联系人部门" className={fieldClass} value={enterprise.reportingContact.department} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, reportingContact: { ...current.enterprise.reportingContact, department: event.target.value } } }))} /></div></Field>
             </div>
           </SectionCard>
 
@@ -81,7 +90,7 @@ export function StepOne() {
               <Field label="资本市场身份">
                 <div className="grid grid-cols-4 gap-2">
                   {listingOptions.map((item) => (
-                    <button key={item} type="button" onClick={() => setListingStatus(item)} className={`h-10 rounded-lg border text-xs font-semibold transition ${listingStatus === item ? "border-[#176b52] bg-[#eef6f2] text-[#176b52] ring-1 ring-[#176b52]/10" : "border-[#dfe5e1] bg-white text-[#68746e] hover:border-[#b9c9c1]"}`}>
+                    <button key={item} type="button" onClick={() => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, listingStatus: item as ListingStatus } }))} className={`h-10 rounded-lg border text-xs font-semibold transition ${listingStatus === item ? "border-[#176b52] bg-[#eef6f2] text-[#176b52] ring-1 ring-[#176b52]/10" : "border-[#dfe5e1] bg-white text-[#68746e] hover:border-[#b9c9c1]"}`}>
                       {item}
                     </button>
                   ))}
@@ -118,7 +127,7 @@ export function StepOne() {
                     {topics.filter((topic) => topic.category === category).map((topic) => (
                       <span key={topic.id} className="inline-flex items-center gap-2 rounded-lg border border-[#e0e6e2] bg-[#fafcfb] px-3 py-2 text-xs font-medium text-[#405047]">
                         {topic.name}<span className="text-[9px] font-normal text-[#98a19c]">{topic.origin}</span>
-                        <button aria-label={`移除${topic.name}`} onClick={() => setTopics((current) => current.filter((item) => item.id !== topic.id))} className="text-[#a5aea9] hover:text-rose-500"><X className="size-3" /></button>
+                        <button aria-label={`移除${topic.name}`} onClick={() => removeTopic(topic.id)} className="text-[#a5aea9] hover:text-rose-500"><X className="size-3" /></button>
                       </span>
                     ))}
                   </div>
@@ -131,21 +140,16 @@ export function StepOne() {
         <div className="space-y-5">
           <SectionCard title="报告边界" description="勾选本年度纳入披露的组织范围。">
             <div className="space-y-3">
-              {[
-                { name: "集团总部", detail: "华澜新材料总部", checked: true },
-                { name: "境内控股子公司", detail: "12 家生产及经营主体", checked: true },
-                { name: "境外控股子公司", detail: "2 家海外经营主体", checked: true },
-                { name: "参股公司", detail: "按重大影响程度选择", checked: false },
-              ].map((item) => (
+              {boundary.items.map((item) => (
                 <label key={item.name} className="flex items-start gap-3 rounded-xl border border-[#e1e6e3] p-3.5 hover:bg-[#fafcfb]">
-                  <input type="checkbox" defaultChecked={item.checked} className="mt-0.5 size-4 accent-[#176b52]" />
+                  <input type="checkbox" checked={item.included} onChange={(event) => editProject((current) => ({ ...current, boundary: { ...current.boundary, items: current.boundary.items.map((entry) => entry.id === item.id ? { ...entry, included: event.target.checked } : entry) } }))} className="mt-0.5 size-4 accent-[#176b52]" />
                   <span><span className="block text-xs font-semibold text-[#35443c]">{item.name}</span><span className="mt-1 block text-[10px] text-[#8b9590]">{item.detail}</span></span>
                 </label>
               ))}
             </div>
             <div className="mt-4">
               <label htmlFor="boundary-note" className="mb-2 block text-[11px] font-semibold text-[#56635c]">边界说明</label>
-              <textarea id="boundary-note" defaultValue="覆盖华澜新材料总部及财务并表范围内的控股子公司；如无特别说明，环境与社会绩效数据均按此边界统计。" className="min-h-24 w-full resize-none rounded-lg border border-[#dce3df] p-3 text-xs leading-5 outline-none focus:border-[#69a28b]" />
+              <textarea id="boundary-note" value={boundary.note} onChange={(event) => editProject((current) => ({ ...current, boundary: { ...current.boundary, note: event.target.value } }))} className="min-h-24 w-full resize-none rounded-lg border border-[#dce3df] p-3 text-xs leading-5 outline-none focus:border-[#69a28b]" />
             </div>
           </SectionCard>
 
@@ -157,7 +161,7 @@ export function StepOne() {
               <span className="mt-2 rounded-full bg-violet-50 px-2 py-1 text-[9px] font-semibold text-violet-700">模拟上传</span>
             </button>
             <div className="mt-4 space-y-2">
-              {historicalReports.map((report) => (
+              {project.sources.map((report) => (
                 <div key={report.id} className="flex items-center gap-3 rounded-xl border border-[#e3e8e5] p-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600"><FileText className="size-4" /></span>
                   <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#38463e]">{report.name}</div><div className="mt-1 text-[9px] text-[#929c97]">{report.size} · {report.uploadedAt}</div></div>

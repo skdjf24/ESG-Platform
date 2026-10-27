@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BookOpen, Check, CheckCircle2, ChevronRight, ClipboardList, Database, ExternalLink, FileText, Link2, PanelRightClose, Plus, RefreshCw, Search, ShieldCheck, Unlink, X } from "lucide-react";
-import { disclosureRequirements, reportSections } from "@/lib/data/mock-data";
+import { useProjectData } from "@/components/project/project-data-provider";
 import type { SourceReference } from "@/lib/types/esg";
 import type { ContentBlock, CoverageStatus, WritingChapter, WritingFact, WritingResource } from "@/lib/types/writing";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -27,6 +27,9 @@ function uniqueReferences(references: SourceReference[]) {
 }
 
 export function ResourcePanel({ chapter, block, facts, resources, onBlockChange, onFactChange, onResourceChange, onFocusBlock, onClose }: ResourcePanelProps) {
+  const { project } = useProjectData();
+  const disclosureRequirements = project.disclosureRequirements;
+  const reportSections = project.reportSections;
   const [tab, setTab] = useState<Tab>("facts");
   const [allFacts, setAllFacts] = useState(false);
   const [allRequirements, setAllRequirements] = useState(false);

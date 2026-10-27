@@ -203,13 +203,14 @@ function isBlock(value: unknown): value is ContentBlock {
 function isChapter(value: unknown): value is WritingChapter {
   return isRecord(value) && ['id', 'title', 'order'].every((key) => isString(value[key]))
     && (value.parentId === undefined || isString(value.parentId)) && isRevision(value.revision)
+    && (value.sourceState === undefined || ['active', 'upstream-removed'].includes(String(value.sourceState)))
     && chapterStates.includes(String(value.status)) && reviewStates.includes(String(value.reviewStatus))
     && Array.isArray(value.blocks) && value.blocks.every((block) => isBlock(block) && block.chapterId === value.id)
     && new Set(value.blocks.map((block) => block.id)).size === value.blocks.length;
 }
 
-export function validateWritingDocument(value: unknown): value is WritingDocument {
-  if (!isRecord(value) || value.schemaVersion !== 1 || value.projectId !== reportProject.id) return false;
+export function validateWritingDocument(value: unknown, expectedProjectId = reportProject.id): value is WritingDocument {
+  if (!isRecord(value) || value.schemaVersion !== 1 || value.projectId !== expectedProjectId) return false;
   if (!Array.isArray(value.chapters) || !value.chapters.length || !value.chapters.every(isChapter)) return false;
   if (new Set(value.chapters.map((chapter) => chapter.id)).size !== value.chapters.length) return false;
   if (!Array.isArray(value.facts) || !value.facts.every((fact) => isRecord(fact)
@@ -217,6 +218,7 @@ export function validateWritingDocument(value: unknown): value is WritingDocumen
     && (fact.unit === undefined || isString(fact.unit)) && (fact.confirmedBy === undefined || isString(fact.confirmedBy))
     && ['已确认', '待人工确认'].includes(String(fact.state)) && isRevision(fact.revision)
     && ['当年事实', '历史事实', '未来计划'].includes(String(fact.temporalType))
+    && (fact.sourceState === undefined || ['active', 'upstream-removed'].includes(String(fact.sourceState)))
     && Array.isArray(fact.sourceReferences) && fact.sourceReferences.every(isSource))) return false;
   if (new Set(value.facts.map((fact) => fact.id)).size !== value.facts.length) return false;
   if (!Array.isArray(value.resources) || !value.resources.every((resource) => isRecord(resource)
@@ -235,7 +237,7 @@ export function validateWritingDocument(value: unknown): value is WritingDocumen
     && isRevision(version.number) && isChapter(version.snapshot) && version.snapshot.id === version.chapterId);
 }
 
-export function parseStoredDocument(raw: string): WritingDocument | null {
+export function parseStoredDocument(raw: string, expectedProjectId = reportProject.id): WritingDocument | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     // Early Step 5 previews did not persist resource confirmations. Add the
@@ -243,7 +245,7 @@ export function parseStoredDocument(raw: string): WritingDocument | null {
     const value: unknown = isRecord(parsed) && parsed.schemaVersion === 1 && parsed.resources === undefined
       ? { ...parsed, resources: createWritingResources() }
       : parsed;
-    if (!validateWritingDocument(value)) return null;
+    if (!validateWritingDocument(value, expectedProjectId)) return null;
     const sanitizeChapter = (chapter: WritingChapter): WritingChapter => ({ ...chapter, blocks: chapter.blocks.map((block) => ({ ...block, html: sanitizeHtml(block.html) })) });
     return reconcileCitations({ ...value, chapters: value.chapters.map(sanitizeChapter), versions: value.versions.map((version) => ({ ...version, snapshot: sanitizeChapter(version.snapshot) })) });
   } catch { return null; }

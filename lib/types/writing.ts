@@ -16,10 +16,11 @@ export interface ContentBlock {
 export interface WritingChapter {
   id: string; title: string; order: string; parentId?: string;
   status: ChapterStatus; reviewStatus: ReviewStatus; revision: number;
-  blocks: ContentBlock[];
+  blocks: ContentBlock[]; sourceState?: 'active' | 'upstream-removed';
 }
 export interface WritingFact extends EnterpriseFact {
   revision: number; temporalType: '当年事实' | '历史事实' | '未来计划';
+  sourceState?: 'active' | 'upstream-removed';
 }
 export interface WritingResource {
   id: string; chapterIds: string[]; kind: '案例' | '制度' | '历史资料';

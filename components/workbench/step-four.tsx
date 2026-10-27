@@ -25,11 +25,10 @@ import {
 } from "lucide-react";
 import {
   aiNormalizationResults,
-  dataRequirements,
   departments,
-  enterpriseFacts,
 } from "@/lib/data/mock-data";
 import type { CollectionState } from "@/lib/types/esg";
+import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -47,26 +46,49 @@ const statusTone: Record<CollectionState, "green" | "blue" | "amber" | "gray"> =
   已确认: "green",
 };
 
-const tabs: Array<{ id: Tab; label: string; count: number }> = [
-  { id: "tasks", label: "资料任务", count: dataRequirements.length },
-  { id: "normalize", label: "规整与确认", count: aiNormalizationResults.length },
-  { id: "facts", label: "企业事实库", count: enterpriseFacts.length },
-];
-
 export function StepFour() {
+  const { project, editProject } = useProjectData();
+  const dataRequirements = project.dataRequirements;
+  const enterpriseFacts = project.facts;
+  const energyFact = enterpriseFacts.find((fact) => fact.id === "fact-energy-2025");
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
   const [query, setQuery] = useState("");
-  const [reviewConfirmed, setReviewConfirmed] = useState(false);
-  const [openFact, setOpenFact] = useState<string | null>(enterpriseFacts[0]?.id ?? null);
-  const [owners, setOwners] = useState<Record<string, string>>(
-    Object.fromEntries(dataRequirements.map((item) => [item.id, item.responsibleDepartment])),
-  );
+  const [openFact, setOpenFact] = useState<string | null>("fact-energy-2025");
+  const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string }>>({});
+  const reviewConfirmed = energyFact?.state === "已确认";
+  const tabs: Array<{ id: Tab; label: string; count: number }> = [
+    { id: "tasks", label: "资料任务", count: dataRequirements.length },
+    { id: "normalize", label: "规整与确认", count: aiNormalizationResults.length },
+    { id: "facts", label: "企业事实库", count: enterpriseFacts.length },
+  ];
 
   const visibleRequirements = useMemo(
-    () => dataRequirements.filter((item) => `${item.itemName}${item.section}${owners[item.id]}`.includes(query.trim())),
-    [owners, query],
+    () => dataRequirements.filter((item) => `${item.itemName}${item.section}${item.responsibleDepartment}`.includes(query.trim())),
+    [dataRequirements, query],
   );
+
+  function updateFactDraft(id: string, fact: { value: string; unit?: string; period: string }, patch: Partial<{ value: string; unit: string; period: string }>) {
+    setFactDrafts((current) => {
+      const base = current[id] ?? { value: fact.value, unit: fact.unit ?? "", period: fact.period };
+      return { ...current, [id]: { ...base, ...patch } };
+    });
+  }
+
+  function applyFactDraft(id: string) {
+    const fact = enterpriseFacts.find((item) => item.id === id);
+    const draft = factDrafts[id];
+    if (!fact || !draft) return;
+    const affected = project.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.citations.some((citation) => citation.factId === id))).length;
+    if (affected && !window.confirm(`该指标已被 ${affected} 个正文块引用。更新后正文不会自动改写，但会标记为待更新。是否继续？`)) return;
+    editProject((current) => ({ ...current, facts: current.facts.map((item) => item.id === id ? { ...item, ...draft, state: "待人工确认", confirmedBy: undefined } : item) }));
+    setFactDrafts((current) => { const next = { ...current }; delete next[id]; return next; });
+  }
+
+  function setEnergyConfirmation(confirmed: boolean) {
+    if (!energyFact) return;
+    editProject((current) => ({ ...current, facts: current.facts.map((fact) => fact.id === energyFact.id ? { ...fact, state: confirmed ? "已确认" : "待人工确认", confirmedBy: confirmed ? "当前用户" : undefined } : fact) }));
+  }
 
   return (
     <>
@@ -94,10 +116,10 @@ export function StepFour() {
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "年度资料", value: "5", note: "来自已确认资料清单", icon: FileText, color: "text-[#176b52] bg-[#eaf4ef]" },
-          { label: "待分工", value: "1", note: "需指定责任部门", icon: UserRoundPen, color: "text-amber-700 bg-amber-50" },
-          { label: "收集中", value: "2", note: "文件与在线补充", icon: CalendarClock, color: "text-blue-700 bg-blue-50" },
-          { label: "已入事实库", value: "28", note: "均保留来源关联", icon: Database, color: "text-violet-700 bg-violet-50" },
+          { label: "年度资料", value: String(dataRequirements.length), note: "来自 Step 3 已保存资料清单", icon: FileText, color: "text-[#176b52] bg-[#eaf4ef]" },
+          { label: "待分工", value: String(dataRequirements.filter((item) => item.state === "待分工").length), note: "需指定责任部门", icon: UserRoundPen, color: "text-amber-700 bg-amber-50" },
+          { label: "收集中", value: String(dataRequirements.filter((item) => item.state === "收集中" || item.state === "待收集").length), note: "文件与在线补充", icon: CalendarClock, color: "text-blue-700 bg-blue-50" },
+          { label: "已入事实库", value: String(enterpriseFacts.filter((fact) => fact.state === "已确认").length), note: "均保留来源关联", icon: Database, color: "text-violet-700 bg-violet-50" },
         ].map((stat) => (
           <div key={stat.label} className="flex items-center justify-between rounded-2xl border border-[#e1e7e3] bg-white p-4">
             <div>
@@ -161,7 +183,7 @@ export function StepFour() {
                 </thead>
                 <tbody className="divide-y divide-[#edf0ee]">
                   {visibleRequirements.map((item) => {
-                    const wasAdjusted = owners[item.id] !== item.suggestedDepartment;
+                    const wasAdjusted = item.responsibleDepartment !== item.suggestedDepartment;
                     return (
                       <tr key={item.id} className="group bg-white transition hover:bg-[#fbfcfb]">
                         <td className="px-5 py-4 align-top">
@@ -181,8 +203,8 @@ export function StepFour() {
                             <Building2 className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-[#87928c]" />
                             <select
                               aria-label={`${item.itemName}责任部门`}
-                              value={owners[item.id]}
-                              onChange={(event) => setOwners((current) => ({ ...current, [item.id]: event.target.value }))}
+                              value={item.responsibleDepartment}
+                              onChange={(event) => editProject((current) => ({ ...current, dataRequirements: current.dataRequirements.map((requirement) => requirement.id === item.id ? { ...requirement, responsibleDepartment: event.target.value, adjustedByUser: event.target.value !== requirement.suggestedDepartment, reviewStatus: "有效" } : requirement) }))}
                               className="h-8 w-full appearance-none rounded-lg border border-[#dfe5e2] bg-white pl-8 pr-7 text-[10px] font-medium text-[#4c5952] outline-none focus:border-[#78a28f]"
                             >
                               {departments.map((department) => <option key={department}>{department}</option>)}
@@ -284,8 +306,8 @@ export function StepFour() {
             </div>
 
             <div className="mt-4 flex flex-col-reverse justify-end gap-2 sm:flex-row">
-              <button onClick={() => setReviewConfirmed(false)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#dce3df] px-3.5 text-[11px] font-semibold text-[#59665f] hover:bg-[#f7f9f8]"><RotateCcw className="size-3.5" />退回调整</button>
-              <button onClick={() => setReviewConfirmed(true)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#176b52] px-3.5 text-[11px] font-semibold text-white hover:bg-[#105c46]"><Check className="size-3.5" />人工确认并模拟入库</button>
+              <button onClick={() => setEnergyConfirmation(false)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#dce3df] px-3.5 text-[11px] font-semibold text-[#59665f] hover:bg-[#f7f9f8]"><RotateCcw className="size-3.5" />退回调整</button>
+              <button onClick={() => setEnergyConfirmation(true)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#176b52] px-3.5 text-[11px] font-semibold text-white hover:bg-[#105c46]"><Check className="size-3.5" />人工确认并模拟入库</button>
             </div>
           </SectionCard>
         </div>
@@ -339,6 +361,15 @@ export function StepFour() {
                               </div>
                             </div>
                           ))}
+                        </div>
+                        <div className="mt-4 rounded-xl border border-[#dfe5e2] bg-white p-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-semibold text-[#4c5d53]">更新事实值</p><p className="mt-1 text-[9px] text-[#8a958f]">保存项目后自动增加事实修订号；已引用正文仅标记待更新，不自动改写。</p></div><StatusBadge tone="gray">当前 v{fact.revision}</StatusBadge></div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_110px_150px_auto]">
+                            <input aria-label={`${fact.name}数值`} value={factDrafts[fact.id]?.value ?? fact.value} onChange={(event) => updateFactDraft(fact.id, fact, { value: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <input aria-label={`${fact.name}单位`} value={factDrafts[fact.id]?.unit ?? fact.unit ?? ""} onChange={(event) => updateFactDraft(fact.id, fact, { unit: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <input aria-label={`${fact.name}报告期`} value={factDrafts[fact.id]?.period ?? fact.period} onChange={(event) => updateFactDraft(fact.id, fact, { period: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <button disabled={!factDrafts[fact.id]} onClick={() => applyFactDraft(fact.id)} className="h-9 rounded-lg bg-[#176b52] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">应用更新</button>
+                          </div>
                         </div>
                         {fact.confirmedBy ? <p className="mt-3 inline-flex items-center gap-1.5 text-[9px] text-[#87918c]"><CheckCircle2 className="size-3 text-[#27805f]" />由 {fact.confirmedBy} 人工确认</p> : null}
                       </div>
