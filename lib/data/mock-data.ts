@@ -48,7 +48,7 @@ export const reportSteps: ReportStep[] = [
   { number: 2, shortTitle: "议题评估", title: "ESG 实质性议题评估", description: "开展双重重要性评估并由用户确认", state: "completed" },
   { number: 3, shortTitle: "框架与大纲", title: "构建披露框架与报告大纲", description: "映射披露要求并形成资料清单", state: "completed" },
   { number: 4, shortTitle: "资料收集", title: "ESG 资料收集、汇总与规整", description: "分工、收集并建立可追溯事实库", state: "in-progress" },
-  { number: 5, shortTitle: "辅助撰写", title: "AI 辅助报告撰写", description: "基于已确认事实辅助生成章节初稿", state: "not-started" },
+  { number: 5, shortTitle: "内容生成与编辑", title: "报告内容生成与编辑", description: "关联资料、编辑正文与人工审校", state: "not-started" },
   { number: 6, shortTitle: "可视化排版", title: "可视化与报告排版", description: "图表、版式与品牌样式编辑", state: "not-started" },
   { number: 7, shortTitle: "质量检查", title: "质量与合规检查", description: "一致性、完整性与披露要求检查", state: "not-started" },
   { number: 8, shortTitle: "定稿导出", title: "定稿与导出", description: "版本确认并导出最终报告", state: "not-started" },

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { StepFour } from "@/components/workbench/step-four";
+import { StepFive } from "@/components/workbench/step-five";
 import { StepOne } from "@/components/workbench/step-one";
 import { StepPlaceholder } from "@/components/workbench/step-placeholder";
 import { StepThree } from "@/components/workbench/step-three";
@@ -24,7 +25,8 @@ export default async function ReportStepPage({
       {step === 2 ? <StepTwo /> : null}
       {step === 3 ? <StepThree /> : null}
       {step === 4 ? <StepFour /> : null}
-      {step >= 5 ? <StepPlaceholder step={step as 5 | 6 | 7 | 8} /> : null}
+      {step === 5 ? <StepFive /> : null}
+      {step >= 6 ? <StepPlaceholder step={step as 6 | 7 | 8} /> : null}
     </WorkbenchShell>
   );
 }

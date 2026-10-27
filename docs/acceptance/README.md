@@ -1,6 +1,6 @@
-# 第一轮产品验收材料
+# 产品验收材料
 
-本目录用于 ESG Disclosure Platform 第一轮产品原型验收，不包含新增业务功能。
+本目录用于 ESG Disclosure Platform 分轮产品原型验收。第一轮截图与说明保持不变；第二轮仅新增 Step 5“报告内容生成与编辑”，未扩展 Step 6–8。
 
 ## 运行截图
 
@@ -45,3 +45,9 @@ npm run build      通过
 ```
 
 生产构建已成功预生成项目首页及 Step 1–8 路由。
+
+## 第二轮：Step 5
+
+Step 5 的运行截图、真实交互范围、Mock 边界、数据关联和真实 AI 接口说明见 [step5/README.md](step5/README.md)。
+
+第一轮文档中的“Step 5–8 占位”描述对应当时的验收基线；第二轮分支中 Step 5 已升级为可操作的前端工作台，Step 6–8 仍为占位页面。

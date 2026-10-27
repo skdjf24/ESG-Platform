@@ -109,7 +109,7 @@ export function WorkbenchShell({ currentStep, children }: { currentStep: number;
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
-            <div className="mr-1 hidden items-center gap-1.5 text-[10px] text-[#83908a] sm:flex"><Check className="size-3 text-[#2b8a65]" />已保存 14:32</div>
+            <div className="mr-1 hidden items-center gap-1.5 text-[10px] text-[#83908a] sm:flex"><Check className="size-3 text-[#2b8a65]" />{currentStep === 5 ? '浏览器本地编制' : '已保存 14:32'}</div>
             <button className="hidden size-9 place-items-center rounded-lg text-[#65716b] hover:bg-[#f1f4f2] sm:grid" aria-label="帮助"><CircleHelp className="size-[17px]" /></button>
             <button className="relative grid size-9 place-items-center rounded-lg text-[#65716b] hover:bg-[#f1f4f2]" aria-label="通知"><Bell className="size-[17px]" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-amber-500 ring-2 ring-white" /></button>
             <button className="ml-1 flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 hover:bg-[#f3f5f4]">
