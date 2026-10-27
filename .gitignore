@@ -23,3 +23,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# local browser-verification helpers
+/work/
