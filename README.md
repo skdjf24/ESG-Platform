@@ -1,6 +1,6 @@
 # ESG Disclosure Platform
 
-ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，第一轮覆盖企业基础画像、实质性议题评估、披露框架与报告大纲、资料收集和事实库；第二轮新增 Step 5“报告内容生成与编辑”工作台。
+ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，第一轮覆盖企业基础画像、实质性议题评估、披露框架与报告大纲、资料收集和事实库；第二轮新增 Step 5“报告内容生成与编辑”工作台；Step 5.5 将 Step 1–5 接入统一的项目数据仓库。
 
 当前版本使用本地模拟数据，不接入真实 AI、文件存储或后端接口。
 
@@ -59,6 +59,8 @@ app/
     └── page.tsx                       # Step 1–8 动态路由与页面分发
 
 components/
+├── project/
+│   └── project-data-provider.tsx      # 项目级状态、保存、撤销/重做与跨步骤影响提示
 ├── dashboard/
 │   └── dashboard-page.tsx             # 首页、示例项目卡与新建报告弹窗
 ├── workbench/
@@ -77,7 +79,7 @@ components/
 │   ├── resource-panel.tsx              # 章节资料包、披露映射与来源引用
 │   ├── ai-dialog.tsx                   # Mock AI 原文/建议对照流程
 │   ├── policy-dialog.tsx               # Writing Policy 设置
-│   └── use-writing-document.ts         # 本地保存、撤销/重做及版本状态
+│   └── use-writing-document.ts         # Step 5 对统一项目状态的兼容适配层
 └── ui/
     ├── brand-mark.tsx                  # 品牌标识
     ├── notice.tsx                      # 信息、警示与 AI 示例提示
@@ -87,8 +89,13 @@ components/
 
 lib/
 ├── data/mock-data.ts                   # 示例企业、项目及 Step 1–4 模拟数据
+├── project/
+│   ├── seed.ts                         # 统一项目快照初始数据
+│   ├── repository.ts                   # Repository 接口的 localStorage 实现及旧草稿迁移
+│   └── synchronize.ts                  # 跨步骤差异识别、关联同步与复核标记
 ├── types/
 │   ├── esg.ts                          # 基础 TypeScript 业务类型
+│   ├── project-data.ts                 # 项目聚合、影响记录与 Repository 契约
 │   └── writing.ts                      # Step 5 内容块、引用、版本及 AI 类型
 └── writing/
     ├── document.ts                     # 编制文档、校验、引用协调及规则检查
@@ -108,7 +115,9 @@ lib/
 - AI 规整示例结果
 - 企业事实、原始文件和页码/工作表/单元格级来源关联
 
-示例数据统一位于 `lib/data/mock-data.ts`，页面组件从该文件读取，便于后续替换为 API 数据。
+示例种子数据统一位于 `lib/data/mock-data.ts`，由 `lib/project/seed.ts` 组合为项目快照；Step 1–5 页面读取同一项目状态，不再各自维护相互隔离的业务副本。
+
+项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `LocalStorageReportProjectRepository`，存储键为 `esg:report-project:{projectId}:v2`；接口为异步设计，可在后续以 API/PostgreSQL Repository 替换，而不改变页面保存调用。项目快照仅保存文件元数据及来源定位，拒绝写入 `File`、`Blob`、`ArrayBuffer` 等二进制内容。
 
 Step 5 类型位于 `lib/types/writing.ts`，核心关联为：
 
@@ -199,7 +208,7 @@ ContentBlock.revision ──> ChapterVersion + ReviewStatus
 - AI 资料解析与规整结果
 - Step 5 的企业事实、资料包、披露映射和章节初始正文
 - Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
-- Step 5 本地保存和版本恢复：仅使用当前浏览器 `localStorage`，不等同于服务器持久化或多人协作
+- Step 1–5 统一项目保存和 Step 5 版本恢复：仅使用当前浏览器 `localStorage`，不等同于服务器持久化或多人协作
 
 所有 AI 结果在界面中明确标注为“示例 AI 规整结果”，需要人工确认后才表现为可进入事实库。项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。
 
@@ -215,6 +224,28 @@ Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选�
 - 尚未收集的资料只显示“待收集”等流程状态，不预判为数据缺失。
 - AI 模拟结果必须人工确认。
 - 企业事实保留与原始文件及具体定位信息的关联。
+- 上游数据变化只同步共享数据和复核状态，不自动改写或删除 Step 5 已编辑正文。
+- 未确认事实不会因同步而自动变为已确认；事实修订会保留旧引用版本并提示待更新。
+
+## Step 1–5 数据贯通
+
+```text
+Step 1 企业画像 / 年度 / 框架
+             ↓
+Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需求
+                                      ↓                 ↓
+                          Step 5 章节与披露映射 ←── Step 4 事实 / 指标 / 来源
+                                      ↓
+                              内容块 / 引用 / 版本
+```
+
+- 所有跨步骤对象使用稳定 ID；保存时对比上一已保存快照并生成 `ChangeImpact`。
+- Step 3 章节名称和顺序会同步到 Step 5；被上游移除的章节仍保留正文并标记“上游已移除”。
+- Step 4 事实值、确认状态或来源修订变化后，引用块进入“待复核/待更新”，正文文本不变。
+- Step 5 仍保留章节版本；旧键 `esg:{projectId}:writing:v1` 可读入新快照，旧键不会被删除或覆盖。
+- 通过 `projectId` 生成独立存储键，并在 Repository 保存时校验项目 ID 与快照修订号。
+
+详细验收记录、截图和限制见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)。
 
 ## 待开发范围
 

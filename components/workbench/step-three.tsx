@@ -19,8 +19,8 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { dataRequirements, disclosureRequirements, reportSections } from "@/lib/data/mock-data";
 import type { Applicability } from "@/lib/types/esg";
+import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -62,38 +62,29 @@ function TabNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab)
 }
 
 function RequirementsMatrix() {
+  const { project, editProject } = useProjectData();
+  const requirements = project.disclosureRequirements;
   const [search, setSearch] = useState("");
   const [framework, setFramework] = useState("全部框架");
-  const [decisions, setDecisions] = useState<Record<string, Applicability>>(
-    Object.fromEntries(disclosureRequirements.map((item) => [item.id, item.applicability])),
-  );
-  const [confirmedIds, setConfirmedIds] = useState(
-    () => new Set(disclosureRequirements.filter((item) => item.userConfirmed).map((item) => item.id)),
-  );
 
   const filteredRequirements = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return disclosureRequirements.filter((item) => {
+    return requirements.filter((item) => {
       const frameworkMatches = framework === "全部框架" || item.framework === framework;
       const queryMatches = !query || `${item.framework}${item.code}${item.topic}${item.summary}${item.mappedSection}`.toLowerCase().includes(query);
       return frameworkMatches && queryMatches;
     });
-  }, [framework, search]);
+  }, [framework, requirements, search]);
 
   const updateDecision = (id: string, value: Applicability) => {
-    setDecisions((current) => ({ ...current, [id]: value }));
-    setConfirmedIds((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
+    editProject((current) => ({ ...current, disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? { ...item, applicability: value, userConfirmed: false, reviewStatus: "待复核" } : item) }));
   };
 
   const confirmDecision = (id: string) => {
-    setConfirmedIds((current) => new Set(current).add(id));
+    editProject((current) => ({ ...current, disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? { ...item, userConfirmed: true, reviewStatus: "有效" } : item) }));
   };
 
-  const pendingCount = disclosureRequirements.filter((item) => !confirmedIds.has(item.id)).length;
+  const pendingCount = requirements.filter((item) => !item.userConfirmed).length;
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -170,7 +161,7 @@ function RequirementsMatrix() {
             </thead>
             <tbody className="divide-y divide-[#edf0ee] text-xs">
               {filteredRequirements.map((item) => {
-                const confirmed = confirmedIds.has(item.id);
+                const confirmed = item.userConfirmed;
                 return (
                   <tr key={item.id} className="group hover:bg-[#fbfcfb]">
                     <td className="sticky left-0 z-10 bg-white px-6 py-4 group-hover:bg-[#fbfcfb]">
@@ -184,10 +175,10 @@ function RequirementsMatrix() {
                     </td>
                     <td className="px-4 py-4">
                       <select
-                        value={decisions[item.id]}
+                        value={item.applicability}
                         onChange={(event) => updateDecision(item.id, event.target.value as Applicability)}
                         aria-label={`${item.code} 用户确认适用性`}
-                        className={`h-8 w-[112px] rounded-lg border bg-white px-2 text-[11px] font-medium outline-none ${decisions[item.id] === "待确认" ? "border-amber-200 text-amber-700" : "border-[#dce3df] text-[#3d554a]"}`}
+                        className={`h-8 w-[112px] rounded-lg border bg-white px-2 text-[11px] font-medium outline-none ${item.applicability === "待确认" ? "border-amber-200 text-amber-700" : "border-[#dce3df] text-[#3d554a]"}`}
                       >
                         <option>适用</option>
                         <option>不适用</option>
@@ -202,7 +193,7 @@ function RequirementsMatrix() {
                         <StatusBadge tone="green"><Check className="size-3" />已确认</StatusBadge>
                       ) : (
                         <button
-                          disabled={decisions[item.id] === "待确认"}
+                          disabled={item.applicability === "待确认"}
                           onClick={() => confirmDecision(item.id)}
                           className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-55"
                         >
@@ -226,8 +217,14 @@ function RequirementsMatrix() {
 }
 
 function ReportOutline() {
+  const { project, savedProject, editProject, saveProject } = useProjectData();
+  const sections = project.reportSections;
   const [selectedId, setSelectedId] = useState("section-4-2");
-  const selectedSection = reportSections.find((item) => item.id === selectedId) ?? reportSections[0];
+  const selectedSection = sections.find((item) => item.id === selectedId) ?? sections[0];
+  const updateSection = (patch: Partial<typeof selectedSection>) => {
+    if (!selectedSection) return;
+    editProject((current) => ({ ...current, reportSections: current.reportSections.map((item) => item.id === selectedSection.id ? { ...item, ...patch } : item) }));
+  };
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(480px,1.35fr)] animate-fade-up">
@@ -239,7 +236,7 @@ function ReportOutline() {
       >
         <div className="border-b border-[#edf0ee] px-5 py-3 text-[10px] text-[#84908a]">共 7 个一级章节 · 1 个示例二级章节</div>
         <div className="scrollbar-subtle max-h-[555px] overflow-y-auto p-3">
-          {reportSections.map((section) => {
+          {sections.map((section) => {
             const active = section.id === selectedId;
             return (
               <button
@@ -269,16 +266,16 @@ function ReportOutline() {
           <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
             <div>
               <label htmlFor="section-order" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节编号</label>
-              <input id="section-order" key={`${selectedId}-order`} defaultValue={selectedSection.order} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
+              <input id="section-order" value={selectedSection.order} onChange={(event) => updateSection({ order: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
             </div>
             <div>
               <label htmlFor="section-title" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节名称</label>
-              <input id="section-title" key={`${selectedId}-title`} defaultValue={selectedSection.title} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
+              <input id="section-title" value={selectedSection.title} onChange={(event) => updateSection({ title: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
             </div>
           </div>
           <div>
             <label htmlFor="section-description" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节编制说明</label>
-            <textarea id="section-description" key={`${selectedId}-description`} defaultValue={selectedSection.description} rows={4} className="w-full resize-none rounded-lg border border-[#dce3df] px-3 py-2.5 text-xs leading-5 outline-none focus:border-[#6f9f8c]" />
+            <textarea id="section-description" value={selectedSection.description} onChange={(event) => updateSection({ description: event.target.value })} rows={4} className="w-full resize-none rounded-lg border border-[#dce3df] px-3 py-2.5 text-xs leading-5 outline-none focus:border-[#6f9f8c]" />
           </div>
 
           <div className="rounded-xl border border-[#e5e9e7] bg-[#fafcfb] p-4">
@@ -308,8 +305,8 @@ function ReportOutline() {
           </div>
 
           <div className="flex justify-end gap-2 border-t border-[#edf0ee] pt-5">
-            <button className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f7f9f8]">取消修改</button>
-            <button className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46]">保存章节</button>
+            <button onClick={() => { const saved = savedProject.reportSections.find((item) => item.id === selectedSection.id); if (saved) updateSection(saved); }} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f7f9f8]">取消修改</button>
+            <button onClick={() => void saveProject(3, `保存章节 ${selectedSection.order}`)} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46]">保存章节</button>
           </div>
         </div>
       </SectionCard>
@@ -318,6 +315,8 @@ function ReportOutline() {
 }
 
 function MaterialsList() {
+  const { project } = useProjectData();
+  const dataRequirements = project.dataRequirements;
   return (
     <div className="space-y-5 animate-fade-up">
       <Notice>
