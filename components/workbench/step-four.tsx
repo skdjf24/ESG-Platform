@@ -55,7 +55,7 @@ export function StepFour() {
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
   const [query, setQuery] = useState("");
   const [openFact, setOpenFact] = useState<string | null>("fact-energy-2025");
-  const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string }>>({});
+  const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string; reportingBoundary: string }>>({});
   const reviewConfirmed = energyFact?.state === "已确认";
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: "tasks", label: "资料任务", count: dataRequirements.length },
@@ -68,9 +68,9 @@ export function StepFour() {
     [dataRequirements, query],
   );
 
-  function updateFactDraft(id: string, fact: { value: string; unit?: string; period: string }, patch: Partial<{ value: string; unit: string; period: string }>) {
+  function updateFactDraft(id: string, fact: { value: string; unit?: string; period: string; reportingBoundary?: string }, patch: Partial<{ value: string; unit: string; period: string; reportingBoundary: string }>) {
     setFactDrafts((current) => {
-      const base = current[id] ?? { value: fact.value, unit: fact.unit ?? "", period: fact.period };
+      const base = current[id] ?? { value: fact.value, unit: fact.unit ?? "", period: fact.period, reportingBoundary: fact.reportingBoundary ?? "" };
       return { ...current, [id]: { ...base, ...patch } };
     });
   }
@@ -81,13 +81,29 @@ export function StepFour() {
     if (!fact || !draft) return;
     const affected = project.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.citations.some((citation) => citation.factId === id))).length;
     if (affected && !window.confirm(`该指标已被 ${affected} 个正文块引用。更新后正文不会自动改写，但会标记为待更新。是否继续？`)) return;
-    editProject((current) => ({ ...current, facts: current.facts.map((item) => item.id === id ? { ...item, ...draft, state: "待人工确认", confirmedBy: undefined } : item) }));
+    editProject((current) => ({ ...current, facts: current.facts.map((item) => item.id === id ? {
+      ...item,
+      ...draft,
+      state: "待人工确认",
+      confirmedBy: undefined,
+      sourceConfirmationStatus: "待确认",
+      boundaryStatus: draft.reportingBoundary !== (item.reportingBoundary ?? "") ? "待核验" : item.boundaryStatus,
+    } : item) }));
     setFactDrafts((current) => { const next = { ...current }; delete next[id]; return next; });
   }
 
   function setEnergyConfirmation(confirmed: boolean) {
     if (!energyFact) return;
-    editProject((current) => ({ ...current, facts: current.facts.map((fact) => fact.id === energyFact.id ? { ...fact, state: confirmed ? "已确认" : "待人工确认", confirmedBy: confirmed ? "当前用户" : undefined } : fact) }));
+    editProject((current) => ({ ...current, facts: current.facts.map((fact) => fact.id === energyFact.id ? {
+      ...fact,
+      state: confirmed ? "已确认" : "待人工确认",
+      confirmedBy: confirmed ? "当前用户" : undefined,
+      sourceConfirmationStatus: confirmed ? "已确认" : "待确认",
+      boundaryStatus: confirmed && fact.reportingBoundary?.trim() ? "已核验" : "待核验",
+      // Confirming a single observation does not establish cross-period
+      // comparability. That remains an explicit chart-selection decision.
+      comparabilityStatus: confirmed ? (fact.comparabilityStatus ?? "待核验") : "待核验",
+    } : fact) }));
   }
 
   return (
@@ -369,6 +385,10 @@ export function StepFour() {
                             <input aria-label={`${fact.name}单位`} value={factDrafts[fact.id]?.unit ?? fact.unit ?? ""} onChange={(event) => updateFactDraft(fact.id, fact, { unit: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
                             <input aria-label={`${fact.name}报告期`} value={factDrafts[fact.id]?.period ?? fact.period} onChange={(event) => updateFactDraft(fact.id, fact, { period: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
                             <button disabled={!factDrafts[fact.id]} onClick={() => applyFactDraft(fact.id)} className="h-9 rounded-lg bg-[#176b52] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">应用更新</button>
+                          </div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_170px]">
+                            <input aria-label={`${fact.name}统计边界`} value={factDrafts[fact.id]?.reportingBoundary ?? fact.reportingBoundary ?? ""} onChange={(event) => updateFactDraft(fact.id, fact, { reportingBoundary: event.target.value })} placeholder="请填写该指标经核验的统计边界" className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <div className="flex h-9 items-center justify-center rounded-lg border border-[#dce3df] bg-[#f8faf9] text-[10px] text-[#65746b]">边界：{fact.boundaryStatus ?? "待核验"} · 来源：{fact.sourceConfirmationStatus ?? "待确认"}</div>
                           </div>
                         </div>
                         {fact.confirmedBy ? <p className="mt-3 inline-flex items-center gap-1.5 text-[9px] text-[#87918c]"><CheckCircle2 className="size-3 text-[#27805f]" />由 {fact.confirmedBy} 人工确认</p> : null}

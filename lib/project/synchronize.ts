@@ -84,6 +84,24 @@ function markRequirementMappings(project: ReportProjectData, requirementIds: str
   };
 }
 
+function markChartsForContextReview(project: ReportProjectData, message: string): ReportProjectData {
+  if (!project.presentation.charts.length) return project;
+  return {
+    ...project,
+    presentation: {
+      ...project.presentation,
+      revision: project.presentation.revision + 1,
+      charts: project.presentation.charts.map((chart) => ({
+        ...chart,
+        status: "需更新" as const,
+        layoutReviewStatus: "待复核" as const,
+        changeNote: message,
+        revision: chart.revision + 1,
+      })),
+    },
+  };
+}
+
 function createChapterHeading(sectionId: string, title: string, requirementIds: string[]): ContentBlock {
   const block = createBlock(sectionId, "heading");
   return {
@@ -106,6 +124,17 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   if (sourceStep === 1) {
     if (previous.enterprise.name !== next.enterprise.name) {
       impacts.push(createImpact(1, "enterprise", next.enterprise.id, `企业名称已更新为“${next.enterprise.name}”，Step 5–6 将显示最新名称；已编辑正文不会自动替换。`, [], [5, 6]));
+    }
+    const reportPeriodChanged = previous.report.year !== next.report.year
+      || JSON.stringify(previous.report.reportingPeriod) !== JSON.stringify(next.report.reportingPeriod);
+    const reportBoundaryChanged = JSON.stringify(previous.boundary) !== JSON.stringify(next.boundary);
+    if (reportPeriodChanged || reportBoundaryChanged) {
+      const reason = reportBoundaryChanged
+        ? "项目报告边界已变化。指标自身的统计边界未被自动替换，请逐图核验范围后确认更新。"
+        : "报告年度或报告期已变化，请核验图表指标期间与当前报告期是否一致。";
+      const chartIds = next.presentation.charts.map((chart) => chart.chartId);
+      next = markChartsForContextReview(next, reason);
+      impacts.push(createImpact(1, "presentation", next.projectId, reason, chartIds, [6]));
     }
     const removedFrameworks = previous.report.frameworks.filter((framework) => !next.report.frameworks.includes(framework));
     const removedTopics = previous.topics.filter((topic) => !next.topics.some((item) => item.id === topic.id));

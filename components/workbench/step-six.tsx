@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { ChartConfigPanel } from "@/components/presentation/chart-config-panel";
-import { ReportPageCanvas, type TocEntry } from "@/components/presentation/report-page";
+import { formalBlockExclusionReason, ReportPageCanvas, type TocEntry } from "@/components/presentation/report-page";
 import { createReportPages } from "@/lib/presentation/pages";
 import { getReportTheme, reportThemes } from "@/lib/presentation/themes";
 import type { ReportChart, ReportLayoutSettings } from "@/lib/types/presentation";
@@ -55,6 +55,17 @@ export function StepSix({ initialBlockId }: { initialBlockId?: string }) {
     return { chapterId: chapter.id, order: chapter.order, title: chapter.title, pageNumber: Math.max(1, index + 1), level: chapter.parentId ? 2 : 1 };
   }), [pages, project.writing.chapters]);
   const issues = pages.flatMap((page) => page.issues.map((message) => ({ pageId: page.id, message })));
+  const formalExclusions = useMemo(() => {
+    const seen = new Set<string>();
+    return pages.flatMap((page) => page.blocks.flatMap(({ block }) => {
+      if (seen.has(block.id)) return [];
+      const chart = project.presentation.charts.find((item) => item.blockId === block.id);
+      const reason = formalBlockExclusionReason(block, project, chart);
+      if (!reason) return [];
+      seen.add(block.id);
+      return [{ pageId: page.id, blockId: block.id, title: block.title, reason }];
+    }));
+  }, [pages, project]);
 
   function updatePresentation(patch: Partial<typeof project.presentation>) {
     editProject((current) => ({ ...current, presentation: { ...current.presentation, ...patch } }));
@@ -141,7 +152,7 @@ export function StepSix({ initialBlockId }: { initialBlockId?: string }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <button onClick={() => setPreview({ mode: "single" })} className={`${buttonClass} ${project.presentation.preview.mode === "single" ? "!border-[#83b29e] !bg-[#eaf4ef] !text-[#176b52]" : ""}`}><FileText className="size-3.5" />单页</button>
           <button onClick={() => setPreview({ mode: "continuous" })} className={`${buttonClass} ${project.presentation.preview.mode === "continuous" ? "!border-[#83b29e] !bg-[#eaf4ef] !text-[#176b52]" : ""}`}><BookOpen className="size-3.5" />连续阅读</button>
-          <button onClick={() => setPreview({ readingMode: project.presentation.preview.readingMode === "editing" ? "formal" : "editing" })} className={buttonClass}><Focus className="size-3.5" />{project.presentation.preview.readingMode === "editing" ? "编辑预览" : "正式阅读"}</button>
+          <button onClick={() => setPreview({ readingMode: project.presentation.preview.readingMode === "editing" ? "formal" : "editing" })} className={buttonClass}><Focus className="size-3.5" />{project.presentation.preview.readingMode === "editing" ? "切换正式阅读" : "返回编辑预览"}</button>
         </div>
         <div className="flex items-center gap-1.5"><button aria-label="缩小预览" onClick={() => setPreview({ zoom: Math.max(.45, Number((project.presentation.preview.zoom - .08).toFixed(2))) })} className={`${buttonClass} !px-2`}><Minus className="size-3.5" /></button><span className="w-12 text-center text-[10px] font-semibold text-[#5d6e64]">{Math.round(project.presentation.preview.zoom * 100)}%</span><button aria-label="放大预览" onClick={() => setPreview({ zoom: Math.min(1, Number((project.presentation.preview.zoom + .08).toFixed(2))) })} className={`${buttonClass} !px-2`}><Plus className="size-3.5" /></button><button onClick={() => setPreview({ zoom: .72 })} className={buttonClass}>适合页面</button><button onClick={() => setSettingsOpen(!settingsOpen)} aria-label={settingsOpen ? "收起版式设置" : "展开版式设置"} className={`${buttonClass} !px-2`}>{settingsOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</button></div>
       </div>
@@ -150,8 +161,9 @@ export function StepSix({ initialBlockId }: { initialBlockId?: string }) {
         {!focusMode ? <ReportNavigation pages={pages} selectedPageId={selectedPage.id} tocEntries={tocEntries} chartBlocks={chartBlocks} selectedBlockId={selectedBlockId} onSelectPage={selectPage} onSelectChart={chooseChartBlock} /> : null}
 
         <section className="min-w-0">
-          {issues.length ? <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800"><span className="inline-flex items-center gap-1.5"><AlertTriangle className="size-3.5" />发现 {issues.length} 项内容或版面待复核；预览不会截断正文。</span><button onClick={() => selectPage(issues[0].pageId)} className="font-semibold text-[#176b52]">定位首项</button></div> : null}
-          <div ref={previewRef} className="scrollbar-subtle max-h-[calc(100vh-180px)] overflow-auto rounded-2xl border border-[#dce3df] bg-[#dde5e0] p-5">
+          {project.presentation.preview.readingMode === "formal" && formalExclusions.length ? <div aria-label="正式阅读排除事项" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800"><span className="inline-flex items-center gap-1.5"><AlertTriangle className="size-3.5" />正式阅读已排除 {formalExclusions.length} 个内部、待确认、待更新或模拟测试内容块；未将其作为披露成果。</span><button onClick={() => selectPage(formalExclusions[0].pageId)} title={`${formalExclusions[0].title}：${formalExclusions[0].reason}`} className="font-semibold text-[#176b52]">定位首项</button></div> : null}
+          {project.presentation.preview.readingMode === "editing" && issues.length ? <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800"><span className="inline-flex items-center gap-1.5"><AlertTriangle className="size-3.5" />发现 {issues.length} 项内容或版面待复核；首项位于 {issues[0].pageId}：{issues[0].message}</span><button onClick={() => selectPage(issues[0].pageId)} className="font-semibold text-[#176b52]">定位首项</button></div> : null}
+          <div ref={previewRef} data-reading-mode={project.presentation.preview.readingMode} className="scrollbar-subtle max-h-[calc(100vh-180px)] overflow-auto rounded-2xl border border-[#dce3df] bg-[#dde5e0] p-5">
             <div className="mx-auto flex min-w-max flex-col items-center gap-7">
               {(project.presentation.preview.mode === "continuous" ? pages : [selectedPage]).map((page) => (
                 <ScaledPage key={page.id} pageId={page.id} zoom={project.presentation.preview.zoom}>

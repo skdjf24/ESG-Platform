@@ -2,7 +2,7 @@ import type { ReportProjectData, ReportProjectRepository, ProjectSaveContext, Pr
 import { createProjectData } from "@/lib/project/seed";
 import { applyWritingDocument, composeWritingDocument, synchronizeProjectData } from "@/lib/project/synchronize";
 import { parseStoredDocument, validateWritingDocument } from "@/lib/writing/document";
-import { ensurePresentationState, isPresentationState } from "@/lib/presentation/state";
+import { ensurePresentationState, isCompatiblePresentationState } from "@/lib/presentation/state";
 
 const MAX_LOCAL_SNAPSHOT_BYTES = 4_500_000;
 const PROJECT_EVENT = "esg-report-project-saved";
@@ -36,9 +36,9 @@ function parseProjectData(raw: string, projectId: string): ReportProjectData | n
     const requiredObjects = ["enterprise", "report", "boundary", "materiality", "writing"];
     const requiredArrays = ["topics", "disclosureRequirements", "reportSections", "dataRequirements", "sources", "facts", "resources", "impacts", "migrations"];
     if (!requiredObjects.every((key) => isRecord(value[key])) || !requiredArrays.every((key) => Array.isArray(value[key]))) return null;
-    const legacyCompatible = value as unknown as Omit<ReportProjectData, "presentation"> & { presentation?: ReportProjectData["presentation"] };
+    const legacyCompatible = value as unknown as Omit<ReportProjectData, "presentation"> & { presentation?: unknown };
     if (legacyCompatible.report.id !== projectId || !validateWritingDocument(composeWritingDocument(legacyCompatible as ReportProjectData), projectId)) return null;
-    if (legacyCompatible.presentation && !isPresentationState(legacyCompatible.presentation)) return null;
+    if (legacyCompatible.presentation && !isCompatiblePresentationState(legacyCompatible.presentation)) return null;
     const project = ensurePresentationState(legacyCompatible);
     if (new Set(project.topics.map((item) => item.id)).size !== project.topics.length) return null;
     if (new Set(project.disclosureRequirements.map((item) => item.id)).size !== project.disclosureRequirements.length) return null;

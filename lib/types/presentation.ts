@@ -30,26 +30,44 @@ export interface MetricObservation {
   observationId: string;
   projectId: string;
   metricId: string;
+  metricDefinitionId: string;
   metricName: string;
+  categoryLabel: string;
+  seriesName: string;
+  compositionGroupId?: string;
   value: number | null;
   rawValue: string;
   unit: string;
   reportingPeriod: string;
   reportingBoundary: string;
+  boundaryStatus: "待核验" | "已核验";
+  sourceConfirmationStatus: "待确认" | "已确认";
+  comparabilityStatus: "待核验" | "可比" | "不可比";
   sourceReferences: SourceReference[];
   revision: number;
   confirmationStatus: "待确认" | "已确认";
   sampleKind: "项目事实" | "明确模拟样本";
+  sampleLabel?: string;
 }
 
 export interface ChartObservationSnapshot {
   observationId: string;
+  metricDefinitionId: string;
   metricName: string;
+  categoryLabel: string;
+  seriesName: string;
+  compositionGroupId?: string;
   value: number;
   unit: string;
   reportingPeriod: string;
+  reportingBoundary: string;
+  boundaryStatus: "待核验" | "已核验";
+  sourceConfirmationStatus: "待确认" | "已确认";
+  comparabilityStatus: "待核验" | "可比" | "不可比";
   revision: number;
   sourceReferences: SourceReference[];
+  sampleKind: "项目事实" | "明确模拟样本";
+  sampleLabel?: string;
 }
 
 export interface ReportChart {
@@ -69,6 +87,9 @@ export interface ReportChart {
   status: ReportChartStatus;
   layoutReviewStatus: LayoutReviewStatus;
   changeNote?: string;
+  validationIssues?: string[];
+  validatedAt?: string;
+  usesMockData?: boolean;
   revision: number;
   updatedAt: string;
 }
@@ -90,7 +111,7 @@ export interface ReportLayoutSettings {
 }
 
 export interface ReportPresentationState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   themeId: string;
   layout: ReportLayoutSettings;
   observations: MetricObservation[];
