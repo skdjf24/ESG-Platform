@@ -121,6 +121,14 @@ export interface EnterpriseFact {
   state: "待人工确认" | "已确认";
   sourceReferences: SourceReference[];
   confirmedBy?: string;
+  metricDefinitionId?: string;
+  categoryLabel?: string;
+  seriesName?: string;
+  compositionGroupId?: string;
+  reportingBoundary?: string;
+  boundaryStatus?: "待核验" | "已核验";
+  sourceConfirmationStatus?: "待确认" | "已确认";
+  comparabilityStatus?: "待核验" | "可比" | "不可比";
 }
 
 export interface AiNormalizationResult {

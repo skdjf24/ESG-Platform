@@ -78,7 +78,7 @@ components/
 ├── presentation/
 │   ├── report-page.tsx                 # A4 页面、八类模板与 blockId 定位
 │   ├── report-chart.tsx                # 五类 Recharts 图表
-│   └── chart-config-panel.tsx           # 图表指标、来源与显示配置
+│   └── chart-config-panel.tsx           # 图表指标、统计校验、来源与显示配置
 ├── writing/
 │   ├── rich-text.tsx                   # 可编辑富文本正文块
 │   ├── block-editor.tsx                # 六类结构化内容块编辑器
@@ -102,6 +102,8 @@ lib/
 ├── presentation/
 │   ├── state.ts                        # 指标观测、图表快照、迁移与修订联动
 │   ├── pages.ts                        # 内容块分页与整本报告页面生成
+│   ├── chart-validation.ts             # 五类图表的统计口径与确认校验
+│   ├── sample-observations.ts          # 独立且明确标注的图表测试数据
 │   ├── themes.ts                       # 两套专业报告主题
 │   └── mock-ai.ts                      # 版式辅助 Mock AI Provider
 ├── types/
@@ -152,7 +154,9 @@ ReportChart.observationSnapshots ──> 已确认指标版本与来源快照
 ReportPresentationState ──> ReportTheme / layout / charts / preview
 ```
 
-旧 schema v2 项目没有 `presentation` 时会通过 `migration-presentation-v1` 兼容补充默认版式；原 Step 1–5 正文、引用、来源和版本保持不变。
+`MetricObservation` 记录指标定义、分类、系列、构成组、指标自身统计边界、来源确认、可比性和修订号。`ChartObservationSnapshot` 固化确认时的口径与来源，指标值、单位、报告期、边界、来源状态或修订变化时，相关图表进入“需更新”并保留旧图。
+
+旧项目没有 `presentation` 时会兼容补充默认版式；Step 6 schema v1 会迁移至 v2。原 Step 1–5 正文、引用、来源和版本保持不变。
 
 ## 已实现功能
 
@@ -224,9 +228,12 @@ ReportPresentationState ──> ReportTheme / layout / charts / preview
 - 报告封面、关于本报告、自动目录、章节首页、正文、绩效数据、案例专题和附录八类页面模型
 - 从 Step 5 已保存章节和内容块生成整本报告，不维护单独硬编码正文
 - 澜绿专业、蓝灰研报两套主题；支持页边距、字体、颜色、字号、行距、单双栏、页眉页脚和预览页码设置
-- 柱状图、折线图、堆叠柱状图、饼图和 KPI 卡片五类真实图表
-- 图表仅关联已确认指标，可查看来源文件、具体位置、摘录和统计边界
+- 柱状图、同指标时间序列折线图、真实多系列堆叠柱状图、同口径构成饼图和 KPI 卡片五类真实图表
+- 图表确认前校验单位、报告期、指标统计边界、可比性、确认状态、来源和修订版本，并显示具体阻断原因
+- 图表仅关联满足当前图表统计规则的指标，可查看来源文件、具体位置、摘录和统计边界
 - 指标版本变化后图表进入“需更新”，保留旧数据快照，人工重新确认后才更新
+- 正式阅读画布排除内部待办、未确认/待更新内容、技术标识和独立模拟测试内容，并在画布外统一提示
+- 长段落和长表格安全分片，新增小标题保留；字号、行距及边距变化后重新分页并定位具体版面问题
 - 单页、连续阅读、缩放、页面缩略图、章节跳转和整本聚焦预览
 - 预览内容保留 `blockId`；正文可返回 Step 5 精确编辑位置，图表占位可直接进入配置
 - 主题、图表、版式及预览偏好保存到同一项目 Repository，刷新后恢复

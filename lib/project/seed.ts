@@ -69,7 +69,7 @@ export function createProjectData(projectId: string): ReportProjectData {
       versions: structuredClone(writingDocument.versions),
       savedAt: writingDocument.savedAt,
     },
-    presentation: createPresentationState(projectId, facts, boundary),
+    presentation: createPresentationState(projectId, facts),
     impacts: [],
     migrations: [],
   };

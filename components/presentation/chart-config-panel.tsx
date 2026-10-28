@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ExternalLink, Link2, Loader2, Sparkles } from "lucide-react";
 import { mockPresentationAiProvider } from "@/lib/presentation/mock-ai";
+import { validateChartSelection } from "@/lib/presentation/chart-validation";
 import { chartSnapshots } from "@/lib/presentation/state";
 import type { ContentBlock, WritingPolicy } from "@/lib/types/writing";
 import type { MetricObservation, PresentationAiOperation, ReportChart, ReportChartType, ReportTheme } from "@/lib/types/presentation";
@@ -57,11 +58,12 @@ export function ChartConfigPanel({
   const [aiOperation, setAiOperation] = useState<PresentationAiOperation>("recommend-chart");
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const confirmed = useMemo(() => observations.filter((item) => item.confirmationStatus === "已确认" && item.value !== null), [observations]);
+  const available = useMemo(() => observations.filter((item) => item.value !== null), [observations]);
   if (!block || !draft) return <div className="rounded-xl border border-dashed border-[#d9e3dd] p-5 text-center text-[11px] leading-5 text-[#819087]">请在预览或章节列表中选择一个图表占位块。</div>;
 
   const selected = observations.filter((item) => draft.metricObservationIds.includes(item.observationId));
-  const canConfirm = selected.length > 0 && selected.every((item) => item.confirmationStatus === "已确认" && item.value !== null);
+  const validation = validateChartSelection(draft.type, selected, draft.unit);
+  const canConfirm = validation.valid;
 
   function toggleObservation(id: string) {
     setDraft((current) => current ? {
@@ -77,13 +79,18 @@ export function ChartConfigPanel({
   function apply(confirm: boolean) {
     const activeDraft = draft;
     if (!activeDraft || !activeDraft.metricObservationIds.length) return;
+    const currentValidation = validateChartSelection(activeDraft.type, selected, activeDraft.unit);
+    if (confirm && !currentValidation.valid) return;
     const snapshots = chartSnapshots(activeDraft, observations);
     const next: ReportChart = {
       ...activeDraft,
       observationSnapshots: confirm ? snapshots : (activeDraft.status === "需更新" ? activeDraft.observationSnapshots : snapshots),
-      status: confirm && snapshots.length === activeDraft.metricObservationIds.length ? "已确认" : activeDraft.status === "需更新" ? "需更新" : "待确认",
-      layoutReviewStatus: confirm && snapshots.length === activeDraft.metricObservationIds.length ? "有效" : "待复核",
+      status: confirm && currentValidation.valid ? "已确认" : activeDraft.status === "需更新" ? "需更新" : "待确认",
+      layoutReviewStatus: confirm && currentValidation.valid ? "有效" : "待复核",
       changeNote: confirm ? undefined : activeDraft.changeNote,
+      validationIssues: currentValidation.issues,
+      validatedAt: confirm ? new Date().toISOString() : activeDraft.validatedAt,
+      usesMockData: selected.some((item) => item.sampleKind === "明确模拟样本"),
       revision: chart ? chart.revision + 1 : 1,
       updatedAt: new Date().toISOString(),
     };
@@ -119,18 +126,25 @@ export function ChartConfigPanel({
       </div>
 
       <div>
-        <div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-semibold text-[#536159]">选择已确认指标与年度</span><span className="text-[9px] text-[#8a958f]">{confirmed.length} 项可用</span></div>
+        <div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-semibold text-[#536159]">选择指标、分类与年度</span><span className="text-[9px] text-[#8a958f]">{available.length} 项数值观测</span></div>
         <div className="max-h-48 space-y-2 overflow-y-auto pr-1 scrollbar-subtle">
-          {confirmed.map((item) => {
+          {available.map((item) => {
             const checked = draft.metricObservationIds.includes(item.observationId);
             return <label key={item.observationId} className={`block rounded-xl border p-3 transition ${checked ? "border-[#82b49f] bg-[#f0f7f3]" : "border-[#e0e6e2] bg-white"}`}>
-              <div className="flex items-start gap-2"><input aria-label={`选择指标 ${item.metricName} ${item.reportingPeriod}`} type="checkbox" checked={checked} onChange={() => toggleObservation(item.observationId)} className="mt-0.5 accent-[#176b52]" /><span className="min-w-0 flex-1"><span className="block text-[11px] font-semibold text-[#30453a]">{item.metricName}</span><span className="mt-1 block text-[9px] text-[#84928a]">{item.reportingPeriod} · {item.rawValue} {item.unit} · v{item.revision}</span></span></div>
+              <div className="flex items-start gap-2"><input aria-label={`选择指标 ${item.metricName} ${item.reportingPeriod}`} type="checkbox" checked={checked} onChange={() => toggleObservation(item.observationId)} className="mt-0.5 accent-[#176b52]" /><span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#30453a]">{item.metricName}{item.sampleKind === "明确模拟样本" ? <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[8px] text-violet-700">独立模拟测试</span> : null}</span><span className="mt-1 block text-[9px] text-[#84928a]">{item.reportingPeriod} · {item.categoryLabel} · {item.rawValue} {item.unit} · v{item.revision}</span><span className="mt-1 block text-[8px] text-[#93a097]">指标{item.confirmationStatus} · 边界{item.boundaryStatus} · 来源{item.sourceConfirmationStatus} · {item.comparabilityStatus}</span></span></div>
               <button type="button" onClick={(event) => { event.preventDefault(); setSourceId(sourceId === item.observationId ? null : item.observationId); }} className="mt-2 inline-flex items-center gap-1 text-[9px] font-semibold text-[#176b52]"><ExternalLink className="size-3" />查看原始来源</button>
-              {sourceId === item.observationId ? <div className="mt-2 space-y-2 rounded-lg bg-white p-2 text-[9px] leading-4 text-[#66776c]">{item.sourceReferences.map((source) => <div key={source.id}><div className="font-semibold text-[#3d5848]">{source.fileName}</div><div>{source.locator} · {source.excerpt}</div></div>)}<div>统计边界：{item.reportingBoundary}</div></div> : null}
+              {sourceId === item.observationId ? <div className="mt-2 space-y-2 rounded-lg bg-white p-2 text-[9px] leading-4 text-[#66776c]">{item.sourceReferences.map((source) => <div key={source.id}><div className="font-semibold text-[#3d5848]">{source.fileName}</div><div>{source.locator} · {source.excerpt}</div></div>)}{!item.sourceReferences.length ? <div className="text-amber-700">未关联来源</div> : null}<div>统计边界：{item.reportingBoundary || "待核验"}</div><div>来源确认：{item.sourceConfirmationStatus} · 修订 v{item.revision}</div></div> : null}
             </label>;
           })}
-          {!confirmed.length ? <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-3 text-[10px] leading-5 text-amber-800">暂无可用于图表的已确认数值。请先在 Step 4 核对来源并人工确认指标。</div> : null}
+          {!available.length ? <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-3 text-[10px] leading-5 text-amber-800">暂无可用于配置的数值观测。请先在 Step 4 核对来源并人工确认指标。</div> : null}
         </div>
+      </div>
+
+      <div aria-label="图表数据有效性检查" className={`rounded-xl border p-3 text-[9px] leading-5 ${validation.valid ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+        <p className="font-semibold">数据有效性检查 · {validation.valid ? "可确认" : `${validation.issues.length} 项阻断`}</p>
+        {validation.issues.map((issue) => <p key={issue} className="mt-1">• {issue}</p>)}
+        {validation.warnings.map((warning) => <p key={warning} className="mt-1 text-violet-700">• {warning}</p>)}
+        {validation.valid && !validation.warnings.length ? <p className="mt-1">单位、期间、统计边界、可比性、确认状态、来源及修订版本均满足当前图表类型要求。</p> : null}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
