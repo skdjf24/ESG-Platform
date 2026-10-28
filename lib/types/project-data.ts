@@ -16,11 +16,12 @@ import type {
   WritingResource,
 } from "@/lib/types/writing";
 import type { ReportPresentationState } from "@/lib/types/presentation";
+import type { QualityCheckState } from "@/lib/types/quality";
 
 export type MaterialityMethod = "综合评估" | "管理层评估" | "利益相关方问卷";
 export type EntityReviewStatus = "有效" | "待复核";
 export type SourceState = "active" | "upstream-removed";
-export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface ReportBoundaryItem {
   id: string;
@@ -65,7 +66,7 @@ export interface ProjectWritingState {
   savedAt?: string;
 }
 
-export type ImpactEntityType = "enterprise" | "framework" | "topic" | "requirement" | "section" | "data-requirement" | "fact" | "chart" | "presentation";
+export type ImpactEntityType = "enterprise" | "framework" | "topic" | "requirement" | "section" | "data-requirement" | "fact" | "chart" | "presentation" | "quality";
 
 export interface ChangeImpact {
   id: string;
@@ -106,6 +107,7 @@ export interface ReportProjectData {
   resources: WritingResource[];
   writing: ProjectWritingState;
   presentation: ReportPresentationState;
+  quality: QualityCheckState;
   impacts: ChangeImpact[];
   migrations: MigrationRecord[];
 }

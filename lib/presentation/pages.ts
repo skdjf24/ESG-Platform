@@ -93,9 +93,22 @@ export function splitRichTextHtml(html: string, limit: number): string[] {
 
   for (const token of tokens) {
     if (token.startsWith("<")) {
-      current += token;
       const closing = token.match(/^<\/([a-z0-9]+)>$/i);
-      const opening = token.match(/^<([a-z0-9]+)>$/i);
+      const opening = token.match(/^<([a-z0-9]+)(?:\s[^>]*)?>$/i);
+      const openingName = opening?.[1].toLowerCase();
+      // Lists consume one visual line per item even when their text is short.
+      // Account for that structural height and prefer a page break before the
+      // next item, while the stack only contains its list container.
+      if (openingName === "li") {
+        const lineWeight = Math.max(14, Math.floor(limit / 10));
+        if (textLength && textLength + lineWeight > limit) flush();
+        textLength += lineWeight;
+      } else if (["p", "h2", "h3", "blockquote"].includes(openingName ?? "")) {
+        const blockSpacing = Math.max(4, Math.floor(limit / 28));
+        if (textLength && textLength + blockSpacing > limit) flush();
+        textLength += blockSpacing;
+      }
+      current += token;
       if (closing) {
         const index = openTags.lastIndexOf(closing[1].toLowerCase());
         if (index >= 0) openTags.splice(index, 1);

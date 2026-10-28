@@ -22,8 +22,8 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
   const { project, dirty, saveProject } = useProjectData();
   const shortLabel = project.enterprise.shortName.slice(0, 2).toUpperCase();
   const handleNavigate = async (href: string) => {
-    if (dirty && currentStep <= 6) {
-      const saved = await saveProject(currentStep as 1 | 2 | 3 | 4 | 5 | 6, "步骤切换自动保存");
+    if (dirty && currentStep <= 7) {
+      const saved = await saveProject(currentStep as 1 | 2 | 3 | 4 | 5 | 6 | 7, "步骤切换自动保存");
       if (!saved) return;
     }
     onNavigate?.();

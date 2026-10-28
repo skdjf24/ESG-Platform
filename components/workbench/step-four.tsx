@@ -46,15 +46,15 @@ const statusTone: Record<CollectionState, "green" | "blue" | "amber" | "gray"> =
   已确认: "green",
 };
 
-export function StepFour() {
+export function StepFour({ initialFactId }: { initialFactId?: string }) {
   const { project, editProject } = useProjectData();
   const dataRequirements = project.dataRequirements;
   const enterpriseFacts = project.facts;
   const energyFact = enterpriseFacts.find((fact) => fact.id === "fact-energy-2025");
-  const [activeTab, setActiveTab] = useState<Tab>("tasks");
+  const [activeTab, setActiveTab] = useState<Tab>(initialFactId ? "facts" : "tasks");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
   const [query, setQuery] = useState("");
-  const [openFact, setOpenFact] = useState<string | null>("fact-energy-2025");
+  const [openFact, setOpenFact] = useState<string | null>(initialFactId ?? "fact-energy-2025");
   const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string; reportingBoundary: string }>>({});
   const reviewConfirmed = energyFact?.state === "已确认";
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
@@ -344,7 +344,7 @@ export function StepFour() {
               {enterpriseFacts.map((fact) => {
                 const expanded = openFact === fact.id;
                 return (
-                  <div key={fact.id} className="bg-white">
+                  <div id={`fact-${fact.id}`} key={fact.id} className={`scroll-mt-24 bg-white ${initialFactId === fact.id ? "ring-1 ring-inset ring-amber-300" : ""}`}>
                     <button onClick={() => setOpenFact(expanded ? null : fact.id)} className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-[#fbfcfb] sm:grid-cols-[1fr_150px_130px_150px_24px] sm:items-center">
                       <div className="flex items-start gap-3">
                         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#edf5f1] text-[#176b52]"><Database className="size-4" /></span>

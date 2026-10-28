@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Check,
@@ -61,11 +61,19 @@ function TabNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab)
   );
 }
 
-function RequirementsMatrix() {
+function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: string }) {
   const { project, editProject } = useProjectData();
   const requirements = project.disclosureRequirements;
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => requirements.find((item) => item.id === initialRequirementId)?.code ?? "");
   const [framework, setFramework] = useState("全部框架");
+
+  useEffect(() => {
+    if (!initialRequirementId) return;
+    const requirement = requirements.find((item) => item.id === initialRequirementId);
+    if (requirement) {
+      requestAnimationFrame(() => document.getElementById(`requirement-${initialRequirementId}`)?.scrollIntoView({ block: "center" }));
+    }
+  }, [initialRequirementId, requirements]);
 
   const filteredRequirements = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -163,7 +171,7 @@ function RequirementsMatrix() {
               {filteredRequirements.map((item) => {
                 const confirmed = item.userConfirmed;
                 return (
-                  <tr key={item.id} className="group hover:bg-[#fbfcfb]">
+                  <tr id={`requirement-${item.id}`} key={item.id} className={`group scroll-mt-24 hover:bg-[#fbfcfb] ${initialRequirementId === item.id ? "bg-amber-50/60" : ""}`}>
                     <td className="sticky left-0 z-10 bg-white px-6 py-4 group-hover:bg-[#fbfcfb]">
                       <span className="font-semibold text-[#26362d]">{item.framework}</span>
                       <span className="ml-2 text-[11px] text-[#708078]">{item.code}</span>
@@ -386,8 +394,8 @@ function MaterialsList() {
   );
 }
 
-export function StepThree() {
-  const [activeTab, setActiveTab] = useState<Tab>("requirements");
+export function StepThree({ initialRequirementId }: { initialRequirementId?: string }) {
+  const [activeTab, setActiveTab] = useState<Tab>(initialRequirementId ? "requirements" : "requirements");
 
   return (
     <>
@@ -404,7 +412,7 @@ export function StepThree() {
         }
       />
       <TabNavigation active={activeTab} onChange={setActiveTab} />
-      {activeTab === "requirements" ? <RequirementsMatrix /> : null}
+      {activeTab === "requirements" ? <RequirementsMatrix initialRequirementId={initialRequirementId} /> : null}
       {activeTab === "outline" ? <ReportOutline /> : null}
       {activeTab === "materials" ? <MaterialsList /> : null}
       <StepFooter currentStep={3} />

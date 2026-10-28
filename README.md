@@ -1,6 +1,6 @@
 # ESG Disclosure Platform
 
-ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，当前覆盖企业画像、实质性议题、披露框架、资料与事实、报告内容编辑，以及 Step 6 数据可视化、版式和整本报告预览。Step 1–6 共享统一的项目数据仓库。
+ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，当前覆盖企业画像、实质性议题、披露框架、资料与事实、报告内容编辑、数据可视化与整本预览，以及 Step 7 报告质量与披露完整性检查。Step 1–7 共享统一的项目数据仓库。
 
 当前版本使用本地模拟数据，不接入真实 AI、文件存储或后端接口。
 
@@ -43,7 +43,7 @@ npm run start
 | `/reports/hualan-2025/step/4` | ESG 资料收集、汇总与规整 | 已实现原型 |
 | `/reports/hualan-2025/step/5` | 报告内容生成与编辑 | 已实现前端工作台 |
 | `/reports/hualan-2025/step/6` | 数据可视化、版式与整本报告预览 | 已实现前端工作台 |
-| `/reports/hualan-2025/step/7` | 质量与合规检查 | 待开发占位页 |
+| `/reports/hualan-2025/step/7` | 报告质量与披露完整性检查 | 已实现前端工作台与规则引擎 |
 | `/reports/hualan-2025/step/8` | 定稿与导出 | 待开发占位页 |
 
 工作台侧边导航、首页“继续编辑”以及每一步底部的上一步/下一步均使用真实 App Router 路由。当前仅提供示例项目 `hualan-2025`，未知项目或无效步骤会进入 404 页面。
@@ -74,7 +74,8 @@ components/
 │   ├── step-four.tsx                   # Step 4
 │   ├── step-five.tsx                   # Step 5 三栏报告编制工作台
 │   ├── step-six.tsx                    # Step 6 三栏版式与整本预览工作台
-│   └── step-placeholder.tsx            # Step 7–8 占位页
+│   ├── step-seven.tsx                  # Step 7 三栏质量检查工作台
+│   └── step-placeholder.tsx            # Step 8 占位页
 ├── presentation/
 │   ├── report-page.tsx                 # A4 页面、八类模板与 blockId 定位
 │   ├── report-chart.tsx                # 五类 Recharts 图表
@@ -106,11 +107,17 @@ lib/
 │   ├── sample-observations.ts          # 独立且明确标注的图表测试数据
 │   ├── themes.ts                       # 两套专业报告主题
 │   └── mock-ai.ts                      # 版式辅助 Mock AI Provider
+├── quality/
+│   ├── state.ts                        # Step 7 状态、兼容迁移、汇总与定稿准备状态
+│   ├── rules.ts                        # 五类确定性质量检查规则
+│   ├── engine.ts                       # 检查运行、稳定问题身份、复检与处理记录
+│   └── mock-ai.ts                      # 质量审校 Mock AI Provider
 ├── types/
 │   ├── esg.ts                          # 基础 TypeScript 业务类型
 │   ├── project-data.ts                 # 项目聚合、影响记录与 Repository 契约
 │   ├── writing.ts                      # Step 5 内容块、引用、版本及 AI 类型
-│   └── presentation.ts                 # Step 6 主题、指标、图表、版式及 AI 类型
+│   ├── presentation.ts                 # Step 6 主题、指标、图表、版式及 AI 类型
+│   └── quality.ts                      # Step 7 规则、问题、运行、处理与 AI 类型
 └── writing/
     ├── document.ts                     # 编制文档、校验、引用协调及规则检查
     └── mock-ai.ts                      # 本地确定性 Mock AI Provider
@@ -129,7 +136,7 @@ lib/
 - AI 规整示例结果
 - 企业事实、原始文件和页码/工作表/单元格级来源关联
 
-示例种子数据统一位于 `lib/data/mock-data.ts`，由 `lib/project/seed.ts` 组合为项目快照；Step 1–6 页面读取同一项目状态，不再各自维护相互隔离的业务副本。
+示例种子数据统一位于 `lib/data/mock-data.ts`，由 `lib/project/seed.ts` 组合为项目快照；Step 1–7 页面读取同一项目状态，不再各自维护相互隔离的业务副本。
 
 项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `LocalStorageReportProjectRepository`，存储键为 `esg:report-project:{projectId}:v2`；接口为异步设计，可在后续以 API/PostgreSQL Repository 替换，而不改变页面保存调用。项目快照仅保存文件元数据及来源定位，拒绝写入 `File`、`Blob`、`ArrayBuffer` 等二进制内容。
 
@@ -157,6 +164,17 @@ ReportPresentationState ──> ReportTheme / layout / charts / preview
 `MetricObservation` 记录指标定义、分类、系列、构成组、指标自身统计边界、来源确认、可比性和修订号。`ChartObservationSnapshot` 固化确认时的口径与来源，指标值、单位、报告期、边界、来源状态或修订变化时，相关图表进入“需更新”并保留旧图。
 
 旧项目没有 `presentation` 时会兼容补充默认版式；Step 6 schema v1 会迁移至 v2。原 Step 1–5 正文、引用、来源和版本保持不变。
+
+Step 7 类型位于 `lib/types/quality.ts`，核心关联为：
+
+```text
+DisclosureRequirement ──> WritingChapter / ContentBlock ──> FactCitation
+WritingFact / MetricObservation ──> SourceReference
+ContentBlock(chart) ──> ReportChart / PreviewPage
+上述稳定 ID ──> QualityIssue ──> QualityCheckRun / QualityActionRecord
+```
+
+`QualityIssue` 保存规则、严重程度、证据、来源步骤、章节/内容块/事实/图表 ID、处理状态和稳定身份。人工“标记已处理”只进入“待复检”，只有确定性规则再次运行且不再命中时才进入“已复检解决”。旧项目没有 `quality` 时会兼容补充空状态并记录迁移，不改写 Step 1–6 数据。
 
 ## 已实现功能
 
@@ -238,6 +256,23 @@ ReportPresentationState ──> ReportTheme / layout / charts / preview
 - 预览内容保留 `blockId`；正文可返回 Step 5 精确编辑位置，图表占位可直接进入配置
 - 主题、图表、版式及预览偏好保存到同一项目 Repository，刷新后恢复
 
+### Step 7：报告质量与披露完整性检查
+
+- 三栏工作台：检查分类与筛选、可搜索排序的问题清单、证据和处理详情
+- 顶部概览：披露覆盖、问题严重程度、解决/复检/例外数量、检查版本和定稿准备状态
+- 五类真实确定性规则：披露完整性、事实与来源、数据一致性、Writing Policy、版式与结构
+- 覆盖状态区分“未覆盖、部分覆盖、待核验、已核验覆盖”；正文映射存在不等于充分披露
+- 事实存在性、人工确认、引用修订、报告期、来源文件和具体位置检查
+- 仅在指标定义、单位、期间和已核验统计边界均一致时自动判断数据冲突
+- 表格未建立指标级引用时明确标记“无法自动核验”，不虚构匹配结果
+- 图表旧快照、待确认、需更新、来源状态及版面待复核检查
+- 复用 Writing Policy 的可复现词语规则；命中词语只生成带上下文的人工复核提示
+- 稳定问题身份、完整检查/章节检查/修改项复检、检查历史和处理记录
+- “认可问题、返回修改、标记已处理、接受例外、重新检查”流程；阻断问题不能普通例外绕过
+- 通过稳定 ID 定位 Step 3 披露要求、Step 4 事实、Step 5 内容块和 Step 6 图表
+- 上游保存后旧检查结果进入待复检，正文、来源、图表快照和旧问题历史均保留
+- 内部质量报告摘要和定稿准备状态只代表平台流程，不构成合规认证或外部鉴证
+
 ## 模拟功能说明
 
 以下交互用于产品原型演示，不会写入后端或产生真实业务结果：
@@ -252,7 +287,8 @@ ReportPresentationState ──> ReportTheme / layout / charts / preview
 - Step 5 的企业事实、资料包、披露映射和章节初始正文
 - Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
 - Step 6 图表/版式建议：由本地确定性 `mockPresentationAiProvider` 返回，并明确标注 `Mock AI`
-- Step 1–6 统一项目保存和 Step 5 版本恢复：仅使用当前浏览器 `localStorage`，不等同于服务器持久化或多人协作
+- Step 7 AI 建议：由 `mockQualityAiProvider` 返回固定演示流程，不能判断披露义务、充分性或事实真实性，也不会自动修改正文
+- Step 1–7 统一项目保存和 Step 5 版本恢复：仅使用当前浏览器 `localStorage`，不等同于服务器持久化或多人协作
 
 所有 AI 结果在界面中明确标注为“示例 AI 规整结果”，需要人工确认后才表现为可进入事实库。项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。
 
@@ -271,7 +307,7 @@ Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选�
 - 上游数据变化只同步共享数据和复核状态，不自动改写或删除 Step 5 已编辑正文。
 - 未确认事实不会因同步而自动变为已确认；事实修订会保留旧引用版本并提示待更新。
 
-## Step 1–6 数据贯通
+## Step 1–7 数据贯通
 
 ```text
 Step 1 企业画像 / 年度 / 框架
@@ -281,6 +317,7 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
                           Step 5 章节与披露映射 ←── Step 4 事实 / 指标 / 来源
                                       ↓                         ↓
                               内容块 / 引用 / 版本 ──→ Step 6 页面 / 图表 / 版式
+                                      └──────────────→ Step 7 规则 / 问题 / 复检
 ```
 
 - 所有跨步骤对象使用稳定 ID；保存时对比上一已保存快照并生成 `ChangeImpact`。
@@ -288,13 +325,13 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - Step 4 事实值、确认状态或来源修订变化后，引用块进入“待复核/待更新”，正文文本不变。
 - Step 5 仍保留章节版本；旧键 `esg:{projectId}:writing:v1` 可读入新快照，旧键不会被删除或覆盖。
 - Step 6 的图表保存指标版本快照；上游数值变化只标记“需更新”，不会覆盖旧图或 Step 5 正文。
+- Step 7 引用现有对象 ID 而不复制整份报告；Step 1–6 保存后检查状态标记待复检，旧运行和人工处理历史保留。
 - 通过 `projectId` 生成独立存储键，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6 截图、数据流、自动化测试和限制见 [docs/acceptance/step6/README.md](docs/acceptance/step6/README.md)。
+Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6 截图、数据流、自动化测试和限制见 [docs/acceptance/step6/README.md](docs/acceptance/step6/README.md)；Step 7 截图、规则边界、回归记录和已知限制见 [docs/acceptance/step7/README.md](docs/acceptance/step7/README.md)。
 
 ## 待开发范围
 
-- Step 7：质量与合规检查
 - Step 8：定稿与导出
 - Word/PDF 正式导出与最终披露索引
 - 后端 API、数据库、真实身份与权限体系
@@ -303,7 +340,7 @@ Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/ste
 - 服务端数据持久化、多人协作、正式版本记录与审计日志
 - 真实 AI Provider、流式任务、提示词/模型治理及服务端事实校验
 
-Step 7–8 当前仍仅展示明确的待开发状态与未来能力说明。Step 6 提供受控主题和浏览器 A4 预览，但不包含自由拖拽专业设计画布、Word/PDF 正式导出或最终页码保证。
+Step 8 当前仍仅展示明确的待开发状态与未来能力说明。Step 6 提供受控主题和浏览器 A4 预览，Step 7 提供内部质量流程，但均不包含自由拖拽专业设计画布、Word/PDF 正式导出、最终页码保证、合规认证或外部鉴证。
 
 ## 基础检查
 
