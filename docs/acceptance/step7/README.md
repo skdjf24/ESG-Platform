@@ -179,4 +179,6 @@ git diff --check   PASS
 
 ## 10. Pull Request
 
-Pull Request 将在分支推送后补充；不会自动合并。
+[PR #6：Step 7 报告质量与披露完整性检查](https://github.com/skdjf24/ESG-Platform/pull/6)
+
+PR 目标分支为完整 Step 6.1 修复分支，不会自动合并。
