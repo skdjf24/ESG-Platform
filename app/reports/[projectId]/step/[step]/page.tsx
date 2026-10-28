@@ -3,6 +3,7 @@ import { ProjectDataProvider } from "@/components/project/project-data-provider"
 import { StepFour } from "@/components/workbench/step-four";
 import { StepFive } from "@/components/workbench/step-five";
 import { StepSix } from "@/components/workbench/step-six";
+import { StepSeven } from "@/components/workbench/step-seven";
 import { StepOne } from "@/components/workbench/step-one";
 import { StepPlaceholder } from "@/components/workbench/step-placeholder";
 import { StepThree } from "@/components/workbench/step-three";
@@ -14,10 +15,10 @@ export default async function ReportStepPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string; step: string }>;
-  searchParams: Promise<{ chapterId?: string; blockId?: string }>;
+  searchParams: Promise<{ chapterId?: string; blockId?: string; requirementId?: string; factId?: string }>;
 }) {
   const { projectId, step: stepParam } = await params;
-  const { chapterId, blockId } = await searchParams;
+  const { chapterId, blockId, requirementId, factId } = await searchParams;
   const step = Number(stepParam);
 
   if (projectId !== "hualan-2025" || !Number.isInteger(step) || step < 1 || step > 8) {
@@ -29,11 +30,12 @@ export default async function ReportStepPage({
       <WorkbenchShell currentStep={step}>
         {step === 1 ? <StepOne /> : null}
         {step === 2 ? <StepTwo /> : null}
-        {step === 3 ? <StepThree /> : null}
-        {step === 4 ? <StepFour /> : null}
+        {step === 3 ? <StepThree initialRequirementId={requirementId} /> : null}
+        {step === 4 ? <StepFour initialFactId={factId} /> : null}
         {step === 5 ? <StepFive initialChapterId={chapterId} initialBlockId={blockId} /> : null}
         {step === 6 ? <StepSix initialBlockId={blockId} /> : null}
-        {step >= 7 ? <StepPlaceholder step={step as 7 | 8} /> : null}
+        {step === 7 ? <StepSeven /> : null}
+        {step === 8 ? <StepPlaceholder step={8} /> : null}
       </WorkbenchShell>
     </ProjectDataProvider>
   );

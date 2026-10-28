@@ -3,9 +3,9 @@ import type { SourceReference } from '@/lib/types/esg';
 import type { BlockKind, ContentBlock, WritingChapter, WritingDocument, WritingPolicy, WritingResource } from '@/lib/types/writing';
 
 const seedTimestamp = '2026-10-26T08:00:00.000Z';
-const allowedTags = new Set(['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote']);
+const allowedTags = new Set(['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'a', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote']);
 
-/** Formatting only. No attributes, links, images, styles, or executable content survive. */
+/** Formatting only. Links retain a validated href; images, styles, event handlers and executable content never survive. */
 export function sanitizeHtml(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, '')
@@ -14,9 +14,17 @@ export function sanitizeHtml(html: string): string {
       const match = tag.match(/^<\s*(\/?)\s*([a-z0-9]+)/i);
       if (!match || !allowedTags.has(match[2].toLowerCase())) return '';
       const name = match[2].toLowerCase();
+      if (name === 'a') {
+        if (match[1]) return '</a>';
+        const href = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)?.slice(1).find(Boolean)?.trim() ?? '';
+        if (!/^(?:https?:\/\/|mailto:|#)/i.test(href)) return '<a>';
+        const safeHref = href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<a href="${safeHref}" rel="noopener noreferrer">`;
+      }
       return name === 'br' ? '<br>' : `<${match[1] ? '/' : ''}${name}>`;
     })
-    .replace(/<(?!\/?(?:p|br|strong|b|em|i|u|s|ul|ol|li|h2|h3|blockquote)\b)/gi, '&lt;');
+    .replace(/<a><\/a>/gi, '')
+    .replace(/<(?!\/?(?:p|br|strong|b|em|i|u|s|a|ul|ol|li|h2|h3|blockquote)\b)/gi, '&lt;');
 }
 
 export function plainText(html: string): string {

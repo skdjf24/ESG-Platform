@@ -10,6 +10,7 @@ import {
 import type { ReportProjectData } from "@/lib/types/project-data";
 import { createWritingDocument } from "@/lib/writing/document";
 import { createPresentationState } from "@/lib/presentation/state";
+import { createQualityState } from "@/lib/quality/state";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
 
@@ -70,6 +71,7 @@ export function createProjectData(projectId: string): ReportProjectData {
       savedAt: writingDocument.savedAt,
     },
     presentation: createPresentationState(projectId, facts),
+    quality: createQualityState(),
     impacts: [],
     migrations: [],
   };
