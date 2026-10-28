@@ -47,53 +47,88 @@ function blockWeight(block: PreviewBlock) {
   return 12 + Math.ceil(plainText(block.html ?? source.html).length / 78) * 5;
 }
 
-function splitText(text: string, limit: number) {
-  const pieces = text.split(/(?<=[。！？；.!?;])\s*/).filter(Boolean);
-  const chunks: string[] = [];
-  let current = "";
-  for (const piece of pieces.length ? pieces : [text]) {
-    let remaining = piece;
-    while (remaining.length > limit) {
-      if (current) { chunks.push(current); current = ""; }
-      chunks.push(remaining.slice(0, limit));
-      remaining = remaining.slice(limit);
-    }
-    if (current && current.length + remaining.length > limit) { chunks.push(current); current = ""; }
-    current += remaining;
-  }
-  if (current) chunks.push(current);
-  return chunks;
+function decodeText(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, raw: string) => {
+      const code = Number(raw);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&amp;/gi, "&");
 }
 
-function htmlElements(html: string) {
+function preferredBreak(text: string, limit: number) {
+  if (text.length <= limit) return text.length;
+  const minimum = Math.max(1, Math.floor(limit * 0.6));
+  for (let index = limit - 1; index >= minimum; index -= 1) {
+    if (/[。！？；.!?;、，,\s]/.test(text[index])) return index + 1;
+  }
+  return limit;
+}
+
+/**
+ * Split sanitized rich text without flattening inline emphasis or list
+ * structure. Open tags are closed at a page boundary and reopened in the next
+ * fragment so every fragment remains independently renderable HTML.
+ */
+export function splitRichTextHtml(html: string, limit: number): string[] {
   const safe = sanitizeHtml(html);
-  const elements = safe.match(/<(?:p|h2|h3|blockquote|ul|ol)\b[^>]*>[\s\S]*?<\/(?:p|h2|h3|blockquote|ul|ol)>/gi);
-  return elements?.length ? elements : safe ? [safe] : [];
+  if (!safe || plainText(safe).length <= limit) return safe ? [safe] : [];
+  const tokens = safe.match(/<[^>]+>|[^<]+/g) ?? [];
+  const chunks: string[] = [];
+  const openTags: string[] = [];
+  let current = "";
+  let textLength = 0;
+
+  const closeOpenTags = () => [...openTags].reverse().map((name) => `</${name}>`).join("");
+  const reopenTags = () => openTags.map((name) => `<${name}>`).join("");
+  const flush = () => {
+    if (!textLength) return;
+    chunks.push(`${current}${closeOpenTags()}`);
+    current = reopenTags();
+    textLength = 0;
+  };
+
+  for (const token of tokens) {
+    if (token.startsWith("<")) {
+      current += token;
+      const closing = token.match(/^<\/([a-z0-9]+)>$/i);
+      const opening = token.match(/^<([a-z0-9]+)>$/i);
+      if (closing) {
+        const index = openTags.lastIndexOf(closing[1].toLowerCase());
+        if (index >= 0) openTags.splice(index, 1);
+      } else if (opening && opening[1].toLowerCase() !== "br") {
+        openTags.push(opening[1].toLowerCase());
+      }
+      continue;
+    }
+
+    let remaining = decodeText(token);
+    while (remaining) {
+      if (textLength >= limit) flush();
+      const room = Math.max(1, limit - textLength);
+      const take = preferredBreak(remaining, room);
+      const part = remaining.slice(0, take);
+      current += escapeHtml(part);
+      textLength += part.length;
+      remaining = remaining.slice(take);
+      if (remaining) flush();
+    }
+  }
+  flush();
+  return chunks;
 }
 
 function splitHtmlBlock(block: ContentBlock, capacity: number): PreviewBlock[] {
   // Keep fragments small enough that a preceding in-section heading can stay
   // with the first paragraph after typography or margin changes.
   const groupLimit = Math.max(180, Math.min(520, Math.floor((capacity - 23) / 5) * 78));
-  const pieceLimit = Math.max(160, Math.min(420, groupLimit));
-  const elements = htmlElements(block.html);
-  const pieces = elements.flatMap((element) => {
-    const text = plainText(element);
-    if (text.length <= pieceLimit) return [element];
-    return splitText(text, pieceLimit).map((part) => `<p>${escapeHtml(part)}</p>`);
-  });
-  const groups: string[][] = [[]];
-  let count = 0;
-  for (const piece of pieces) {
-    const length = plainText(piece).length;
-    if (count && count + length > groupLimit) { groups.push([]); count = 0; }
-    groups.at(-1)?.push(piece);
-    count += length;
-  }
-  return groups.filter((group) => group.length).map((group, index) => ({
+  return splitRichTextHtml(block.html, groupLimit).map((html, index) => ({
     block,
     fragmentId: index ? `${block.id}-fragment-${index + 1}` : block.id,
-    html: group.join(""),
+    html,
     continued: index > 0,
   }));
 }

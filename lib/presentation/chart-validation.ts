@@ -59,6 +59,12 @@ export function validateChartSelection(type: ReportChartType, observations: Metr
   if (type === "stacked-bar") {
     const series = unique(observations.map((item) => item.seriesName));
     const categories = unique(periods);
+    const pairCounts = new Map<string, number>();
+    observations.forEach((item) => {
+      const key = `${item.reportingPeriod.trim()}\u0000${item.seriesName.trim()}`;
+      pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+    });
+    const duplicatePairs = [...pairCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key.split("\u0000"));
     if (series.length < 2) issues.push("堆叠柱状图至少需要两个数据系列。 ");
     if (categories.length < 1) issues.push("堆叠柱状图缺少可用分类。 ");
     if (!same(units)) issues.push("堆叠系列的单位必须一致。 ");
@@ -66,6 +72,9 @@ export function validateChartSelection(type: ReportChartType, observations: Metr
     if (observations.some((item) => !item.compositionGroupId) || !same(observations.map((item) => item.compositionGroupId ?? ""))) {
       issues.push("堆叠柱状图各系列必须属于同一构成组。 ");
     }
+    duplicatePairs.forEach(([period, seriesName]) => {
+      issues.push(`堆叠柱状图中“${period} + ${seriesName}”存在重复数据；每个期间与系列只能对应一项观测。`);
+    });
     const expected = [...categories].sort().join("|");
     series.forEach((seriesName) => {
       const actual = unique(observations.filter((item) => item.seriesName === seriesName).map((item) => item.reportingPeriod)).sort().join("|");
