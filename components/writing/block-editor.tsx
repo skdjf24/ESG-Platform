@@ -22,9 +22,10 @@ export interface BlockEditorProps {
   onChange: (block: ContentBlock) => void;
   onDelete: () => void;
   onSelection: (text: string) => void;
+  onConfigureChart?: () => void;
 }
 
-export function BlockEditor({ block, selected, onSelect, onChange, onDelete, onSelection }: BlockEditorProps) {
+export function BlockEditor({ block, selected, onSelect, onChange, onDelete, onSelection, onConfigureChart }: BlockEditorProps) {
   const definition = kinds[block.kind];
   const Icon = definition.icon;
   const isPending = block.kind === "todo" && !block.resolved;
@@ -96,7 +97,7 @@ export function BlockEditor({ block, selected, onSelect, onChange, onDelete, onS
 
         {block.kind === "chart" && (
           <div className="rounded-lg border border-dashed border-[#bad0c2] bg-[#f7faf8] p-4">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-[#6f8c7b]"><BarChart3 className="size-5" />图表占位 · 排版功能将在 Step 6 开放</div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2 text-xs font-semibold text-[#6f8c7b]"><BarChart3 className="size-5" />图表占位 · Step 6 数据可视化</div>{onConfigureChart ? <button type="button" onClick={(event) => { event.stopPropagation(); onConfigureChart(); }} className="rounded-lg bg-[#176b52] px-3 py-1.5 text-[10px] font-semibold text-white">进入 Step 6 配置</button> : null}</div>
             <RichText compact value={block.html} label={`${block.title}图表说明`} onChange={(html) => change({ html })} onSelection={onSelection} />
           </div>
         )}

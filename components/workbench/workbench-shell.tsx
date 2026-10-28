@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Bell,
@@ -18,11 +18,16 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { reportSteps } from "@/lib/data/mock-data";
 
 function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNavigate?: () => void }) {
+  const router = useRouter();
   const { project, dirty, saveProject } = useProjectData();
   const shortLabel = project.enterprise.shortName.slice(0, 2).toUpperCase();
-  const handleNavigate = () => {
-    if (dirty && currentStep <= 5) void saveProject(currentStep as 1 | 2 | 3 | 4 | 5, "步骤切换自动保存");
+  const handleNavigate = async (href: string) => {
+    if (dirty && currentStep <= 6) {
+      const saved = await saveProject(currentStep as 1 | 2 | 3 | 4 | 5 | 6, "步骤切换自动保存");
+      if (!saved) return;
+    }
     onNavigate?.();
+    router.push(href);
   };
   return (
     <>
@@ -30,9 +35,9 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
         <BrandMark inverse />
       </div>
       <div className="border-b border-white/10 px-5 py-5">
-        <Link href="/" className="mb-4 inline-flex items-center gap-1 text-[11px] font-medium text-white/55 transition hover:text-white">
+        <button onClick={() => void handleNavigate("/")} className="mb-4 inline-flex items-center gap-1 text-[11px] font-medium text-white/55 transition hover:text-white">
           <ChevronLeft className="size-3.5" />返回项目首页
-        </Link>
+        </button>
         <div className="flex items-start gap-3">
           <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold text-emerald-100">{shortLabel}</div>
           <div className="min-w-0">
@@ -54,10 +59,9 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
             const passed = step.number < currentStep;
             return (
               <li key={step.number}>
-                <Link
-                  onClick={handleNavigate}
-                  href={`/reports/${project.projectId}/step/${step.number}`}
-                  className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${active ? "bg-white/11 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.08)]" : "text-white/58 hover:bg-white/[0.06] hover:text-white/85"}`}
+                <button
+                  onClick={() => void handleNavigate(`/reports/${project.projectId}/step/${step.number}`)}
+                  className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? "bg-white/11 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.08)]" : "text-white/58 hover:bg-white/[0.06] hover:text-white/85"}`}
                 >
                   {active ? <span className="absolute -left-3 top-2.5 h-8 w-[3px] rounded-r-full bg-[#6fd5ab]" /> : null}
                   <span className={`grid size-7 shrink-0 place-items-center rounded-lg border text-[10px] font-semibold ${passed ? "border-emerald-400/20 bg-emerald-400/15 text-emerald-200" : active ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-white/40"}`}>
@@ -67,7 +71,7 @@ function SidebarContent({ currentStep, onNavigate }: { currentStep: number; onNa
                     <span className={`block text-[9px] font-medium uppercase tracking-wider ${active ? "text-emerald-200/75" : "text-white/30"}`}>Step {step.number}</span>
                     <span className="mt-0.5 block truncate text-[12px] font-medium">{step.shortTitle}</span>
                   </span>
-                </Link>
+                </button>
               </li>
             );
           })}
