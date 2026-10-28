@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from 'react';
-import Link from 'next/link';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, FileClock, ListChecks, PanelRightClose, PanelRightOpen, Plus, Redo2, Save, Search, Settings2, Sparkles, Undo2, X } from 'lucide-react';
 import { BlockEditor } from '@/components/writing/block-editor';
 import { ResourcePanel } from '@/components/writing/resource-panel';
@@ -42,11 +42,13 @@ function replaceSelection(html: string, selection: string, replacement: string):
   return null;
 }
 
-export function StepFive() {
+export function StepFive({ initialChapterId, initialBlockId }: { initialChapterId?: string; initialBlockId?: string }) {
+  const router = useRouter();
   const store = useWritingDocument();
   const { doc } = store;
-  const [chapterId, setChapterId] = useState('section-4-2');
-  const [blockId, setBlockId] = useState('section-4-2-paragraph');
+  const validInitialChapter = doc.chapters.find(item => item.id === initialChapterId);
+  const [chapterId, setChapterId] = useState(validInitialChapter?.id ?? 'section-4-2');
+  const [blockId, setBlockId] = useState(validInitialChapter?.blocks.find(item => item.id === initialBlockId)?.id ?? (validInitialChapter ? validInitialChapter.blocks[0]?.id : 'section-4-2-paragraph') ?? '');
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const desktopResource = useSyncExternalStore(subscribeDesktopResource, getDesktopResource, getServerDesktopResource);
@@ -65,6 +67,10 @@ export function StepFive() {
   const pending = chapter.blocks.filter(b => (b.pendingKind && !b.resolved) || b.reviewStatus === '待复核');
   const versions = doc.versions.filter(v => v.chapterId === chapter.id).slice().reverse();
   const upstreamImpacts = store.project.impacts.filter(impact => impact.status === '待复核' && impact.targetSteps.includes(5));
+
+  useEffect(() => {
+    requestAnimationFrame(() => document.getElementById(`block-${blockId}`)?.scrollIntoView({ block: 'center' }));
+  }, [blockId]);
 
   function changeChapter(next: WritingChapter) {
     store.edit({ ...doc, chapters: doc.chapters.map(c => c.id === next.id ? { ...next, revision: c.revision + 1 } : c) });
@@ -131,6 +137,22 @@ export function StepFive() {
     changeChapter({ ...chapter, status, reviewStatus: status === '已审校' ? '已审校' : status === '待审校' ? '待审校' : chapter.reviewStatus });
   }
 
+  async function configureChart(block: ContentBlock) {
+    if (store.dirty) {
+      const saved = await store.save('进入 Step 6 前保存正文');
+      if (!saved) return;
+    }
+    router.push(`/reports/${store.project.projectId}/step/6?blockId=${encodeURIComponent(block.id)}`);
+  }
+
+  async function navigateToStep(step: 4 | 6) {
+    if (store.dirty) {
+      const saved = await store.save('步骤切换自动保存');
+      if (!saved) return;
+    }
+    router.push(`/reports/${store.project.projectId}/step/${step}`);
+  }
+
   if (!store.ready) return <div className="p-12 text-center text-sm text-[#63776a]">正在读取本地编制草稿…</div>;
   return <div className="writing-workbench">
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -166,14 +188,14 @@ export function StepFive() {
         {selection?.text && selection.blockId === blockId && <p className="mb-3 rounded-lg bg-violet-50 p-2.5 text-[11px] text-violet-700">已选文字：{selection.text.slice(0, 100)}{selection.text.length > 100 ? '…' : ''}</p>}
         {scanOpen && <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="text-xs font-semibold text-amber-900">空泛表述检查 · 词语匹配规则</div><p className="my-2 text-[11px] leading-5 text-amber-800">仅检测配置词语，供人工复核，不代表完整 AI 语义审校。</p>{issues.map((issue, i) => <button key={i} onClick={() => focusBlock(issue.blockId)} className="mt-2 block w-full rounded-lg bg-white/80 p-2 text-left text-xs leading-5 text-amber-900">{issue.suggestion}</button>)}{!issues.length && <p className="text-xs">未命中当前规则词。仍需人工审阅。</p>}</div>}
         <div className="space-y-4">{chapter.blocks.map(block => <div key={block.id}>
-          <BlockEditor block={block} selected={selectedBlock?.id === block.id} onSelect={() => { if (blockId !== block.id) { setBlockId(block.id); setSelection(null); } }} onChange={changeBlock} onDelete={() => { const remaining = chapter.blocks.filter(b => b.id !== block.id); changeChapter({ ...chapter, status: '撰写中', reviewStatus: '待复核', blocks: remaining }); if (blockId === block.id) setBlockId(remaining[0]?.id ?? ''); setSelection(null); }} onSelection={text => setSelection({ blockId: block.id, text })} />
+          <BlockEditor block={block} selected={selectedBlock?.id === block.id} onSelect={() => { if (blockId !== block.id) { setBlockId(block.id); setSelection(null); } }} onChange={changeBlock} onDelete={() => { const remaining = chapter.blocks.filter(b => b.id !== block.id); changeChapter({ ...chapter, status: '撰写中', reviewStatus: '待复核', blocks: remaining }); if (blockId === block.id) setBlockId(remaining[0]?.id ?? ''); setSelection(null); }} onSelection={text => setSelection({ blockId: block.id, text })} onConfigureChart={block.kind === 'chart' ? () => void configureChart(block) : undefined} />
           {selectedBlock?.id === block.id && <div className="mt-1 flex flex-wrap items-center gap-2 px-1 text-[10px] text-[#7a8f80]"><label>内部标记 <select aria-label="当前块内部标记" value={block.pendingKind ?? ''} onChange={e => changeBlock({ ...block, pendingKind: e.target.value ? e.target.value as ContentBlock['pendingKind'] : undefined, resolved: false })} className="rounded border border-[#dce5df] bg-white p-1"><option value="">无</option><option>待补充</option><option>待确认</option><option>待更新</option></select></label><button onClick={() => changeBlock({ ...block, pendingKind: undefined, resolved: true, reviewStatus: '已审校' })} className="ml-auto rounded border border-[#dce5df] bg-white px-2 py-1 text-[#176b52]">人工确认此块已审校</button></div>}
         </div>)}</div>
         <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-dashed border-[#bed2c5] bg-white/60 p-3">{Object.entries(blockLabels).map(([kind, label]) => <button key={kind} className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-[11px] text-[#4f775e] hover:bg-[#eaf4ee]" onClick={() => addBlock(kind as BlockKind)}><Plus className="size-3" />{label}</button>)}</div>
       </section>
       {panelOpen && <div className="writing-resources min-w-0 self-start"><ResourcePanel chapter={chapter} block={selectedBlock} facts={doc.facts} resources={getChapterResources(doc.resources, chapter.id)} onBlockChange={changeBlock} onFactChange={fact => store.edit({ ...doc, facts: doc.facts.map(f => f.id === fact.id ? fact : f) })} onResourceChange={resource => store.edit({ ...doc, resources: doc.resources.map(item => item.id === resource.id ? resource : item) })} onFocusBlock={focusBlock} onClose={() => setPanelOpen(false)} /></div>}
     </div>
-    <div className="mt-6 flex justify-between border-t border-[#dfe7e1] pt-4 text-xs text-[#587764]"><Link onClick={() => { if (store.dirty) void store.save('步骤切换自动保存'); }} href={`/reports/${store.project.projectId}/step/4`}>← 返回资料收集</Link><Link onClick={() => { if (store.dirty) void store.save('步骤切换自动保存'); }} href={`/reports/${store.project.projectId}/step/6`}>Step 6 可视化排版（待开发） →</Link></div>
+    <div className="mt-6 flex justify-between border-t border-[#dfe7e1] pt-4 text-xs text-[#587764]"><button onClick={() => void navigateToStep(4)}>← 返回资料收集</button><button onClick={() => void navigateToStep(6)}>Step 6 可视化、版式与预览 →</button></div>
     {policyOpen && <PolicyDialog policy={doc.policy} onSave={policy => { store.edit({ ...doc, policy }); setPolicyOpen(false); store.setMessage('写作规范已应用，请保存报告草稿。'); }} onClose={() => setPolicyOpen(false)} />}
     {aiRequest && <AiDialog request={aiRequest} provider={mockAiProvider} onAccept={acceptAi} onClose={() => setAiRequest(null)} />}
     {versionsOpen && <div className="fixed inset-0 z-[65] grid place-items-center bg-[#12271d]/40 p-4" onKeyDown={e => e.key === 'Escape' && setVersionsOpen(false)}><section role="dialog" aria-modal="true" aria-label="章节版本记录" className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"><div className="flex items-center justify-between"><h2 className="text-base font-semibold">章节版本记录</h2><button autoFocus onClick={() => setVersionsOpen(false)} aria-label="关闭版本记录"><X className="size-4" /></button></div><p className="my-3 text-xs leading-5 text-[#7b8d80]">{chapter.title} · 恢复版本后可撤销，保存时产生新记录。历史版本保留。</p>{versions.length ? versions.map(v => <div key={v.id} className="mb-2 rounded-xl border border-[#e1e7e3] p-3"><div className="flex items-center justify-between text-xs"><span className="font-semibold">v{v.number} · {v.label}</span><button className="text-[#176b52]" onClick={() => { const restored = structuredClone(v.snapshot); changeChapter({ ...restored, revision: chapter.revision, status: '待完善', reviewStatus: '待复核', blocks: restored.blocks.map(b => ({ ...b, reviewStatus: '待复核' })) }); setBlockId(restored.blocks[0]?.id ?? ''); setSelection(null); setVersionsOpen(false); store.setMessage(`已恢复 v${v.number}，请复核来源并保存为新版本。`); }}>恢复此版本</button></div><p className="mt-2 text-[10px] text-[#87978d]">{new Date(v.savedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} · {v.snapshot.blocks.length} 个内容块</p></div>) : <p className="py-8 text-center text-sm text-[#89998e]">保存草稿后建立版本记录</p>}</section></div>}
