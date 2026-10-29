@@ -16,6 +16,16 @@ export interface QualityEvidence {
   entityId?: string;
 }
 
+export interface QualityIssueLocation {
+  sourceStep: 3 | 4 | 5 | 6 | 7;
+  chapterId?: string;
+  blockId?: string;
+  requirementId?: string;
+  factId?: string;
+  chartId?: string;
+  label: string;
+}
+
 export interface QualityRuleDefinition {
   ruleId: string;
   ruleVersion: string;
@@ -39,6 +49,7 @@ export interface QualityIssue {
   sourceStep: 3 | 4 | 5 | 6 | 7;
   chapterId?: string;
   blockId?: string;
+  locations: QualityIssueLocation[];
   requirementIds: string[];
   factIds: string[];
   chartIds: string[];
@@ -63,6 +74,8 @@ export interface QualityCheckRun {
   scope: QualityCheckScope;
   chapterId?: string;
   inputProjectRevision: number;
+  inputFingerprint: string;
+  ruleSetFingerprint: string;
   ruleVersions: Record<string, string>;
   issueIds: string[];
   status: QualityRunStatus;
@@ -72,7 +85,7 @@ export interface QualityCheckRun {
 export interface QualityActionRecord {
   actionId: string;
   issueId: string;
-  action: "认可问题" | "返回修改" | "标记已处理" | "提交复检" | "接受例外" | "系统复检解决" | "记录 Mock AI 建议";
+  action: "认可问题" | "返回修改" | "标记已处理" | "提交复检" | "接受例外" | "系统复检解决" | "问题重新打开" | "例外失效重新确认" | "记录 Mock AI 建议";
   note: string;
   actor: string;
   createdAt: string;
@@ -81,12 +94,47 @@ export interface QualityActionRecord {
 
 export interface DisclosureCoverageRecord {
   requirementId: string;
+  requirementRevision: number;
+  requirementFingerprint: string;
   status: QualityCoverageStatus;
   reason: string;
   chapterIds: string[];
   blockIds: string[];
   assessedAt: string;
   method: "规则检查" | "人工确认";
+}
+
+export interface QualityFullCheckRecord {
+  runId: string;
+  inputProjectRevision: number;
+  savedProjectRevision: number;
+  inputFingerprint: string;
+  ruleSetFingerprint: string;
+  completedAt: string;
+  valid: boolean;
+  invalidatedAt?: string;
+  invalidationReason?: string;
+}
+
+export interface QualityInvalidationRecord {
+  invalidationId: string;
+  sourceStep: 1 | 2 | 3 | 4 | 5 | 6;
+  projectRevision: number;
+  reason: string;
+  affectedEntityIds: string[];
+  affectedIssueIds: string[];
+  createdAt: string;
+}
+
+export interface Step8QualityGate {
+  validFullCheck: boolean;
+  canSubmit: boolean;
+  readiness: FinalizationReadiness;
+  reasons: string[];
+  fullCheckRunId?: string;
+  checkedProjectRevision?: number;
+  currentInputFingerprint: string;
+  currentRuleSetFingerprint: string;
 }
 
 export interface QualityCheckSummary {
@@ -107,7 +155,7 @@ export interface QualityCheckSummary {
 }
 
 export interface QualityCheckState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   issues: QualityIssue[];
   runs: QualityCheckRun[];
   actions: QualityActionRecord[];
@@ -115,6 +163,8 @@ export interface QualityCheckState {
   summary: QualityCheckSummary;
   readiness: FinalizationReadiness;
   checkedProjectRevision?: number;
+  fullCheck?: QualityFullCheckRecord;
+  invalidations: QualityInvalidationRecord[];
   stale: boolean;
   savedAt?: string;
 }

@@ -3,6 +3,7 @@ import type { ContentBlock, WritingDocument, WritingFact } from "@/lib/types/wri
 import { createBlock, reconcileCitations } from "@/lib/writing/document";
 import { synchronizeObservations } from "@/lib/presentation/state";
 import { markQualityChecksStale } from "@/lib/quality/engine";
+import { qualityInputFingerprint } from "@/lib/quality/validity";
 
 const unique = <T,>(items: T[]) => [...new Set(items)];
 const comparable = <T extends object>(value: T, ignored: string[]) => Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.includes(key)));
@@ -167,9 +168,13 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   next.disclosureRequirements = next.disclosureRequirements.map((requirement) => {
     const before = previous.disclosureRequirements.find((item) => item.id === requirement.id);
     if (!before) return { ...requirement, revision: Math.max(1, requirement.revision) };
-    if (!changed(before, requirement, ["revision", "reviewStatus"])) return { ...requirement, revision: before.revision };
+    if (!changed(before, requirement, ["revision"])) return { ...requirement, revision: before.revision };
     changedRequirementIds.push(requirement.id);
-    return { ...requirement, revision: Math.max(before.revision + 1, requirement.revision), reviewStatus: requirement.userConfirmed ? "有效" : "待复核" };
+    return {
+      ...requirement,
+      revision: Math.max(before.revision + 1, requirement.revision),
+      reviewStatus: requirement.userConfirmed ? requirement.reviewStatus : "待复核",
+    };
   });
   if (sourceStep === 3 && changedRequirementIds.length) {
     next = markRequirementMappings(next, changedRequirementIds);
@@ -251,8 +256,15 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   }
 
   next.impacts = [...next.impacts, ...impacts];
-  if (sourceStep <= 6 && previous.quality.runs.length) {
-    next = markQualityChecksStale(next, `Step ${sourceStep} 的已保存输入发生变化；旧检查记录保留，相关结论等待重新检查。`);
+  const qualityInputsChanged = sourceStep <= 6 && qualityInputFingerprint(previous) !== qualityInputFingerprint(next);
+  if (qualityInputsChanged && (previous.quality.runs.length || previous.quality.fullCheck)) {
+    const affectedEntityIds = unique(impacts.flatMap((impact) => [impact.entityId, ...impact.affectedIds]));
+    next = markQualityChecksStale(
+      next,
+      `Step ${sourceStep} 的已保存输入发生变化；旧检查记录保留，相关结论等待重新检查。`,
+      sourceStep as 1 | 2 | 3 | 4 | 5 | 6,
+      affectedEntityIds,
+    );
   }
   next.updatedAt = nowIso();
   return { project: next, impacts };

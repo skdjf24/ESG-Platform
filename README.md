@@ -328,7 +328,7 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - Step 7 引用现有对象 ID 而不复制整份报告；Step 1–6 保存后检查状态标记待复检，旧运行和人工处理历史保留。
 - 通过 `projectId` 生成独立存储键，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6 截图、数据流、自动化测试和限制见 [docs/acceptance/step6/README.md](docs/acceptance/step6/README.md)；Step 7 截图、规则边界、回归记录和已知限制见 [docs/acceptance/step7/README.md](docs/acceptance/step7/README.md)。
+Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6 截图、数据流、自动化测试和限制见 [docs/acceptance/step6/README.md](docs/acceptance/step6/README.md)；Step 7 截图、规则边界、回归记录和已知限制见 [docs/acceptance/step7/README.md](docs/acceptance/step7/README.md)；Step 7.1 全面检查有效性、稳定问题身份、状态迁移及 A–G 测试见 [docs/acceptance/step7-1/README.md](docs/acceptance/step7-1/README.md)。
 
 ## 待开发范围
 
