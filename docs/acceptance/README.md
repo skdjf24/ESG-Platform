@@ -1,6 +1,6 @@
 # 产品验收材料
 
-本目录用于 ESG Disclosure Platform 分轮产品原型验收。早期截图与说明作为当时基线保留，当前分支已完成 Step 1–6；Step 7–8 仍为待开发占位。
+本目录用于 ESG Disclosure Platform 分轮产品原型验收。早期截图与说明作为当时基线保留，当前代码已完成 Step 1–8 前端原型。
 
 ## 运行截图
 
@@ -65,3 +65,11 @@ Step 5 的运行截图、真实交互范围、Mock 边界、数据关联和真�
 ## Step 6.1：图表统计与正式预览修复
 
 图表统计有效性、指标边界/修订联动、正式阅读清理、长正文与长表格分页、动态封面及修复截图见 [step6-1/README.md](step6-1/README.md)。
+
+## Step 7 / 7.1：质量检查与状态修复
+
+确定性质量规则、全面检查有效性、稳定问题身份、人工处理历史和 Step 8 gate 接口见 [step7/README.md](step7/README.md) 与 [step7-1/README.md](step7-1/README.md)。
+
+## Step 8：定稿与导出
+
+Step 7.1 gate 接入、人工定稿声明、版本失效、正式打印页、JSON 审计归档及浏览器回归见 [step8/README.md](step8/README.md)。

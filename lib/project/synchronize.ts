@@ -125,7 +125,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
 
   if (sourceStep === 1) {
     if (previous.enterprise.name !== next.enterprise.name) {
-      impacts.push(createImpact(1, "enterprise", next.enterprise.id, `企业名称已更新为“${next.enterprise.name}”，Step 5–7 将读取最新名称；已编辑正文不会自动替换。`, [], [5, 6, 7]));
+      impacts.push(createImpact(1, "enterprise", next.enterprise.id, `企业名称已更新为“${next.enterprise.name}”，Step 5–8 将读取最新名称；已编辑正文不会自动替换。`, [], [5, 6, 7, 8]));
     }
     const reportPeriodChanged = previous.report.year !== next.report.year
       || JSON.stringify(previous.report.reportingPeriod) !== JSON.stringify(next.report.reportingPeriod);
@@ -136,7 +136,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         : "报告年度或报告期已变化，请核验图表指标期间与当前报告期是否一致。";
       const chartIds = next.presentation.charts.map((chart) => chart.chartId);
       next = markChartsForContextReview(next, reason);
-      impacts.push(createImpact(1, "presentation", next.projectId, reason, chartIds, [6, 7]));
+      impacts.push(createImpact(1, "presentation", next.projectId, reason, chartIds, [6, 7, 8]));
     }
     const removedFrameworks = previous.report.frameworks.filter((framework) => !next.report.frameworks.includes(framework));
     const removedTopics = previous.topics.filter((topic) => !next.topics.some((item) => item.id === topic.id));
@@ -145,7 +145,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       const ids = affectedRequirements.map((item) => item.id);
       next.disclosureRequirements = next.disclosureRequirements.map((item) => ids.includes(item.id) ? { ...item, userConfirmed: false, reviewStatus: "待复核" } : item);
       next = markRequirementMappings(next, ids);
-      impacts.push(createImpact(1, removedTopics.length ? "topic" : "framework", removedTopics[0]?.id ?? removedFrameworks[0], "企业画像中的框架或议题已调整，相关披露要求、正文映射、报告版面及质量结论需要复核。", ids, [2, 3, 5, 6, 7]));
+      impacts.push(createImpact(1, removedTopics.length ? "topic" : "framework", removedTopics[0]?.id ?? removedFrameworks[0], "企业画像中的框架或议题已调整，相关披露要求、正文映射、报告版面、质量结论及定稿状态需要复核。", ids, [2, 3, 5, 6, 7, 8]));
     }
   }
 
@@ -158,7 +158,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
       next.disclosureRequirements = next.disclosureRequirements.map((item) => requirementIds.includes(item.id) ? { ...item, userConfirmed: false, reviewStatus: "待复核" } : item);
       next = markRequirementMappings(next, requirementIds);
-      impacts.push(createImpact(2, "topic", topicIds[0], "实质性议题范围已变化，关联披露要求、正文覆盖、报告版面和质量结论需要复核。", requirementIds, [3, 5, 6, 7]));
+      impacts.push(createImpact(2, "topic", topicIds[0], "实质性议题范围已变化，关联披露要求、正文覆盖、报告版面、质量结论及定稿状态需要复核。", requirementIds, [3, 5, 6, 7, 8]));
     } else if (changed(previous.materiality, next.materiality, ["revision", "confirmedAt"])) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
     }
@@ -178,7 +178,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   });
   if (sourceStep === 3 && changedRequirementIds.length) {
     next = markRequirementMappings(next, changedRequirementIds);
-    impacts.push(createImpact(3, "requirement", changedRequirementIds[0], "披露要求的适用性或章节映射已更新，已有正文映射保留并标记为待核验，质量结论需复检。", changedRequirementIds, [5, 6, 7]));
+    impacts.push(createImpact(3, "requirement", changedRequirementIds[0], "披露要求的适用性或章节映射已更新，已有正文映射保留并标记为待核验，质量结论及定稿状态需复检。", changedRequirementIds, [5, 6, 7, 8]));
   }
 
   if (sourceStep === 3) {
@@ -189,7 +189,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       const current = next.reportSections.find((item) => item.id === id);
       if (before && !current) {
         next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? { ...chapter, sourceState: "upstream-removed", status: "待完善", reviewStatus: "待复核" } : chapter);
-        impacts.push(createImpact(3, "section", id, `目录章节“${before.title}”已从 Step 3 移除；Step 5 正文、历史版本及 Step 6 版面仍保留，等待人工处理和质量复检。`, [id], [5, 6, 7]));
+        impacts.push(createImpact(3, "section", id, `目录章节“${before.title}”已从 Step 3 移除；Step 5 正文、历史版本及 Step 6 版面仍保留，等待人工处理、质量复检和定稿复核。`, [id], [5, 6, 7, 8]));
         continue;
       }
       if (!current) continue;
@@ -215,7 +215,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         const oldMapping = `${before.order} ${before.title}`;
         const newMapping = `${current.order} ${current.title}`;
         next.disclosureRequirements = next.disclosureRequirements.map((item) => item.mappedSection === oldMapping ? { ...item, mappedSection: newMapping, revision: item.revision + 1, reviewStatus: "待复核", userConfirmed: false } : item);
-        impacts.push(createImpact(3, "section", id, `报告目录已更新为“${newMapping}”；Step 5–6 已同步章节信息并保留全部正文块，Step 7 需复检。`, [id], [5, 6, 7]));
+        impacts.push(createImpact(3, "section", id, `报告目录已更新为“${newMapping}”；Step 5–6 已同步章节信息并保留全部正文块，Step 7–8 需复检。`, [id], [5, 6, 7, 8]));
       }
     }
     next.writing.chapters = next.writing.chapters.map((chapter) => activeSectionIds.has(chapter.id) ? { ...chapter, sourceState: "active" } : chapter);
@@ -251,7 +251,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       const affectedBlocks = next.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.citations.some((citation) => changedFacts.includes(citation.factId))).map((block) => block.id));
       next = synchronizeObservations(next, changedFacts);
       const affectedCharts = next.presentation.charts.filter((chart) => chart.status === "需更新" && chart.metricObservationIds.some((observationId) => changedFacts.some((factId) => observationId === `observation-${factId}`))).map((chart) => chart.chartId);
-      impacts.push(createImpact(4, "fact", changedFacts[0], "企业事实或 ESG 指标已更新；相关正文和图表保留旧版本，并标记为待更新和待复检。", [...affectedBlocks, ...affectedCharts], [5, 6, 7]));
+      impacts.push(createImpact(4, "fact", changedFacts[0], "企业事实或 ESG 指标已更新；相关正文和图表保留旧版本，质量结论与定稿状态标记为待复核。", [...affectedBlocks, ...affectedCharts], [5, 6, 7, 8]));
     }
   }
 

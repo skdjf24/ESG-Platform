@@ -8,9 +8,9 @@ import type { ProjectStep } from "@/lib/types/project-data";
 export function StepFooter({ currentStep, showSave = true }: { currentStep: number; showSave?: boolean }) {
   const router = useRouter();
   const { project, dirty, saving, saveProject } = useProjectData();
-  const save = () => currentStep <= 6 ? saveProject(currentStep as ProjectStep, `Step ${currentStep} 手动保存`) : Promise.resolve(false);
+  const save = () => currentStep <= 8 ? saveProject(currentStep as ProjectStep, `Step ${currentStep} 手动保存`) : Promise.resolve(false);
   const navigate = async (href: string) => {
-    if (dirty && currentStep <= 6) {
+    if (dirty && currentStep <= 8) {
       const saved = await saveProject(currentStep as ProjectStep, "步骤切换自动保存");
       if (!saved) return;
     }

@@ -62,7 +62,7 @@ export function ReportPageCanvas({
   const pageStyle = {
     color: theme.colors.text,
     backgroundColor: theme.colors.surface,
-    fontFamily: theme.fonts.chinese,
+    fontFamily: `${theme.fonts.chinese}, "Noto Sans SC", sans-serif`,
     "--report-primary": theme.colors.primary,
     "--report-secondary": theme.colors.secondary,
     "--report-accent": theme.colors.accent,

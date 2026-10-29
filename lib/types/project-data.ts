@@ -17,11 +17,12 @@ import type {
 } from "@/lib/types/writing";
 import type { ReportPresentationState } from "@/lib/types/presentation";
 import type { QualityCheckState } from "@/lib/types/quality";
+import type { FinalizationState } from "@/lib/types/finalization";
 
 export type MaterialityMethod = "综合评估" | "管理层评估" | "利益相关方问卷";
 export type EntityReviewStatus = "有效" | "待复核";
 export type SourceState = "active" | "upstream-removed";
-export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export interface ReportBoundaryItem {
   id: string;
@@ -108,6 +109,7 @@ export interface ReportProjectData {
   writing: ProjectWritingState;
   presentation: ReportPresentationState;
   quality: QualityCheckState;
+  finalization: FinalizationState;
   impacts: ChangeImpact[];
   migrations: MigrationRecord[];
 }

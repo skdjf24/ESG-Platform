@@ -25,7 +25,7 @@ body {
   margin: 0;
   color: var(--foreground);
   background: var(--background);
-  font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  font-family: "Noto Sans SC", "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -105,6 +105,16 @@ input[type="radio"]:not(:disabled) {
 .presentation-navigation, .presentation-settings { position: sticky; top: 84px; max-height: calc(100vh - 100px); }
 .quality-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
 .quality-sidebar, .quality-detail { position: sticky; top: 84px; max-height: calc(100vh - 100px); }
+
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  .final-report-toolbar { display: none !important; }
+  .final-report-shell, .final-report-pages { background: white !important; }
+  .final-report-pages { display: block !important; padding: 0 !important; }
+  .final-report-page { break-after: page; page-break-after: always; }
+  .final-report-page:last-child { break-after: auto; page-break-after: auto; }
+  .final-report-page .report-page { box-shadow: none !important; }
+}
 .report-page { isolation: isolate; }
 .report-page-body { overflow: visible; }
 @media (min-width: 1280px) {

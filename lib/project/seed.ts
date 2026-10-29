@@ -11,6 +11,7 @@ import type { ReportProjectData } from "@/lib/types/project-data";
 import { createWritingDocument } from "@/lib/writing/document";
 import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
+import { createFinalizationState } from "@/lib/finalization/state";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
 
@@ -72,6 +73,7 @@ export function createProjectData(projectId: string): ReportProjectData {
     },
     presentation: createPresentationState(projectId, facts),
     quality: createQualityState(),
+    finalization: createFinalizationState(),
     impacts: [],
     migrations: [],
   };

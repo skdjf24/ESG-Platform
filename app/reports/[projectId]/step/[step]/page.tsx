@@ -4,8 +4,8 @@ import { StepFour } from "@/components/workbench/step-four";
 import { StepFive } from "@/components/workbench/step-five";
 import { StepSix } from "@/components/workbench/step-six";
 import { StepSeven } from "@/components/workbench/step-seven";
+import { StepEight } from "@/components/workbench/step-eight";
 import { StepOne } from "@/components/workbench/step-one";
-import { StepPlaceholder } from "@/components/workbench/step-placeholder";
 import { StepThree } from "@/components/workbench/step-three";
 import { StepTwo } from "@/components/workbench/step-two";
 import { WorkbenchShell } from "@/components/workbench/workbench-shell";
@@ -35,7 +35,7 @@ export default async function ReportStepPage({
         {step === 5 ? <StepFive initialChapterId={chapterId} initialBlockId={blockId} /> : null}
         {step === 6 ? <StepSix initialBlockId={blockId} /> : null}
         {step === 7 ? <StepSeven /> : null}
-        {step === 8 ? <StepPlaceholder step={8} /> : null}
+        {step === 8 ? <StepEight /> : null}
       </WorkbenchShell>
     </ProjectDataProvider>
   );
