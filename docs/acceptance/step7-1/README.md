@@ -115,4 +115,6 @@ node scripts/step7-browser-regression.cjs  PASS（Step 7 完整回归、Step 1�
 
 ## 8. Pull Request
 
-PR 创建后补充链接；目标分支为 `feature/step7-quality-check-20261028`，不会自动合并。
+[PR #7：Step 7.1 质量检查状态与问题管理修复](https://github.com/skdjf24/ESG-Platform/pull/7)
+
+PR 目标分支为 `feature/step7-quality-check-20261028`，当前处于开放、可合并状态；不会自动合并。
