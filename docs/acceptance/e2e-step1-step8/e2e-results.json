@@ -1,0 +1,557 @@
+{
+  "generatedAt": "2026-10-29T08:53:05.390Z",
+  "baseUrl": "http://127.0.0.1:4346",
+  "testProject": "E2E Prototype Test Project",
+  "dataPolicy": "独立浏览器 context + 清空 localStorage；图表数据明确标记为模拟，不作为正式披露。",
+  "totals": {
+    "pass": 75,
+    "fail": 5,
+    "findings": 6
+  },
+  "results": [
+    {
+      "id": "CHART-bar",
+      "title": "bar 合规模拟数据通过确认校验",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-bar-LABEL",
+      "title": "bar 模拟数据具有明确警示",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-line",
+      "title": "line 合规模拟数据通过确认校验",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-line-LABEL",
+      "title": "line 模拟数据具有明确警示",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-stacked-bar",
+      "title": "stacked-bar 合规模拟数据通过确认校验",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-stacked-bar-LABEL",
+      "title": "stacked-bar 模拟数据具有明确警示",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-pie",
+      "title": "pie 合规模拟数据通过确认校验",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-pie-LABEL",
+      "title": "pie 模拟数据具有明确警示",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-kpi",
+      "title": "kpi 合规模拟数据通过确认校验",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-kpi-LABEL",
+      "title": "kpi 模拟数据具有明确警示",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-BLOCK-line-metric",
+      "title": "拦截 line-metric",
+      "status": "PASS",
+      "detail": "折线图只能选择同一指标定义的时间序列。"
+    },
+    {
+      "id": "CHART-BLOCK-unit",
+      "title": "拦截 unit",
+      "status": "PASS",
+      "detail": "图表显示单位与指标单位不一致；当前原型不执行单位换算。；同一柱状图中的指标单位必须一致。"
+    },
+    {
+      "id": "CHART-BLOCK-boundary",
+      "title": "拦截 boundary",
+      "status": "PASS",
+      "detail": "同一柱状图中的指标统计边界必须一致。"
+    },
+    {
+      "id": "CHART-BLOCK-pie-period",
+      "title": "拦截 pie-period",
+      "status": "PASS",
+      "detail": "饼图构成项目必须属于同一报告期间。"
+    },
+    {
+      "id": "CHART-BLOCK-stack-duplicate",
+      "title": "拦截 stack-duplicate",
+      "status": "PASS",
+      "detail": "堆叠柱状图中“2024年度 + 外购电力”存在重复数据；每个期间与系列只能对应一项观测。"
+    },
+    {
+      "id": "ROUTE-1",
+      "title": "Step 1 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP1-MARKET",
+      "title": "市场类别保存",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-BOUNDARY",
+      "title": "报告边界保存",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-HISTORY",
+      "title": "历史报告记录保留",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-REFRESH",
+      "title": "Step 1 刷新后恢复",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-DYNAMIC",
+      "title": "Step 1 使用最新企业信息作为当前项目状态",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-INDUSTRY-EDIT",
+      "title": "行业分类可编辑并可进入保存流程",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-HISTORY-UPLOAD",
+      "title": "历史报告可创建真实来源记录",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-7",
+      "title": "Step 7 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP7-FULL-CHECK",
+      "title": "全面检查建立有效运行记录",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-2",
+      "title": "Step 2 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "CHAIN-B-STEP2-3",
+      "title": "Step 2 议题变化使相关披露要求待复核",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP2-NO-DELETE",
+      "title": "议题变化不删除既有正文",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP2-INVALIDATE-QA",
+      "title": "议题变化保留历史并使原全面检查失效",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP2-ADD-TOPIC",
+      "title": "议题池支持新增议题",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-3",
+      "title": "Step 3 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "CHAIN-D-STEP3-5",
+      "title": "Step 3 章节改名同步 Step 5 目录",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHAIN-B-STEP3-MAPPING",
+      "title": "Step 3 章节改名同步披露要求映射",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP3-ADD-SECTION",
+      "title": "Step 3 可新增章节",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-4",
+      "title": "Step 4 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP4-FACT-REVISION",
+      "title": "Step 4 事实修订保存并增加版本",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHAIN-A-STEP4-5",
+      "title": "事实版本变化保留旧引用快照并使正文待复核",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHAIN-A-STEP4-6",
+      "title": "图表引用数据变化后进入需更新",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP4-UPLOAD-MOCK-LABEL",
+      "title": "文件收集明确标记为模拟",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP4-UPLOAD-NO-FALSE-DATA",
+      "title": "模拟上传不伪造来源记录",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-5",
+      "title": "Step 5 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP5-UPSTREAM-ENTERPRISE",
+      "title": "Step 5 读取 Step 1 最新企业信息",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP5-MOCK-NO-OVERWRITE",
+      "title": "Mock AI 未经接受不覆盖用户正文",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP5-REFRESH",
+      "title": "Step 5 正文修改保存并刷新恢复",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-6",
+      "title": "Step 6 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP6-DYNAMIC-COVER",
+      "title": "Step 6 动态显示 Step 1 企业名称",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP6-DYNAMIC-YEAR",
+      "title": "Step 6 动态显示 Step 1 报告年度",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHAIN-D-STEP6",
+      "title": "Step 3 目录顺序和标题进入 Step 6",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP5-6-SYNC",
+      "title": "Step 5 正文同步 Step 6 预览",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP6-NO-SILENT-CLIP",
+      "title": "字体和行距变化后正文无静默裁切",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "STEP6-REPAGINATE",
+      "title": "字体和行距变化触发安全重分页",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP6-FORMAL-CLEAN",
+      "title": "正式阅读不显示内部编辑标识或 Mock 说明",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-DUPLICATES",
+      "title": "统一数据中无重复 ID",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-REQ-ORPHANS",
+      "title": "正文无失效披露映射",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-FACT-ORPHANS",
+      "title": "正文无失效事实引用",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-CHART-ORPHANS",
+      "title": "图表无失效引用",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-SECTIONS",
+      "title": "Step 3/5 章节引用完整",
+      "status": "PASS",
+      "detail": "{\"sectionGaps\":[],\"inactiveChapters\":[]}"
+    },
+    {
+      "id": "DATA-REVISIONS",
+      "title": "事实、正文块和指标修订号有效",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "DATA-SOURCE-ORPHANS",
+      "title": "来源引用均指向统一 sources 集合",
+      "status": "FAIL",
+      "detail": "fact:fact-energy-2025:source-energy-xlsx；fact:fact-training-2025:source-hr-xlsx"
+    },
+    {
+      "id": "CHART-RENDER-bar",
+      "title": "bar 在 Step 6 真实画布渲染",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-RENDER-line",
+      "title": "line 在 Step 6 真实画布渲染",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-RENDER-stacked-bar",
+      "title": "stacked-bar 在 Step 6 真实画布渲染",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-RENDER-pie",
+      "title": "pie 在 Step 6 真实画布渲染",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "CHART-RENDER-kpi",
+      "title": "kpi 在 Step 6 真实画布渲染",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-7",
+      "title": "Step 7 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP7-RECHECK",
+      "title": "修订后可重新执行全面检查并保留运行历史",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP7-UNRESOLVED-PRESERVED",
+      "title": "未解决问题未在复检时消失",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP7-BLOCKER-GATE",
+      "title": "阻断问题不能放行 Step 8 Gate",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP7-CURRENT-FINDINGS",
+      "title": "当前 E2E 数据真实触发披露、来源和 Writing Policy 问题",
+      "status": "PASS",
+      "detail": "DISC-002,SRC-001,SRC-003,WRITE-001,WRITE-003,DISC-003"
+    },
+    {
+      "id": "ROUTE-8",
+      "title": "Step 8 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STEP8-BLOCKED",
+      "title": "Step 7 Gate 未通过时禁止定稿",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP8-BUTTON-DISABLED",
+      "title": "定稿按钮处于禁用状态",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-3",
+      "title": "Step 3 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "ROUTE-8",
+      "title": "Step 8 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STORAGE-REOPEN",
+      "title": "刷新、关闭式重载和跨步骤往返保持数据",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "ROUTE-1",
+      "title": "Step 1 路由可打开",
+      "status": "PASS",
+      "detail": "200"
+    },
+    {
+      "id": "STORAGE-CONFLICT",
+      "title": "并发旧页面保存被明确拦截且未覆盖新数据",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STORAGE-MIGRATION",
+      "title": "旧 schema 加法迁移保留正文与历史来源",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STORAGE-CAPACITY",
+      "title": "超过容量上限明确报错且不覆盖旧快照",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "BROWSER-ERRORS",
+      "title": "浏览器无未处理 console/page error",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "High",
+      "id": "GAP-S1-INDUSTRY",
+      "title": "行业分类控件不可操作",
+      "evidence": "行业按钮无处理器，点击后数据、弹层均无变化。",
+      "impact": "企业无法按实际行业创建画像。",
+      "recommendation": "实现行业选择器并经统一仓库保存、触发下游复核。"
+    },
+    {
+      "severity": "High",
+      "id": "GAP-S1-UPLOAD",
+      "title": "历史报告上传为静态 Mock",
+      "evidence": "点击模拟上传区不创建来源记录，也不打开文件处理流程。",
+      "impact": "无法用真实历史报告启动企业项目。",
+      "recommendation": "接入对象存储、文件校验和解析任务，保留原始文件哈希与版本。"
+    },
+    {
+      "severity": "High",
+      "id": "GAP-S2-EDIT",
+      "title": "Step 2 新增/编辑议题未实现",
+      "evidence": "新增议题和编辑按钮没有业务处理器；评分也只有静态显示。",
+      "impact": "无法完成真实企业的完整实质性议题评估。",
+      "recommendation": "补齐议题 CRUD、双重重要性评分、依据与确认审计。"
+    },
+    {
+      "severity": "High",
+      "id": "GAP-S3-STRUCTURE",
+      "title": "新增章节和映射编辑未实现",
+      "evidence": "新增章节、编辑关联、查看映射均为无处理器按钮。",
+      "impact": "真实报告目录与披露要求映射无法完整配置，链路 B/D 不完整。",
+      "recommendation": "实现章节 CRUD、排序与 Requirement 映射编辑，保存时只标记下游复核，不删除正文。"
+    },
+    {
+      "severity": "High",
+      "id": "GAP-S4-INGEST",
+      "title": "Step 4 无真实文件新增、解析和事实抽取",
+      "evidence": "上传/在线补充弹层明确说明不会保存真实文件；仅能编辑种子事实。",
+      "impact": "链路 C 无法由真实原始资料起始。",
+      "recommendation": "建设真实上传、解析、抽取、人工确认和来源版本管理。"
+    },
+    {
+      "severity": "Medium",
+      "id": "DATA-ORPHAN-SOURCES",
+      "title": "种子事实/资源引用了 sources 中不存在的 sourceId",
+      "evidence": "fact:fact-energy-2025:source-energy-xlsx；fact:fact-training-2025:source-hr-xlsx",
+      "impact": "来源卡片可展示嵌入快照，但无法从统一来源集合管理或撤销这些来源。",
+      "recommendation": "统一 Source 实体，迁移现有引用并在保存校验中覆盖 facts/resources/blocks。"
+    }
+  ],
+  "integrity": {
+    "duplicates": [],
+    "orphanRequirements": [],
+    "orphanFacts": [],
+    "orphanCharts": [],
+    "orphanSources": [
+      "fact:fact-energy-2025:source-energy-xlsx",
+      "fact:fact-training-2025:source-hr-xlsx"
+    ],
+    "sectionGaps": [],
+    "inactiveChapters": [],
+    "badRevisions": []
+  },
+  "browserErrors": []
+}

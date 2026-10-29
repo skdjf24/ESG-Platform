@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:step8:browser": "node scripts/step8-browser-regression.cjs"
+    "test:step8:browser": "node scripts/step8-browser-regression.cjs",
+    "test:e2e:step1-8": "node --experimental-strip-types scripts/e2e-step1-step8-regression.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.8",
