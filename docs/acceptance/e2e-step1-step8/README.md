@@ -12,7 +12,7 @@
 - Step 1–7 的统一数据、上游失效、正文保留、图表校验、质量检查和 Gate 机制大体贯通。
 - 五种图表均使用明确标记的模拟观测通过统计校验，并在真实 Step 6 画布渲染。
 - localStorage 的刷新恢复、旧 schema 加法迁移、并发冲突保护和超容量失败提示有效。
-- 存在 1 个 Blocker：创建定稿版本后，既有 Step 8 回归无法打开最终打印页面。
+- Step 8 Gate、定稿持久化、最终打印、正式阅读清理和上游变更失效全部通过独立回归。
 - 存在 5 个直接影响真实企业操作的 High 缺口：行业不可编辑、历史报告上传为 Mock、议题新增/编辑及评分不完整、章节/映射编辑不完整、真实文件采集/解析/抽取缺失。
 - 统一数据中发现 2 个孤立来源引用。没有发现重复 ID、孤立披露映射、孤立事实引用、孤立图表引用或无效修订号。
 
@@ -30,7 +30,7 @@
 | Step 6 回归 | PASS |
 | Step 7 回归 | PASS |
 | Step 7.1 回归 | PASS |
-| Step 8 回归 | **FAIL：最终打印页无法打开** |
+| Step 8 回归 | PASS（23 项，console/page error 0） |
 | ESLint | PASS |
 | TypeScript | PASS |
 | Production build | PASS |
@@ -149,19 +149,20 @@
 - 同一数据不能重复创建相同定稿；审计 JSON 能生成且明确标记模拟原型。
 - 上游关键输入变化会使原定稿失效，旧版本仍保留，输出按钮关闭。
 
-失败：
+复核修正：
 
-- **Blocker**：刚创建的有效定稿在 `/reports/hualan-2025/final` 无法显示“打印 / 保存 PDF”。独立复跑两次一致失败。
-- 从代码路径推断，最终页的新 `ProjectDataProvider` 加载后，`activeFinalVersion` 或 `isFinalVersionCurrent` 判定失败；需要下一轮比较定稿前、保存后和重新加载后的 fingerprint 输入，不能在本轮直接修复。
+- 初次验收把 `/reports/hualan-2025/final` 的异步加载态误判为定稿失效。根因是浏览器回归仅等待 `networkidle`，没有等待 `ProjectDataProvider` 完成 localStorage 加载。
+- 回归现已在每次跳转和刷新后等待 `aria-busy="false"`，随后验证“打印 / 保存 PDF”、指纹一致、页数一致和正式阅读清理，23 项全部通过。
+- 这是测试等待时序修正，不放宽 Step 7 Gate、定稿指纹或失效条件，产品数据模型无需修改。
 
 ## 4. 跨步骤数据链路
 
 | 链路 | 结果 | 证据与断点 |
 | --- | --- | --- |
-| A：Step 4 指标 → Step 5 引用 → Step 6 图表 → Step 7 → Step 8 | 部分通过 | 指标修订、旧引用、图表需更新和 Step 7 数据问题均通过；Step 8 最终打印 Blocker 使完整发布链未闭合。 |
+| A：Step 4 指标 → Step 5 引用 → Step 6 图表 → Step 7 → Step 8 | 通过原型链路 | 指标修订、旧引用、图表需更新、Step 7 数据问题和 Step 8 Gate/定稿/最终打印均通过；真实文件与正式 PDF 仍未实现。 |
 | B：Step 3 Requirement → Step 5 映射 → Step 7 覆盖 → Step 8 Gate | 通过 Gate | 映射删除/标题覆盖可被 Step 7 发现并阻断 Step 8；但 Step 3 映射编辑 UI 未实现。 |
 | C：Step 4 原始来源 → 企业事实 → Step 5 → Step 7 | 不完整 | 种子数据可贯通并触发来源规则；真实上传/解析不存在，且有 2 个 sourceId 不在统一 sources 集合。 |
-| D：Step 3 目录 → Step 5 → Step 6 → Step 8 | 部分通过 | 改名与顺序同步 Step 5/6；Step 8 最终打印 Blocker，且新增章节 UI 未实现。 |
+| D：Step 3 目录 → Step 5 → Step 6 → Step 8 | 通过现有功能 | 改名与顺序同步 Step 5/6 并进入 Step 8 最终打印；新增章节 UI 仍未实现。 |
 
 ## 5. 数据完整性
 
@@ -199,10 +200,7 @@
 
 ### Blocker
 
-1. **Step 8 最终打印页拒绝刚创建的定稿版本**
-   - 影响：无法完成“定稿 → 正式打印/PDF”核心成果输出。
-   - 范围：`FinalReportVersion` 持久化、定稿 fingerprint、重新加载后的 final route。
-   - 建议：下一轮增加 fingerprint 前后对照测试，确认 load-time normalize/migration 是否改变质量结论输入；修复后重新运行 Step 8 和完整 E2E。
+无。初次记录的 Step 8 Blocker 经复核确认为回归脚本未等待项目数据加载导致的假失败，修正测试等待条件后 23 项全部通过。
 
 ### High
 
@@ -238,9 +236,9 @@
 | #4 | PR #3 head | `feature/step6-visualization-layout-preview-20261027` | `7293f31` | Step 6 |
 | #5 | PR #4 head | `fix/step6-1-chart-validation-formal-preview-20261028` | `1235676` | Step 6.1 |
 | #6 | PR #5 head | `feature/step7-quality-check-20261028` | `d7cfd4e` | Step 7 |
-| #7 | PR #6 head | `feature/step7-1-quality-state-fixes-20261029` | `22b135d` | Step 7.1 + Step 8 |
+| #7 | PR #6 head | `feature/step7-1-quality-state-fixes-20261029` | 当前 head | Step 7.1 + Step 8 + 验收记录 |
 
-最新连续分支相对 `main` 有 11 个提交，包含 Step 1–8 全量代码。连续主链没有重复 patch；PR 页面中重复显示早期提交是堆叠式 ancestry，不是代码重复。
+最新连续分支相对 `main` 将包含 11 个既有开发/说明提交和 2 个验收提交，包含 Step 1–8 全量代码及回归证据。连续主链没有重复 patch；PR 页面中重复显示早期提交是堆叠式 ancestry，不是代码重复。
 
 本地还存在若干不跟踪远端的替代实现分支（例如 `feature/step8-finalization-export-local-incompatible-20261029`、`feature/step7-quality-compliance-review-20261028`）。它们不属于当前 PR 主链，不能参与集成。当前不删除任何分支。
 
@@ -254,13 +252,12 @@
 - 最新 head 已完整包含 11 个顺序提交，可一次清楚审阅最终净差异。
 - 可避免误合本地替代分支和重复等价提交。
 
-执行前提：先修复 Step 8 Blocker 并复跑本报告全部命令。本轮不 retarget、不新建整合 PR、不合并。
+执行前提：补齐或明确接受本报告列出的 High 缺口，并由产品 owner 决定原型是否进入主线。本轮不 retarget、不新建整合 PR、不合并。
 
 ## 9. Product Gap List
 
 ### P0｜企业试用前必须补齐
 
-- 修复 Step 8 定稿重载/最终打印 Blocker。
 - 补齐行业、议题评分、章节和 Requirement 映射的核心 CRUD。
 - 后端 API、PostgreSQL、对象存储、项目/文件版本和事务式保存。
 - 用户账号、企业租户隔离、基础角色权限、加密、备份恢复和安全日志。
@@ -313,20 +310,20 @@
 | 维度 | 评估 | 说明 |
 | --- | ---: | --- |
 | UI 原型 | 90% | Step 1–8 界面完整，少数按钮是静态外观。 |
-| 业务流程 | 76% | 主流程与 Gate 存在，但关键 CRUD、真实采集和最终打印中断。 |
+| 业务流程 | 80% | 主流程、Gate、定稿和最终打印贯通，但关键 CRUD 与真实采集仍缺失。 |
 | 数据模型 | 72% | 统一项目、修订、snapshot、quality/finalization 较完整；来源实体有孤立引用。 |
-| 跨步骤数据链路 | 74% | 上游失效和正文保留有效；链路 C 与最终输出未闭合。 |
+| 跨步骤数据链路 | 78% | 上游失效、正文保留和原型最终输出有效；链路 C 的真实来源采集未闭合。 |
 | AI 能力 | 10% | Provider 抽象存在，业务能力全部为 Mock。 |
 | 文件处理 | 5% | 仅文件名/定位示例，没有真实文件或解析。 |
 | 数据持久化 | 38% | localStorage 保护较好，但没有服务器、多设备、备份和租户。 |
-| 报告导出 | 30% | 页面与 JSON 原型存在；最终打印回归失败，无 DOCX/正式 PDF。 |
+| 报告导出 | 40% | 最终打印页与 JSON 归档原型通过；仍无 DOCX 和服务器端正式 PDF。 |
 | 生产安全 | 8% | 无账号、权限、租户隔离、服务端日志和生产安全控制。 |
 
 ## 12. 下一阶段建议（最多 3 个阶段）
 
 ### Phase 1｜验收缺口修复
 
-- 只修 Step 8 Blocker、核心 CRUD、来源孤立引用和完整回归。
+- 补齐核心 CRUD、来源孤立引用，并保持完整回归稳定。
 - 保持 UI 及既有数据，不扩展新业务模块。
 - 完成后形成一个面向 `main` 的 integration PR。
 
@@ -362,4 +359,4 @@ E2E_BASE_URL=http://127.0.0.1:4346 npm run test:e2e:step1-8
 
 - 本报告不构成法规合规认证、披露充分性法律意见或外部验证。
 - 没有真实企业文件、真实 AI、真实用户、数据库或正式导出，因此不能据此宣布 Enterprise Pilot Ready。
-- Blocker 未修复前，不建议把当前版本作为稳定发布主线合并。
+- 当前没有自动验收 Blocker；是否进入主线仍需产品 owner 根据 High 缺口和原型定位决定。

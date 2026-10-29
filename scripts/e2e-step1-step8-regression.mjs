@@ -104,10 +104,19 @@ async function stored(page) {
   }, storageKey);
 }
 
+async function waitForProjectReady(page) {
+  await page.locator('[aria-busy="false"]').first().waitFor({ state: "attached", timeout: 15000 });
+}
+
+async function reloadProject(page, timeout = 90_000) {
+  await page.reload({ waitUntil: "networkidle", timeout });
+  await waitForProjectReady(page);
+}
+
 async function openStep(page, step) {
   const response = await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
   record(Boolean(response?.ok()), `ROUTE-${step}`, `Step ${step} 路由可打开`, String(response?.status()));
-  await page.waitForTimeout(150);
+  await waitForProjectReady(page);
 }
 
 async function waitForStored(page, predicate, timeout = 12_000) {
@@ -190,7 +199,7 @@ async function main() {
 
   await openStep(page, 1);
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   await page.getByLabel("企业全称").fill(projectLabel);
   await page.getByLabel("报告年度").fill("2026");
   await page.getByLabel("报告期开始").fill("2026.01.01");
@@ -203,7 +212,7 @@ async function main() {
   record(project.boundary.note.startsWith("E2E"), "STEP1-BOUNDARY", "报告边界保存");
   record(project.sources.length > 0, "STEP1-HISTORY", "历史报告记录保留");
   const initialSourceCount = project.sources.length;
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   record(await page.getByLabel("企业全称").inputValue() === projectLabel, "STEP1-REFRESH", "Step 1 刷新后恢复");
   record(await page.getByLabel("企业全称").inputValue() === projectLabel, "STEP1-DYNAMIC", "Step 1 使用最新企业信息作为当前项目状态");
 
@@ -309,7 +318,7 @@ async function main() {
   record(await editor.innerText() === beforeAi, "STEP5-MOCK-NO-OVERWRITE", "Mock AI 未经接受不覆盖用户正文");
   await page.getByRole("button", { name: "保存报告草稿" }).click();
   await waitForStored(page, (value) => value.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))));
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   record(await page.getByRole("textbox", { name: blockTitle }).innerText().then((text) => text.includes(e2eSentence)).catch(() => false), "STEP5-REFRESH", "Step 5 正文修改保存并刷新恢复");
 
   await openStep(page, 6);
@@ -366,8 +375,10 @@ async function main() {
         }];
         localStorage.setItem(key, JSON.stringify(value));
       }, { key: storageKey, type, observationIds: chartObservationIds[type], blockId: chartBlock.block.id, chapterId: chartBlock.chapter.id });
-      await page.reload({ waitUntil: "networkidle" });
-      const visible = await page.locator(`[data-chart-type="${type}"]`).count() > 0;
+      await reloadProject(page);
+      const renderedChart = page.locator(`[data-chart-type="${type}"]`);
+      await renderedChart.first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => null);
+      const visible = await renderedChart.count() > 0;
       record(visible, `CHART-RENDER-${type}`, `${type} 在 Step 6 真实画布渲染`);
     }
   } else {
@@ -390,7 +401,7 @@ async function main() {
 
   // 持久化：刷新、关闭重开、跨步骤往返。
   const revisionBeforeReopen = project.revision;
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   await openStep(page, 3);
   await openStep(page, 8);
   const reopened = await stored(page);
@@ -400,6 +411,7 @@ async function main() {
   const stalePage = await context.newPage();
   await openStep(stalePage, 1);
   await page.goto(`${baseUrl}/reports/hualan-2025/step/1`, { waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   await page.getByLabel("报告联系人姓名").fill("E2E Page A");
   await page.getByRole("button", { name: "保存基础信息" }).click();
   const pageAProject = await waitForStored(page, (value) => value.enterprise.reportingContact.name === "E2E Page A");
@@ -418,7 +430,7 @@ async function main() {
     delete value.finalization;
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   await page.getByRole("button", { name: /保存基础信息|基础信息已保存/ }).click();
   project = await waitForStored(page, (value) => Boolean(value.presentation && value.quality && value.finalization));
   record(project.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))) && project.sources.length === initialSourceCount, "STORAGE-MIGRATION", "旧 schema 加法迁移保留正文与历史来源");
@@ -429,7 +441,7 @@ async function main() {
     value.report.title = `E2E-CAPACITY-${"x".repeat(4_600_000)}`;
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle", timeout: 45_000 });
+  await reloadProject(page, 45_000);
   const largeRawBefore = await page.evaluate((key) => localStorage.getItem(key), storageKey);
   await page.getByLabel("报告联系人姓名").fill("容量测试不应落盘");
   await page.getByRole("button", { name: "保存基础信息" }).click();

@@ -14,6 +14,10 @@ function check(condition, name, detail = "") {
   console.log(`PASS ${name}`);
 }
 
+async function waitForProjectReady(page) {
+  await page.locator('[aria-busy="false"]').first().waitFor({ state: "attached", timeout: 15000 });
+}
+
 async function main() {
   fs.mkdirSync(acceptanceDir, { recursive: true });
   const executablePath = process.env.CHROMIUM_EXECUTABLE || "/usr/bin/chromium";
@@ -25,13 +29,16 @@ async function main() {
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
 
   await page.goto(`${baseUrl}/reports/hualan-2025/step/7`, { waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   await page.getByRole("button", { name: "开始全面检查" }).click();
   await page.getByText(/确定性规则检查已完成/).waitFor({ timeout: 15000 });
   const checkedProject = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
   check(Boolean(checkedProject.quality.fullCheck?.valid), "Step 7.1 全面检查建立有效 gate 记录");
   await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   check(await page.getByText("定稿门禁未通过").isVisible() && await page.getByRole("button", { name: "确认并创建新定稿版本" }).isDisabled(), "Step 7 活动问题未关闭时 Step 8 禁止定稿");
 
   const originalChapterCount = checkedProject.writing.chapters.length;
@@ -42,6 +49,7 @@ async function main() {
     localStorage.setItem(key, JSON.stringify(project));
   }, storageKey);
   await page.reload({ waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   await page.getByRole("button", { name: "已保存" }).click();
   await page.getByText(/已保存项目数据/).waitFor({ timeout: 10000 });
   const migratedProject = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
@@ -78,6 +86,7 @@ async function main() {
   }, storageKey);
 
   await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   check(await page.getByText(/Step 7.1 定稿门禁已通过/).isVisible(), "Step 8 直接读取朋友版本的 Step 7.1 gate");
   await page.screenshot({ path: path.join(acceptanceDir, "01-finalization-gate.png"), fullPage: true });
 
@@ -103,6 +112,8 @@ async function main() {
   finalPage.on("console", (message) => { if (message.type() === "error") browserErrors.push(`final console: ${message.text()}`); });
   finalPage.on("pageerror", (error) => browserErrors.push(`final page: ${error.message}`));
   await finalPage.goto(`${baseUrl}/reports/hualan-2025/final`, { waitUntil: "networkidle" });
+  await waitForProjectReady(finalPage);
+  await finalPage.getByText("打印 / 保存 PDF").waitFor({ timeout: 15000 });
   check(await finalPage.getByText("打印 / 保存 PDF").isVisible(), "当前有效版本可以打开最终打印页");
   const reportText = await finalPage.locator(".final-report-pages").innerText();
   check(!/blockId:|编辑原文|内部待办|Mock AI|独立模拟测试/.test(reportText), "最终报告不显示内部编辑标识、待办或 Mock 说明");
@@ -118,6 +129,7 @@ async function main() {
     localStorage.setItem(key, JSON.stringify(project));
   }, storageKey);
   await page.reload({ waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   check(await page.getByText("当前有效定稿").isVisible(), "普通保存元数据变化不会错误使定稿失效");
 
   await page.evaluate((key) => {
@@ -126,12 +138,14 @@ async function main() {
     localStorage.setItem(key, JSON.stringify(project));
   }, storageKey);
   await page.reload({ waitUntil: "networkidle" });
+  await waitForProjectReady(page);
   check(await page.getByText("定稿已失效").isVisible(), "披露输入变化立即使旧定稿失效");
   check(await page.getByRole("button", { name: "打开最终打印版" }).isDisabled(), "失效定稿禁止继续输出");
   check(await page.getByText("定稿门禁未通过").isVisible(), "披露输入变化同时关闭 Step 7.1 gate");
 
   for (let step = 1; step <= 8; step += 1) {
     const response = await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
+    await waitForProjectReady(page);
     check(response?.ok(), `Step ${step} 既有路由可打开`);
   }
   check(browserErrors.length === 0, "浏览器无 console/page error", browserErrors.join(" | "));

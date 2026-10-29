@@ -30,6 +30,8 @@
 - Step 1–8 路由回归；
 - console error 0、page error 0。
 
+回归在每次跳转和刷新后显式等待 `ProjectDataProvider` 完成 localStorage 加载，避免把短暂加载态误判为 Gate 或定稿失效。
+
 机器可读结果见 `browser-results.json`；测试使用独立模拟项目数据，不代表示例企业真实绩效。
 
 ## 截图

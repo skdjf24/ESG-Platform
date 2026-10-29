@@ -23,15 +23,24 @@ async function waitStored(page, predicate, timeout = 10_000) {
   throw new Error("Timed out waiting for project storage");
 }
 
+async function waitForProjectReady(page) {
+  await page.locator('[aria-busy="false"]').first().waitFor({ state: "attached", timeout: 15000 });
+}
+
+async function reloadProject(page) {
+  await page.reload({ waitUntil: "networkidle" });
+  await waitForProjectReady(page);
+}
+
 async function openStep(page, step) {
   await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(200);
+  await waitForProjectReady(page);
 }
 
 async function fresh(page) {
   await openStep(page, 7);
   await page.evaluate(() => localStorage.clear());
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   return null;
 }
 
@@ -91,7 +100,7 @@ async function main() {
     }
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   const sourceIssues = project.quality.issues.filter((issue) => issue.ruleId === "SRC-002" && issue.factIds.includes("fact-training-2025"));
   assert(sourceIssues.length === 1, "C1 同一缺陷事实只生成一个 SRC-002 稳定问题身份");
@@ -105,7 +114,7 @@ async function main() {
     block.citations = block.citations.filter((citation) => citation.factId !== "fact-training-2025");
     localStorage.setItem(key, JSON.stringify(value));
   }, { key: storageKey, blockId: removedLocation.blockId });
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   await page.getByLabel("按章节筛选").selectOption(removedLocation.chapterId);
   project = await run(page, "检查当前章节", 3);
   const partiallyUpdatedSource = project.quality.issues.find((issue) => issue.ruleId === "SRC-002" && issue.factIds.includes("fact-training-2025"));
@@ -132,7 +141,7 @@ async function main() {
     block.mappings = [...block.mappings.filter((item) => item.requirementId !== requirement.id), { requirementId: requirement.id, coverage: "已覆盖" }];
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   assert(project.quality.coverage.find((item) => item.requirementId === "req-gri-302-1")?.status === "已核验覆盖", "D1 有效要求和人工审校正文可形成已核验覆盖记录");
   await page.evaluate((key) => {
@@ -142,7 +151,7 @@ async function main() {
     requirement.revision += 1;
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   assert(await page.getByText("上游已变化 · 待复检").isVisible(), "D2 输入指纹变化即时使全面检查失效");
   project = await run(page, "开始全面检查", 3);
   assert(project.quality.coverage.find((item) => item.requirementId === "req-gri-302-1")?.status === "待核验", "D3 reviewStatus 待复核后覆盖状态失效为待核验");
@@ -159,7 +168,7 @@ async function main() {
     block.html = block.html.replaceAll("高度重视", "重视");
     localStorage.setItem(key, JSON.stringify(value));
   }, { key: storageKey, blockId: vagueBlockId });
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   let resolvedActions = project.quality.actions.filter((action) => action.issueId === vague.issueId && action.action === "系统复检解决");
   assert(resolvedActions.length === 1, "E1 首次复检解决只写入一条系统解决记录");
@@ -172,7 +181,7 @@ async function main() {
     block.html = `${block.html}<p>本公司高度重视相关工作。</p>`;
     localStorage.setItem(key, JSON.stringify(value));
   }, { key: storageKey, blockId: vagueBlockId });
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", 4);
   const reopened = project.quality.issues.find((issue) => issue.issueId === vague.issueId);
   assert(reopened?.status === "待处理", "F1 已解决问题重新出现时恢复待处理状态");
@@ -187,7 +196,7 @@ async function main() {
     block.html = block.html.replace("高度重视相关工作", "高度重视并持续推进相关工作");
     localStorage.setItem(key, JSON.stringify(value));
   }, { key: storageKey, issueId: vague.issueId, blockId: vagueBlockId });
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", 5);
   assert(project.quality.issues.find((issue) => issue.issueId === vague.issueId)?.status === "待处理", "F4 已接受例外的输入变化后需要重新处理");
   assert(project.quality.actions.some((action) => action.issueId === vague.issueId && action.action === "例外失效重新确认"), "F5 例外失效动作保留在处理历史中");
@@ -206,7 +215,7 @@ async function main() {
     value.migrations = value.migrations.filter((item) => item.id !== "migration-quality-check-v2");
     localStorage.setItem(key, JSON.stringify(value));
   }, storageKey);
-  await page.reload({ waitUntil: "networkidle" });
+  await reloadProject(page);
   project = await run(page, "开始全面检查", runCount + 1);
   assert(project.quality.schemaVersion === 2 && project.quality.invalidations, "G1 QualityCheckState v1 已迁移到 v2");
   assert(project.writing.chapters.length === chapterCount && project.quality.runs.length === runCount + 1, "G2 迁移保留章节和历史检查运行");
