@@ -65,6 +65,26 @@ export const historicalReports: UploadedSource[] = [
     uploadedBy: "林悦",
     state: "已解析",
   },
+  {
+    id: "source-energy-xlsx",
+    name: "2025年度能源与排放统计表.xlsx",
+    kind: "file",
+    fileType: "XLSX",
+    size: "1.6 MB",
+    uploadedAt: "2026-10-24",
+    uploadedBy: "林悦",
+    state: "已解析",
+  },
+  {
+    id: "source-hr-xlsx",
+    name: "2025年度员工培训统计.xlsx",
+    kind: "file",
+    fileType: "XLSX",
+    size: "780 KB",
+    uploadedAt: "2026-10-24",
+    uploadedBy: "林悦",
+    state: "已解析",
+  },
 ];
 
 export const esgTopics: EsgTopic[] = [

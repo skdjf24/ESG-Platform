@@ -189,7 +189,9 @@ function integrity(project) {
 async function main() {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const chartFixtures = runChartContractChecks();
-  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE || "/usr/bin/chromium", args: ["--no-sandbox"] });
+  const bundledChromium = chromium.executablePath();
+  const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
+  const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 }, acceptDownloads: true });
   const page = await context.newPage();
   page.setDefaultNavigationTimeout(90_000);
@@ -217,18 +219,17 @@ async function main() {
   record(await page.getByLabel("企业全称").inputValue() === projectLabel, "STEP1-DYNAMIC", "Step 1 使用最新企业信息作为当前项目状态");
 
   const industryBefore = `${project.enterprise.industryCode}:${project.enterprise.industryName}`;
-  await page.getByRole("button", { name: /C26/ }).click();
-  await page.waitForTimeout(200);
-  const industryAfter = await stored(page);
-  const industryEditable = `${industryAfter.enterprise.industryCode}:${industryAfter.enterprise.industryName}` !== industryBefore || await page.getByRole("dialog").count() > 0;
+  await page.getByLabel("行业分类").selectOption("I65");
+  await page.getByRole("button", { name: "保存基础信息" }).click();
+  const industryAfter = await waitForStored(page, (value) => value.enterprise.industryCode === "I65");
+  const industryEditable = `${industryAfter.enterprise.industryCode}:${industryAfter.enterprise.industryName}` !== industryBefore;
   record(industryEditable, "STEP1-INDUSTRY-EDIT", "行业分类可编辑并可进入保存流程");
-  if (!industryEditable) finding("High", "GAP-S1-INDUSTRY", "行业分类控件不可操作", "行业按钮无处理器，点击后数据、弹层均无变化。", "企业无法按实际行业创建画像。", "实现行业选择器并经统一仓库保存、触发下游复核。");
-  await page.getByText("拖拽或点击上传历史报告").click();
-  await page.waitForTimeout(200);
-  project = await stored(page);
-  const historyUploadWorks = project.sources.length > initialSourceCount || await page.getByRole("dialog").count() > 0;
-  record(historyUploadWorks, "STEP1-HISTORY-UPLOAD", "历史报告可创建真实来源记录");
-  if (!historyUploadWorks) finding("High", "GAP-S1-UPLOAD", "历史报告上传为静态 Mock", "点击模拟上传区不创建来源记录，也不打开文件处理流程。", "无法用真实历史报告启动企业项目。", "接入对象存储、文件校验和解析任务，保留原始文件哈希与版本。");
+  await page.getByLabel("选择历史报告文件").setInputFiles({ name: "E2E-历史报告-明确模拟.pdf", mimeType: "application/pdf", buffer: Buffer.from("E2E mock PDF metadata only") });
+  await page.getByRole("button", { name: "保存基础信息" }).click();
+  project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-历史报告-明确模拟.pdf"));
+  const historyUploadWorks = project.sources.length === initialSourceCount + 1 && project.sources.some((item) => item.kind === "historical" && item.state === "已上传");
+  record(historyUploadWorks, "STEP1-HISTORY-UPLOAD", "历史报告可创建并保存本地来源元数据");
+  record(await page.getByText(/文件内容不会存入浏览器/).isVisible(), "STEP1-HISTORY-BOUNDARY", "历史报告入口明确不保存或解析文件内容");
 
   await openStep(page, 7);
   await page.getByRole("button", { name: "开始全面检查" }).click();
@@ -250,10 +251,15 @@ async function main() {
 
   const topicCount = project.topics.length;
   await page.getByRole("button", { name: "新增议题" }).click();
-  await page.waitForTimeout(150);
-  const topicEditWorks = (await stored(page)).topics.length > topicCount || await page.getByRole("dialog").count() > 0;
-  record(topicEditWorks, "STEP2-ADD-TOPIC", "议题池支持新增议题");
-  if (!topicEditWorks) finding("High", "GAP-S2-EDIT", "Step 2 新增/编辑议题未实现", "新增议题和编辑按钮没有业务处理器；评分也只有静态显示。", "无法完成真实企业的完整实质性议题评估。", "补齐议题 CRUD、双重重要性评分、依据与确认审计。");
+  await page.locator("#topic-name").fill("E2E 用户新增议题");
+  await page.locator("#topic-category").selectOption("S");
+  await page.locator("#topic-financial").fill("4.1");
+  await page.locator("#topic-impact").fill("4.4");
+  await page.getByRole("button", { name: "保存议题" }).click();
+  await saveFooter(page);
+  project = await waitForStored(page, (value) => value.topics.some((item) => item.name === "E2E 用户新增议题"));
+  const addedTopic = project.topics.find((item) => item.name === "E2E 用户新增议题");
+  record(project.topics.length === topicCount + 1 && addedTopic?.financialScore === 4.1 && addedTopic?.impactScore === 4.4, "STEP2-ADD-TOPIC", "议题池支持新增议题并保存双重重要性评分");
 
   await openStep(page, 3);
   const requirement = project.disclosureRequirements[0];
@@ -271,10 +277,13 @@ async function main() {
   record(project.writing.chapters.some((item) => item.title === renamedTitle), "CHAIN-D-STEP3-5", "Step 3 章节改名同步 Step 5 目录");
   record(project.disclosureRequirements.filter((item) => item.mappedSection.endsWith(renamedTitle)).length > 0, "CHAIN-B-STEP3-MAPPING", "Step 3 章节改名同步披露要求映射");
   await page.getByRole("button", { name: "新增章节" }).click();
-  await page.waitForTimeout(150);
-  const addSectionWorks = (await stored(page)).reportSections.length > originalSectionCount || await page.getByRole("dialog").count() > 0;
-  record(addSectionWorks, "STEP3-ADD-SECTION", "Step 3 可新增章节");
-  if (!addSectionWorks) finding("High", "GAP-S3-STRUCTURE", "新增章节和映射编辑未实现", "新增章节、编辑关联、查看映射均为无处理器按钮。", "真实报告目录与披露要求映射无法完整配置，链路 B/D 不完整。", "实现章节 CRUD、排序与 Requirement 映射编辑，保存时只标记下游复核，不删除正文。");
+  await page.locator("#new-section-order").fill("8");
+  await page.locator("#new-section-title-input").fill("E2E 新增章节");
+  await page.locator("#new-section-description").fill("E2E 章节新增与下游同步测试。");
+  await page.getByRole("button", { name: "创建章节" }).click();
+  await page.getByRole("button", { name: "保存章节" }).click();
+  project = await waitForStored(page, (value) => value.reportSections.some((item) => item.title === "E2E 新增章节") && value.writing.chapters.some((item) => item.title === "E2E 新增章节"));
+  record(project.reportSections.length === originalSectionCount + 1, "STEP3-ADD-SECTION", "Step 3 可新增章节并同步创建 Step 5 章节");
 
   await openStep(page, 4);
   await page.getByRole("button", { name: /企业事实库/ }).click();
@@ -296,10 +305,14 @@ async function main() {
 
   const sourceCountBefore = project.sources.length;
   await page.getByRole("button", { name: /上传资料/ }).click();
-  record(await page.getByText(/模拟收集操作，不会上传或保存真实文件/).isVisible(), "STEP4-UPLOAD-MOCK-LABEL", "文件收集明确标记为模拟");
-  await page.getByRole("button", { name: /关闭|取消/ }).first().click().catch(() => page.keyboard.press("Escape"));
-  record((await stored(page)).sources.length === sourceCountBefore, "STEP4-UPLOAD-NO-FALSE-DATA", "模拟上传不伪造来源记录");
-  finding("High", "GAP-S4-INGEST", "Step 4 无真实文件新增、解析和事实抽取", "上传/在线补充弹层明确说明不会保存真实文件；仅能编辑种子事实。", "链路 C 无法由真实原始资料起始。", "建设真实上传、解析、抽取、人工确认和来源版本管理。");
+  record(await page.getByText(/文件字节不会上传或解析/).isVisible(), "STEP4-UPLOAD-MOCK-LABEL", "文件收集明确标记本地元数据边界");
+  await page.getByLabel("选择资料文件").setInputFiles({ name: "E2E-能源资料-明确模拟.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("E2E mock spreadsheet metadata only") });
+  await page.getByRole("button", { name: "保存来源记录" }).click();
+  await saveFooter(page);
+  project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-能源资料-明确模拟.xlsx"));
+  record(project.sources.length === sourceCountBefore + 1, "STEP4-UPLOAD-METADATA", "Step 4 文件入口创建并保存来源元数据");
+  record(!project.facts.some((item) => item.sourceReferences.some((reference) => reference.sourceId === project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx")?.id)), "STEP4-UPLOAD-NO-FALSE-DATA", "未解析文件不伪造事实或抽取结果");
+  finding("High", "GAP-S4-INGEST", "Step 4 尚无真实文件存储、解析和事实抽取", "现可保存本地文件元数据，但文件字节不上传，且不会生成事实。", "链路 C 可从来源登记开始，但无法处理真实原始资料内容。", "建设对象存储、解析、抽取、人工确认和来源版本管理。");
 
   await openStep(page, 5);
   record((await page.locator("body").innerText()).includes(`当前企业：${projectLabel}`), "STEP5-UPSTREAM-ENTERPRISE", "Step 5 读取 Step 1 最新企业信息");
@@ -423,6 +436,7 @@ async function main() {
   await stalePage.close();
 
   // 旧 schema 加法迁移：删除后续步骤状态，再打开保存，正文和历史来源必须保留。
+  const retainedSourceIds = project.sources.map((item) => item.id);
   await page.evaluate((key) => {
     const value = JSON.parse(localStorage.getItem(key));
     delete value.presentation;
@@ -433,7 +447,7 @@ async function main() {
   await reloadProject(page);
   await page.getByRole("button", { name: /保存基础信息|基础信息已保存/ }).click();
   project = await waitForStored(page, (value) => Boolean(value.presentation && value.quality && value.finalization));
-  record(project.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))) && project.sources.length === initialSourceCount, "STORAGE-MIGRATION", "旧 schema 加法迁移保留正文与历史来源");
+  record(project.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))) && retainedSourceIds.every((id) => project.sources.some((item) => item.id === id)), "STORAGE-MIGRATION", "旧 schema 加法迁移保留正文与来源记录");
 
   // 容量上限：超限保存必须提示且不得覆盖旧快照。
   await page.evaluate((key) => {

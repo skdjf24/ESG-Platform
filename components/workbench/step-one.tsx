@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import {
   Building2,
   CalendarDays,
@@ -27,6 +28,13 @@ import { StepPageHeader } from "@/components/workbench/step-page-header";
 
 const fieldClass = "h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-[13px] text-[#29362f] outline-none transition placeholder:text-[#a0aaa4] focus:border-[#69a28b] focus:ring-2 focus:ring-[#176b52]/10";
 const listingOptions: ListingStatus[] = ["A股", "H股", "A+H", "未上市"];
+const industryOptions = [
+  { code: "C26", name: "化学原料和化学制品制造业" },
+  { code: "C27", name: "医药制造业" },
+  { code: "C29", name: "橡胶和塑料制品业" },
+  { code: "D44", name: "电力、热力生产和供应业" },
+  { code: "I65", name: "软件和信息技术服务业" },
+] as const;
 const categoryMeta: Record<EsgCategory, { label: string; className: string }> = {
   E: { label: "环境", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
   S: { label: "社会", className: "border-blue-200 bg-blue-50 text-blue-700" },
@@ -35,6 +43,8 @@ const categoryMeta: Record<EsgCategory, { label: string; className: string }> = 
 
 export function StepOne() {
   const { project, editProject, saveProject, dirty, saving } = useProjectData();
+  const historyInputRef = useRef<HTMLInputElement>(null);
+  const [historyMessage, setHistoryMessage] = useState("");
   const { enterprise, report, topics, boundary } = project;
   const listingStatus = enterprise.listingStatus;
   const selectedFrameworks = report.frameworks;
@@ -49,6 +59,34 @@ export function StepOne() {
     const affected = project.disclosureRequirements.filter((item) => item.topic === topic.name).length;
     if (affected && !window.confirm(`移除“${topic.name}”将影响 ${affected} 项披露要求。已有正文和映射不会删除，但会标记为待复核。是否继续？`)) return;
     editProject((current) => ({ ...current, topics: current.topics.filter((item) => item.id !== topicId) }));
+  }
+
+  function addHistoricalReport(file: File) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension !== "pdf" && extension !== "docx") {
+      setHistoryMessage("仅支持 PDF 或 DOCX 历史报告。");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setHistoryMessage("文件超过 50 MB，本地原型未创建来源记录。");
+      return;
+    }
+    const fileType = extension === "pdf" ? "PDF" : "DOCX";
+    const size = file.size >= 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+    editProject((current) => ({
+      ...current,
+      sources: [...current.sources, {
+        id: `source-history-${Date.now()}`,
+        name: file.name,
+        kind: "historical",
+        fileType,
+        size,
+        uploadedAt: new Date().toISOString().slice(0, 10),
+        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        state: "已上传",
+      }],
+    }));
+    setHistoryMessage("已在当前草稿中创建历史报告元数据。文件内容不会存入浏览器，也不会自动解析。");
   }
 
   return (
@@ -81,11 +119,22 @@ export function StepOne() {
           <SectionCard title="行业与上市身份" description="行业依据 GB/T 4754 选择；上市身份仅记录，不触发披露义务判断。">
             <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
               <Field label="GB/T 4754 国民经济行业分类">
-                <button className={`${fieldClass} flex items-center justify-between text-left`}>
-                  <span><span className="mr-2 rounded bg-[#eef3f0] px-1.5 py-0.5 font-mono text-[11px] text-[#53635a]">{enterprise.industryCode}</span>{enterprise.industryName}</span>
-                  <ChevronDown className="size-4 text-[#85908a]" />
-                </button>
-                <p className="mt-2 text-[11px] text-[#87918c]">门类 C 制造业 · 大类 26 化学原料和化学制品制造业</p>
+                <div className="relative">
+                  <select
+                    aria-label="行业分类"
+                    value={enterprise.industryCode}
+                    onChange={(event) => {
+                      const selected = industryOptions.find((item) => item.code === event.target.value);
+                      if (!selected) return;
+                      editProject((current) => ({ ...current, enterprise: { ...current.enterprise, industryCode: selected.code, industryName: selected.name } }));
+                    }}
+                    className={`${fieldClass} appearance-none pr-9`}
+                  >
+                    {industryOptions.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#85908a]" />
+                </div>
+                <p className="mt-2 text-[11px] text-[#87918c]">当前分类：{enterprise.industryCode} · {enterprise.industryName}</p>
               </Field>
               <Field label="资本市场身份">
                 <div className="grid grid-cols-4 gap-2">
@@ -153,15 +202,28 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="历史报告" description="用于提取已有披露信息，仅展示模拟上传流程。">
-            <button className="soft-grid flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#a9c9bb] bg-[#f5faf7] px-4 py-7 text-center hover:bg-[#f0f7f3]">
+          <SectionCard title="历史报告" description="本地原型只保存文件元数据，不保存文件内容，也不执行解析。">
+            <input
+              ref={historyInputRef}
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="选择历史报告文件"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) addHistoricalReport(file);
+                event.target.value = "";
+              }}
+            />
+            <button type="button" onClick={() => historyInputRef.current?.click()} className="soft-grid flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#a9c9bb] bg-[#f5faf7] px-4 py-7 text-center hover:bg-[#f0f7f3]">
               <span className="grid size-10 place-items-center rounded-xl bg-white text-[#176b52] shadow-sm"><UploadCloud className="size-5" /></span>
-              <span className="mt-3 text-xs font-semibold text-[#33463c]">拖拽或点击上传历史报告</span>
+              <span className="mt-3 text-xs font-semibold text-[#33463c]">点击选择历史报告</span>
               <span className="mt-1 text-[10px] text-[#87938d]">支持 PDF、DOCX，单个文件不超过 50 MB</span>
-              <span className="mt-2 rounded-full bg-violet-50 px-2 py-1 text-[9px] font-semibold text-violet-700">模拟上传</span>
+              <span className="mt-2 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-700">仅保存本地元数据</span>
             </button>
+            {historyMessage ? <p role="status" className="mt-2 text-[10px] leading-4 text-[#66736c]">{historyMessage}</p> : null}
             <div className="mt-4 space-y-2">
-              {project.sources.map((report) => (
+              {project.sources.filter((source) => source.kind === "historical").map((report) => (
                 <div key={report.id} className="flex items-center gap-3 rounded-xl border border-[#e3e8e5] p-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600"><FileText className="size-4" /></span>
                   <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#38463e]">{report.name}</div><div className="mt-1 text-[9px] text-[#929c97]">{report.size} · {report.uploadedAt}</div></div>

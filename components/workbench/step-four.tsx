@@ -53,6 +53,11 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
   const energyFact = enterpriseFacts.find((fact) => fact.id === "fact-energy-2025");
   const [activeTab, setActiveTab] = useState<Tab>(initialFactId ? "facts" : "tasks");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
+  const [selectedRequirementId, setSelectedRequirementId] = useState(dataRequirements[0]?.id ?? "");
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; fileType: "PDF" | "XLSX" | "DOCX" } | null>(null);
+  const [supplementTitle, setSupplementTitle] = useState("节能改造项目说明");
+  const [supplementContent, setSupplementContent] = useState("");
+  const [intakeError, setIntakeError] = useState("");
   const [query, setQuery] = useState("");
   const [openFact, setOpenFact] = useState<string | null>(initialFactId ?? "fact-energy-2025");
   const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string; reportingBoundary: string }>>({});
@@ -104,6 +109,83 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
       // comparability. That remains an explicit chart-selection decision.
       comparabilityStatus: confirmed ? (fact.comparabilityStatus ?? "待核验") : "待核验",
     } : fact) }));
+  }
+
+  function resetIntake() {
+    setIntakeMode(null);
+    setSelectedFile(null);
+    setSupplementContent("");
+    setIntakeError("");
+  }
+
+  function handleIntakeFile(file: File) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const fileType = extension === "pdf" ? "PDF" : extension === "docx" ? "DOCX" : extension === "xlsx" || extension === "xls" ? "XLSX" : null;
+    if (!fileType) {
+      setSelectedFile(null);
+      setIntakeError("仅支持 XLSX、XLS、PDF 或 DOCX 文件。");
+      return;
+    }
+    const size = file.size >= 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+    setSelectedFile({ name: file.name, size, fileType });
+    setIntakeError("");
+  }
+
+  function submitIntake() {
+    const requirement = dataRequirements.find((item) => item.id === selectedRequirementId);
+    if (!requirement) {
+      setIntakeError("请选择关联资料项。");
+      return;
+    }
+    if (intakeMode === "upload" && !selectedFile) {
+      setIntakeError("请先选择文件。当前原型只会保存文件元数据。");
+      return;
+    }
+    if (intakeMode === "online" && (!supplementTitle.trim() || !supplementContent.trim())) {
+      setIntakeError("请填写补充标题和资料内容。");
+      return;
+    }
+    const sourceId = `source-user-${Date.now()}`;
+    const now = new Date();
+    editProject((current) => {
+      const source = intakeMode === "upload" && selectedFile ? {
+        id: sourceId,
+        name: selectedFile.name,
+        kind: "file" as const,
+        fileType: selectedFile.fileType,
+        size: selectedFile.size,
+        uploadedAt: now.toISOString().slice(0, 10),
+        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        state: "已上传" as const,
+      } : {
+        id: sourceId,
+        name: supplementTitle.trim(),
+        kind: "online" as const,
+        fileType: "表单" as const,
+        size: `${supplementContent.trim().length} 字`,
+        uploadedAt: now.toISOString().slice(0, 10),
+        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        state: "已上传" as const,
+      };
+      const relatedSection = current.reportSections.find((section) => requirement.section === `${section.order} ${section.title}`);
+      const onlineResource = intakeMode === "online" ? [{
+        id: `resource-user-${Date.now()}`,
+        chapterIds: relatedSection ? [relatedSection.id] : [],
+        kind: requirement.type === "案例" ? "案例" as const : "制度" as const,
+        title: supplementTitle.trim(),
+        description: supplementContent.trim(),
+        confirmed: false,
+        sourceReferences: [{ id: `ref-user-${Date.now()}`, sourceId, fileName: `${supplementTitle.trim()}.表单`, locator: "Step 4 在线补充", excerpt: supplementContent.trim().slice(0, 160) }],
+        revision: 1,
+      }] : [];
+      return {
+        ...current,
+        sources: [...current.sources, source],
+        resources: [...current.resources, ...onlineResource],
+        dataRequirements: current.dataRequirements.map((item) => item.id === requirement.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" : "文件上传", state: "待确认", reviewStatus: "待复核" } : item),
+      };
+    });
+    resetIntake();
   }
 
   return (
@@ -405,21 +487,21 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
       <StepFooter currentStep={4} />
 
       {intakeMode ? (
-        <div className="fixed inset-0 z-[60] flex justify-end bg-[#10241c]/40 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="intake-title" onMouseDown={(event) => event.target === event.currentTarget && setIntakeMode(null)}>
+        <div className="fixed inset-0 z-[60] flex justify-end bg-[#10241c]/40 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="intake-title" onMouseDown={(event) => event.target === event.currentTarget && resetIntake()}>
           <div className="h-full w-full max-w-[480px] overflow-y-auto bg-white shadow-2xl animate-fade-up">
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-[#e5e9e7] bg-white px-6 py-5">
               <div>
                 <span className="mb-3 grid size-10 place-items-center rounded-xl bg-[#eaf4ef] text-[#176b52]">{intakeMode === "upload" ? <UploadCloud className="size-5" /> : <MessageSquareText className="size-5" />}</span>
                 <h2 id="intake-title" className="text-base font-semibold text-[#1d2a23]">{intakeMode === "upload" ? "上传资料文件" : "在线补充资料"}</h2>
-                <p className="mt-1 text-[11px] text-[#7f8a84]">模拟收集操作，不会上传或保存真实文件。</p>
+                <p className="mt-1 text-[11px] text-[#7f8a84]">本地原型保存来源元数据；文件字节不会上传或解析。</p>
               </div>
-              <button onClick={() => setIntakeMode(null)} className="grid size-8 place-items-center rounded-lg text-[#7c8781] hover:bg-[#f1f4f2]" aria-label="关闭"><X className="size-4" /></button>
+              <button onClick={resetIntake} className="grid size-8 place-items-center rounded-lg text-[#7c8781] hover:bg-[#f1f4f2]" aria-label="关闭"><X className="size-4" /></button>
             </div>
             <div className="space-y-5 p-6">
               <div>
                 <label htmlFor="requirement-select" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">关联资料项</label>
-                <select id="requirement-select" className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none focus:border-[#78a28f]">
-                  {dataRequirements.map((item) => <option key={item.id}>{item.itemName}</option>)}
+                <select id="requirement-select" value={selectedRequirementId} onChange={(event) => setSelectedRequirementId(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none focus:border-[#78a28f]">
+                  {dataRequirements.map((item) => <option key={item.id} value={item.id}>{item.itemName}</option>)}
                 </select>
               </div>
               {intakeMode === "upload" ? (
@@ -428,19 +510,20 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                     <span className="mx-auto grid size-11 place-items-center rounded-xl bg-white text-[#176b52] shadow-sm"><UploadCloud className="size-5" /></span>
                     <p className="mt-4 text-xs font-semibold text-[#34423a]">拖拽文件至此，或点击选择</p>
                     <p className="mt-1.5 text-[10px] leading-4 text-[#849089]">支持 XLSX、XLS、PDF、DOCX；可直接沿用企业现有 Excel 模板</p>
-                    <button className="mt-4 h-8 rounded-lg border border-[#d4ded9] bg-white px-3 text-[10px] font-semibold text-[#526159]">选择文件</button>
+                    <label className="mt-4 inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#d4ded9] bg-white px-3 text-[10px] font-semibold text-[#526159]">选择文件<input type="file" aria-label="选择资料文件" accept=".xlsx,.xls,.pdf,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleIntakeFile(file); event.target.value = ""; }} /></label>
+                    {selectedFile ? <p className="mt-3 text-[10px] font-semibold text-[#176b52]">已选择：{selectedFile.name} · {selectedFile.size}</p> : null}
                   </div>
-                  <Notice tone="info">平台保留文件名、工作表/单元格或页码信息，用于建立事实与原始资料的来源关联。</Notice>
+                  <Notice tone="info">提交后仅保存文件名、类型、大小、填写人与时间。文件内容和单元格/页码定位需待正式解析能力接入后生成。</Notice>
                 </>
               ) : (
                 <>
                   <div>
                     <label htmlFor="supplement-title" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">补充标题</label>
-                    <input id="supplement-title" defaultValue="节能改造项目说明" className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                    <input id="supplement-title" value={supplementTitle} onChange={(event) => setSupplementTitle(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
                   </div>
                   <div>
                     <label htmlFor="supplement-content" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">资料内容</label>
-                    <textarea id="supplement-content" rows={8} placeholder="请按企业实际情况补充项目背景、实施范围、年度进展与成效……" className="w-full resize-none rounded-lg border border-[#dce3df] p-3 text-xs leading-6 outline-none placeholder:text-[#a0aaa4] focus:border-[#78a28f]" />
+                    <textarea id="supplement-content" rows={8} value={supplementContent} onChange={(event) => setSupplementContent(event.target.value)} placeholder="请按企业实际情况补充项目背景、实施范围、年度进展与成效……" className="w-full resize-none rounded-lg border border-[#dce3df] p-3 text-xs leading-6 outline-none placeholder:text-[#a0aaa4] focus:border-[#78a28f]" />
                   </div>
                   <div className="rounded-xl border border-[#e1e6e3] bg-[#f8faf9] p-4">
                     <p className="text-[10px] font-semibold text-[#4a5750]">来源记录</p>
@@ -448,10 +531,11 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                   </div>
                 </>
               )}
+              {intakeError ? <p role="alert" className="text-[10px] text-rose-600">{intakeError}</p> : null}
             </div>
             <div className="sticky bottom-0 mt-auto flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-6 py-4">
-              <button onClick={() => setIntakeMode(null)} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5b6861]">取消</button>
-              <button onClick={() => setIntakeMode(null)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">模拟提交<ArrowRight className="size-3.5" /></button>
+              <button onClick={resetIntake} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5b6861]">取消</button>
+              <button onClick={submitIntake} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存来源记录<ArrowRight className="size-3.5" /></button>
             </div>
           </div>
         </div>

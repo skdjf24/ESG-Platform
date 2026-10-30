@@ -30,6 +30,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function restoreReferencedSourceMetadata(project: ReportProjectData): ReportProjectData {
+  const knownSourceIds = new Set(project.sources.map((item) => item.id));
+  const references = [...project.facts, ...project.resources].flatMap((item) => item.sourceReferences);
+  const missing = references.filter((reference, index) => !knownSourceIds.has(reference.sourceId) && references.findIndex((item) => item.sourceId === reference.sourceId) === index);
+  if (!missing.length) return project;
+  const migratedAt = new Date().toISOString();
+  return {
+    ...project,
+    sources: [...project.sources, ...missing.map((reference) => {
+      const extension = reference.fileName.split(".").pop()?.toLowerCase();
+      return {
+        id: reference.sourceId,
+        name: reference.fileName,
+        kind: "file" as const,
+        fileType: extension === "pdf" ? "PDF" as const : extension === "docx" ? "DOCX" as const : "XLSX" as const,
+        uploadedAt: project.createdAt.slice(0, 10),
+        uploadedBy: "历史存档迁移",
+        state: "已解析" as const,
+      };
+    })],
+    migrations: project.migrations.some((item) => item.id === "migration-referenced-source-metadata-v1") ? project.migrations : [...project.migrations, {
+      id: "migration-referenced-source-metadata-v1",
+      from: "embedded-source-references",
+      migratedAt,
+      note: `从既有事实与资料的来源快照恢复 ${missing.length} 条缺失来源元数据；未生成或解析任何文件内容。`,
+    }],
+  };
+}
+
 function parseProjectData(raw: string, projectId: string): ReportProjectData | null {
   try {
     const value: unknown = JSON.parse(raw);
@@ -50,7 +79,7 @@ function parseProjectData(raw: string, projectId: string): ReportProjectData | n
     if (new Set(project.disclosureRequirements.map((item) => item.id)).size !== project.disclosureRequirements.length) return null;
     if (new Set(project.reportSections.map((item) => item.id)).size !== project.reportSections.length) return null;
     if (new Set(project.dataRequirements.map((item) => item.id)).size !== project.dataRequirements.length) return null;
-    return project;
+    return restoreReferencedSourceMetadata(project);
   } catch {
     return null;
   }
