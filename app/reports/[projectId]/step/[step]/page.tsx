@@ -21,7 +21,7 @@ export default async function ReportStepPage({
   const { chapterId, blockId, requirementId, factId } = await searchParams;
   const step = Number(stepParam);
 
-  if (projectId !== "hualan-2025" || !Number.isInteger(step) || step < 1 || step > 8) {
+  if (!projectId.trim() || !Number.isInteger(step) || step < 1 || step > 8) {
     notFound();
   }
 
@@ -39,11 +39,4 @@ export default async function ReportStepPage({
       </WorkbenchShell>
     </ProjectDataProvider>
   );
-}
-
-export function generateStaticParams() {
-  return Array.from({ length: 8 }, (_, index) => ({
-    projectId: "hualan-2025",
-    step: String(index + 1),
-  }));
 }

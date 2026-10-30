@@ -2,7 +2,7 @@
 
 ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，当前覆盖企业画像、实质性议题、披露框架、资料与事实、报告内容编辑、数据可视化与整本预览、质量检查，以及 Step 8 定稿与导出。Step 1–8 共享统一的项目数据仓库。
 
-当前版本使用本地模拟数据，不接入真实 AI、文件存储或后端接口。
+当前版本使用本地模拟业务数据，不接入真实 AI、文件解析或后端接口。结构化项目数据和用户选择的真实文件字节分别保存在当前浏览器的 IndexedDB。
 
 ## 技术栈
 
@@ -37,17 +37,17 @@ npm run start
 | 路由 | 页面 | 当前状态 |
 | --- | --- | --- |
 | `/` | 项目首页 | 已实现 |
-| `/reports/hualan-2025/step/1` | 创建报告与企业基础画像 | 已实现原型 |
-| `/reports/hualan-2025/step/2` | ESG 实质性议题评估 | 已实现原型 |
-| `/reports/hualan-2025/step/3` | 构建披露框架与报告大纲 | 已实现原型 |
-| `/reports/hualan-2025/step/4` | ESG 资料收集、汇总与规整 | 已实现原型 |
-| `/reports/hualan-2025/step/5` | 报告内容生成与编辑 | 已实现前端工作台 |
-| `/reports/hualan-2025/step/6` | 数据可视化、版式与整本报告预览 | 已实现前端工作台 |
-| `/reports/hualan-2025/step/7` | 报告质量与披露完整性检查 | 已实现前端工作台与规则引擎 |
-| `/reports/hualan-2025/step/8` | 定稿与导出 | 已实现门禁、版本与输出工作台 |
-| `/reports/hualan-2025/final` | 当前有效定稿打印页 | 已实现浏览器打印/PDF 页面 |
+| `/reports/[projectId]/step/1` | 创建报告与企业基础画像 | 已实现原型 |
+| `/reports/[projectId]/step/2` | ESG 实质性议题评估 | 已实现原型 |
+| `/reports/[projectId]/step/3` | 构建披露框架与报告大纲 | 已实现原型 |
+| `/reports/[projectId]/step/4` | ESG 资料收集、汇总与规整 | 已实现原型 |
+| `/reports/[projectId]/step/5` | 报告内容生成与编辑 | 已实现前端工作台 |
+| `/reports/[projectId]/step/6` | 数据可视化、版式与整本报告预览 | 已实现前端工作台 |
+| `/reports/[projectId]/step/7` | 报告质量与披露完整性检查 | 已实现前端工作台与规则引擎 |
+| `/reports/[projectId]/step/8` | 定稿与导出 | 已实现门禁、版本与输出工作台 |
+| `/reports/[projectId]/final` | 当前有效定稿打印页 | 已实现浏览器打印/PDF 页面 |
 
-工作台侧边导航、首页“继续编辑”以及每一步底部的上一步/下一步均使用真实 App Router 路由。当前仅提供示例项目 `hualan-2025`，未知项目或无效步骤会进入 404 页面。
+工作台侧边导航、项目列表“打开项目”以及每一步底部的上一步/下一步均使用真实 App Router 路由。首页支持创建和打开多个本地项目；无效步骤进入 404 页面。
 
 ## 目录说明
 
@@ -100,7 +100,9 @@ lib/
 ├── data/mock-data.ts                   # 示例企业、项目及 Step 1–4 模拟数据
 ├── project/
 │   ├── seed.ts                         # 统一项目快照初始数据
-│   ├── repository.ts                   # Repository 接口的 localStorage 实现及旧草稿迁移
+│   ├── indexed-db.ts                   # IndexedDB schema、容量估算和持久存储请求
+│   ├── repository.ts                   # 项目/文件 Repository 及旧 localStorage 迁移
+│   ├── operations.ts                   # 备份、恢复与下一年度复制
 │   └── synchronize.ts                  # 跨步骤差异识别、关联同步与复核标记
 ├── presentation/
 │   ├── state.ts                        # 指标观测、图表快照、迁移与修订联动
@@ -143,7 +145,7 @@ lib/
 
 示例种子数据统一位于 `lib/data/mock-data.ts`，由 `lib/project/seed.ts` 组合为项目快照；Step 1–8 页面读取同一项目状态，不再各自维护相互隔离的业务副本。
 
-项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `LocalStorageReportProjectRepository`，存储键为 `esg:report-project:{projectId}:v2`；接口为异步设计，可在后续以 API/PostgreSQL Repository 替换，而不改变页面保存调用。项目快照仅保存文件元数据及来源定位，拒绝写入 `File`、`Blob`、`ArrayBuffer` 等二进制内容。
+项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `IndexedDbReportProjectRepository` 保存结构化项目，以 `projectId` 隔离并通过 `revision` 防止旧页面覆盖新数据；`IndexedDbProjectFileRepository` 在独立 object store 保存真实 `Blob` 字节。项目快照只保存 `fileId`、状态和来源定位，拒绝混入 `File`、`Blob`、`ArrayBuffer`。旧 `localStorage` 完整项目和 Step 5 草稿可加法迁移，旧键不会自动删除。
 
 Step 5 类型位于 `lib/types/writing.ts`，核心关联为：
 
@@ -245,7 +247,7 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - “待补充、待确认、待更新”内部标记及资料包汇总
 - 可配置 Writing Policy 与基于词语规则的 ESG 空泛表述检查
 - 六种 Mock AI 操作及原文/建议版本对照、接受、重新生成、取消流程
-- 草稿和版本记录保存在当前浏览器 `localStorage`，刷新后可恢复
+- 草稿和版本记录保存在当前浏览器 IndexedDB，刷新后可恢复
 
 ### Step 6：数据可视化、版式与整本报告预览
 
@@ -282,11 +284,10 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 
 ## 模拟功能说明
 
-以下交互用于产品原型演示，不会写入后端或产生真实业务结果：
+以下交互仍属于产品原型或模拟业务能力，不会写入后端或产生真实业务结论：
 
-- 首页新建报告表单和项目统计
 - 所有企业、议题、披露要求、资料、事实及来源数据
-- 历史报告和资料文件上传
+- 文件解析、字段抽取和事实生成（上传本身会真实保存文件字节，`parserStatus` 保持 `not-started`）
 - 在线资料补充
 - 议题增删、评分方式切换、适用性及重要性确认
 - 责任部门调整、草稿保存和保存状态
@@ -295,7 +296,7 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
 - Step 6 图表/版式建议：由本地确定性 `mockPresentationAiProvider` 返回，并明确标注 `Mock AI`
 - Step 7 AI 建议：由 `mockQualityAiProvider` 返回固定演示流程，不能判断披露义务、充分性或事实真实性，也不会自动修改正文
-- Step 1–8 统一项目保存和 Step 5/8 版本记录：仅使用当前浏览器 `localStorage`，不等同于服务器持久化或多人协作
+- Step 1–8 统一项目保存、真实文件字节和 Step 5/8 版本记录：仅使用当前浏览器 IndexedDB，不等同于服务器持久化或多人协作
 
 所有 AI 结果在界面中明确标注为“示例 AI 规整结果”，需要人工确认后才表现为可进入事实库。项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。
 
@@ -337,15 +338,15 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - Step 7 引用现有对象 ID 而不复制整份报告；Step 1–6 保存后检查状态标记待复检，旧运行和人工处理历史保留。
 - Step 8 直接读取 Step 7.1 的 `getStep8QualityGate`；不另建质量判断。只有有效全面检查且无活动问题时才能定稿。
 - 当前有效定稿可进入独立打印页并下载 JSON 审计包；披露输入或质量结论变化后旧定稿立即失效。
-- 通过 `projectId` 生成独立存储键，并在 Repository 保存时校验项目 ID 与快照修订号。
+- 通过 `projectId` 隔离 IndexedDB 项目/文件记录，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6 截图、数据流、自动化测试和限制见 [docs/acceptance/step6/README.md](docs/acceptance/step6/README.md)；Step 7 截图、规则边界、回归记录和已知限制见 [docs/acceptance/step7/README.md](docs/acceptance/step7/README.md)；Step 7.1 全面检查有效性、稳定问题身份、状态迁移及 A–G 测试见 [docs/acceptance/step7-1/README.md](docs/acceptance/step7-1/README.md)；Step 8 门禁、定稿版本、正式打印页和回归结果见 [docs/acceptance/step8/README.md](docs/acceptance/step8/README.md)。
+Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
 
 ## 待开发范围
 
 - Word 文件与服务器端固定渲染 PDF
 - 后端 API、数据库、真实身份与权限体系
-- 真实文件存储、解析和在线协作
+- 服务端文件存储、文件解析和在线协作
 - 真实 AI 服务接入
 - 服务端数据持久化、多人协作、正式版本记录与审计日志
 - 真实 AI Provider、流式任务、提示词/模型治理及服务端事实校验

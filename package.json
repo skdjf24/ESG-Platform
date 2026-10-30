@@ -8,8 +8,12 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:step6": "node --experimental-strip-types scripts/step6-1-chart-regression.mjs",
+    "test:step7:browser": "node scripts/step7-browser-regression.cjs",
+    "test:step7-1:browser": "node scripts/step7-1-state-regression.cjs",
     "test:step8:browser": "node scripts/step8-browser-regression.cjs",
-    "test:e2e:step1-8": "node --experimental-strip-types scripts/e2e-step1-step8-regression.mjs"
+    "test:e2e:step1-8": "node --experimental-strip-types scripts/e2e-step1-step8-regression.mjs",
+    "test:phase1:browser": "node scripts/phase1-local-persistence-regression.cjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.8",

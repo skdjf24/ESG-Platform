@@ -73,3 +73,7 @@ Step 5 的运行截图、真实交互范围、Mock 边界、数据关联和真�
 ## Step 8：定稿与导出
 
 Step 7.1 gate 接入、人工定稿声明、版本失效、正式打印页、JSON 审计归档及浏览器回归见 [step8/README.md](step8/README.md)。
+
+## Phase 1：本地项目持久化
+
+IndexedDB 项目/文件仓库、多项目、旧 localStorage 迁移、备份恢复、年度复制、容量保护和 44 项审计见 [phase1/README.md](phase1/README.md)。Phase 1 文档代表当前实现；本页上方第一轮“不会持久化/仅占位”的说明只保留为历史基线。

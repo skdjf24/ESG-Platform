@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   CircleDot,
+  Download,
   FileCheck2,
   FileText,
   Globe2,
@@ -18,7 +19,8 @@ import {
   X,
 } from "lucide-react";
 import { frameworks } from "@/lib/data/mock-data";
-import type { EsgCategory, ListingStatus } from "@/lib/types/esg";
+import type { EsgCategory, ListingStatus, UploadedSource } from "@/lib/types/esg";
+import { projectFileRepository } from "@/lib/project/repository";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
@@ -42,7 +44,7 @@ const categoryMeta: Record<EsgCategory, { label: string; className: string }> = 
 };
 
 export function StepOne() {
-  const { project, editProject, saveProject, dirty, saving } = useProjectData();
+  const { project, editProject, saveProject, dirty, saving, setMessage } = useProjectData();
   const historyInputRef = useRef<HTMLInputElement>(null);
   const [historyMessage, setHistoryMessage] = useState("");
   const { enterprise, report, topics, boundary } = project;
@@ -61,7 +63,7 @@ export function StepOne() {
     editProject((current) => ({ ...current, topics: current.topics.filter((item) => item.id !== topicId) }));
   }
 
-  function addHistoricalReport(file: File) {
+  async function addHistoricalReport(file: File) {
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (extension !== "pdf" && extension !== "docx") {
       setHistoryMessage("仅支持 PDF 或 DOCX 历史报告。");
@@ -71,22 +73,58 @@ export function StepOne() {
       setHistoryMessage("文件超过 50 MB，本地原型未创建来源记录。");
       return;
     }
-    const fileType = extension === "pdf" ? "PDF" : "DOCX";
+    const fileType: UploadedSource["fileType"] = extension === "pdf" ? "PDF" : "DOCX";
     const size = file.size >= 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
-    editProject((current) => ({
-      ...current,
-      sources: [...current.sources, {
+    try {
+      const storedFile = await projectFileRepository.save(project.projectId, file);
+      const source: UploadedSource = {
         id: `source-history-${Date.now()}`,
         name: file.name,
         kind: "historical",
         fileType,
+        fileId: storedFile.fileId,
+        mimeType: storedFile.mimeType,
+        fileStatus: "available",
+        parserStatus: "not-started",
         size,
         uploadedAt: new Date().toISOString().slice(0, 10),
-        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        uploadedBy: project.enterprise.reportingContact.name || "当前用户",
         state: "已上传",
-      }],
-    }));
-    setHistoryMessage("已在当前草稿中创建历史报告元数据。文件内容不会存入浏览器，也不会自动解析。");
+      };
+      const next = {
+        ...project,
+        sources: [...project.sources, source],
+      };
+      editProject(next);
+      if (!await saveProject(1, "保存历史报告文件", next)) {
+        await projectFileRepository.delete(project.projectId, storedFile.fileId).catch(() => undefined);
+        return;
+      }
+      setHistoryMessage("历史报告文件已保存到本地文件仓库；解析状态为 not-started，未生成任何解析结果。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "历史报告文件保存失败。";
+      setHistoryMessage(message);
+      setMessage(message);
+    }
+  }
+
+  async function downloadHistoricalReport(fileId: string, name: string) {
+    try {
+      const storedFile = await projectFileRepository.get(project.projectId, fileId);
+      if (!storedFile) {
+        setHistoryMessage(`文件“${name}”缺失；来源记录仍保留，未返回伪造内容。`);
+        return;
+      }
+      const url = URL.createObjectURL(storedFile.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = storedFile.name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setHistoryMessage(`已从本地文件仓库读取“${storedFile.name}”。`);
+    } catch (error) {
+      setHistoryMessage(error instanceof Error ? error.message : "文件读取失败。");
+    }
   }
 
   return (
@@ -202,7 +240,7 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="历史报告" description="本地原型只保存文件元数据，不保存文件内容，也不执行解析。">
+          <SectionCard title="历史报告" description="文件字节与项目数据分开保存到本地仓库；Phase 1 不执行解析。">
             <input
               ref={historyInputRef}
               type="file"
@@ -211,7 +249,7 @@ export function StepOne() {
               className="sr-only"
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) addHistoricalReport(file);
+                if (file) void addHistoricalReport(file);
                 event.target.value = "";
               }}
             />
@@ -219,15 +257,16 @@ export function StepOne() {
               <span className="grid size-10 place-items-center rounded-xl bg-white text-[#176b52] shadow-sm"><UploadCloud className="size-5" /></span>
               <span className="mt-3 text-xs font-semibold text-[#33463c]">点击选择历史报告</span>
               <span className="mt-1 text-[10px] text-[#87938d]">支持 PDF、DOCX，单个文件不超过 50 MB</span>
-              <span className="mt-2 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-700">仅保存本地元数据</span>
+              <span className="mt-2 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-700">文件字节保存到本地 IndexedDB</span>
             </button>
             {historyMessage ? <p role="status" className="mt-2 text-[10px] leading-4 text-[#66736c]">{historyMessage}</p> : null}
             <div className="mt-4 space-y-2">
               {project.sources.filter((source) => source.kind === "historical").map((report) => (
                 <div key={report.id} className="flex items-center gap-3 rounded-xl border border-[#e3e8e5] p-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600"><FileText className="size-4" /></span>
-                  <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#38463e]">{report.name}</div><div className="mt-1 text-[9px] text-[#929c97]">{report.size} · {report.uploadedAt}</div></div>
-                  <StatusBadge tone="green">{report.state}</StatusBadge>
+                  <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#38463e]">{report.name}</div><div className="mt-1 text-[9px] text-[#929c97]">{report.size} · {report.uploadedAt} · parser: {report.parserStatus ?? "metadata-only"}</div></div>
+                  {report.fileId && report.fileStatus !== "missing" ? <button type="button" aria-label={`下载历史报告 ${report.name}`} onClick={() => void downloadHistoricalReport(report.fileId!, report.name)} className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#dce3df] text-[#526159] hover:bg-[#f5f8f6]"><Download className="size-3.5" /></button> : null}
+                  <StatusBadge tone={report.fileStatus === "missing" ? "amber" : "green"}>{report.fileStatus === "missing" ? "文件缺失" : report.state}</StatusBadge>
                 </div>
               ))}
             </div>

@@ -28,6 +28,7 @@ import {
   departments,
 } from "@/lib/data/mock-data";
 import type { CollectionState } from "@/lib/types/esg";
+import { projectFileRepository } from "@/lib/project/repository";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
@@ -47,14 +48,14 @@ const statusTone: Record<CollectionState, "green" | "blue" | "amber" | "gray"> =
 };
 
 export function StepFour({ initialFactId }: { initialFactId?: string }) {
-  const { project, editProject } = useProjectData();
+  const { project, editProject, saveProject, setMessage } = useProjectData();
   const dataRequirements = project.dataRequirements;
   const enterpriseFacts = project.facts;
   const energyFact = enterpriseFacts.find((fact) => fact.id === "fact-energy-2025");
   const [activeTab, setActiveTab] = useState<Tab>(initialFactId ? "facts" : "tasks");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
   const [selectedRequirementId, setSelectedRequirementId] = useState(dataRequirements[0]?.id ?? "");
-  const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; fileType: "PDF" | "XLSX" | "DOCX" } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ file: File; name: string; size: string; fileType: "PDF" | "XLSX" | "DOCX" } | null>(null);
   const [supplementTitle, setSupplementTitle] = useState("节能改造项目说明");
   const [supplementContent, setSupplementContent] = useState("");
   const [intakeError, setIntakeError] = useState("");
@@ -127,18 +128,18 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
       return;
     }
     const size = file.size >= 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
-    setSelectedFile({ name: file.name, size, fileType });
+    setSelectedFile({ file, name: file.name, size, fileType });
     setIntakeError("");
   }
 
-  function submitIntake() {
+  async function submitIntake() {
     const requirement = dataRequirements.find((item) => item.id === selectedRequirementId);
     if (!requirement) {
       setIntakeError("请选择关联资料项。");
       return;
     }
     if (intakeMode === "upload" && !selectedFile) {
-      setIntakeError("请先选择文件。当前原型只会保存文件元数据。");
+      setIntakeError("请先选择文件。文件将保存到当前浏览器的本地文件仓库。");
       return;
     }
     if (intakeMode === "online" && (!supplementTitle.trim() || !supplementContent.trim())) {
@@ -147,27 +148,35 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
     }
     const sourceId = `source-user-${Date.now()}`;
     const now = new Date();
-    editProject((current) => {
-      const source = intakeMode === "upload" && selectedFile ? {
+    let storedFileId: string | undefined;
+    try {
+      const storedFile = intakeMode === "upload" && selectedFile ? await projectFileRepository.save(project.projectId, selectedFile.file) : null;
+      storedFileId = storedFile?.fileId;
+      const source = intakeMode === "upload" && selectedFile && storedFile ? {
         id: sourceId,
         name: selectedFile.name,
         kind: "file" as const,
         fileType: selectedFile.fileType,
+        fileId: storedFile.fileId,
+        mimeType: storedFile.mimeType,
+        fileStatus: "available" as const,
+        parserStatus: "not-started" as const,
         size: selectedFile.size,
         uploadedAt: now.toISOString().slice(0, 10),
-        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        uploadedBy: project.enterprise.reportingContact.name || "当前用户",
         state: "已上传" as const,
       } : {
         id: sourceId,
         name: supplementTitle.trim(),
         kind: "online" as const,
         fileType: "表单" as const,
+        fileStatus: "metadata-only" as const,
         size: `${supplementContent.trim().length} 字`,
         uploadedAt: now.toISOString().slice(0, 10),
-        uploadedBy: current.enterprise.reportingContact.name || "当前用户",
+        uploadedBy: project.enterprise.reportingContact.name || "当前用户",
         state: "已上传" as const,
       };
-      const relatedSection = current.reportSections.find((section) => requirement.section === `${section.order} ${section.title}`);
+      const relatedSection = project.reportSections.find((section) => requirement.section === `${section.order} ${section.title}`);
       const onlineResource = intakeMode === "online" ? [{
         id: `resource-user-${Date.now()}`,
         chapterIds: relatedSection ? [relatedSection.id] : [],
@@ -178,14 +187,24 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
         sourceReferences: [{ id: `ref-user-${Date.now()}`, sourceId, fileName: `${supplementTitle.trim()}.表单`, locator: "Step 4 在线补充", excerpt: supplementContent.trim().slice(0, 160) }],
         revision: 1,
       }] : [];
-      return {
-        ...current,
-        sources: [...current.sources, source],
-        resources: [...current.resources, ...onlineResource],
-        dataRequirements: current.dataRequirements.map((item) => item.id === requirement.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" : "文件上传", state: "待确认", reviewStatus: "待复核" } : item),
+      const next = {
+        ...project,
+        sources: [...project.sources, source],
+        resources: [...project.resources, ...onlineResource],
+        dataRequirements: project.dataRequirements.map((item) => item.id === requirement.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" as const : "文件上传" as const, state: "待确认" as const, reviewStatus: "待复核" as const } : item),
       };
-    });
-    resetIntake();
+      editProject(next);
+      if (!await saveProject(4, intakeMode === "upload" ? "保存资料文件" : "保存在线补充", next)) {
+        if (storedFileId) await projectFileRepository.delete(project.projectId, storedFileId).catch(() => undefined);
+        return;
+      }
+      resetIntake();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "来源记录保存失败。";
+      setIntakeError(message);
+      setMessage(message);
+      if (storedFileId) await projectFileRepository.delete(project.projectId, storedFileId).catch(() => undefined);
+    }
   }
 
   return (
@@ -493,7 +512,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
               <div>
                 <span className="mb-3 grid size-10 place-items-center rounded-xl bg-[#eaf4ef] text-[#176b52]">{intakeMode === "upload" ? <UploadCloud className="size-5" /> : <MessageSquareText className="size-5" />}</span>
                 <h2 id="intake-title" className="text-base font-semibold text-[#1d2a23]">{intakeMode === "upload" ? "上传资料文件" : "在线补充资料"}</h2>
-                <p className="mt-1 text-[11px] text-[#7f8a84]">本地原型保存来源元数据；文件字节不会上传或解析。</p>
+                <p className="mt-1 text-[11px] text-[#7f8a84]">文件字节保存到本地 IndexedDB；Phase 1 不执行解析。</p>
               </div>
               <button onClick={resetIntake} className="grid size-8 place-items-center rounded-lg text-[#7c8781] hover:bg-[#f1f4f2]" aria-label="关闭"><X className="size-4" /></button>
             </div>
@@ -513,7 +532,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                     <label className="mt-4 inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#d4ded9] bg-white px-3 text-[10px] font-semibold text-[#526159]">选择文件<input type="file" aria-label="选择资料文件" accept=".xlsx,.xls,.pdf,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleIntakeFile(file); event.target.value = ""; }} /></label>
                     {selectedFile ? <p className="mt-3 text-[10px] font-semibold text-[#176b52]">已选择：{selectedFile.name} · {selectedFile.size}</p> : null}
                   </div>
-                  <Notice tone="info">提交后仅保存文件名、类型、大小、填写人与时间。文件内容和单元格/页码定位需待正式解析能力接入后生成。</Notice>
+                  <Notice tone="info">提交后保存文件字节及元数据，parserStatus 保持 not-started；不会伪造单元格、页码或事实抽取结果。</Notice>
                 </>
               ) : (
                 <>
@@ -535,7 +554,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
             </div>
             <div className="sticky bottom-0 mt-auto flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-6 py-4">
               <button onClick={resetIntake} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5b6861]">取消</button>
-              <button onClick={submitIntake} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存来源记录<ArrowRight className="size-3.5" /></button>
+              <button onClick={() => void submitIntake()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存来源记录<ArrowRight className="size-3.5" /></button>
             </div>
           </div>
         </div>

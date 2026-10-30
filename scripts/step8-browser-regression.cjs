@@ -2,9 +2,9 @@
 const { chromium } = require("playwright");
 const fs = require("node:fs");
 const path = require("node:path");
+const { clearProjectDatabase, mutateProject, readProject } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.STEP8_BASE_URL || "http://127.0.0.1:4325";
-const storageKey = "esg:report-project:hualan-2025:v2";
 const acceptanceDir = path.resolve(__dirname, "../docs/acceptance/step8");
 const results = [];
 
@@ -20,7 +20,8 @@ async function waitForProjectReady(page) {
 
 async function main() {
   fs.mkdirSync(acceptanceDir, { recursive: true });
-  const executablePath = process.env.CHROMIUM_EXECUTABLE || "/usr/bin/chromium";
+  const bundledChromium = chromium.executablePath();
+  const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
   const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 }, acceptDownloads: true });
   const page = await context.newPage();
@@ -30,12 +31,12 @@ async function main() {
 
   await page.goto(`${baseUrl}/reports/hualan-2025/step/7`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
-  await page.evaluate(() => localStorage.clear());
+  await clearProjectDatabase(page);
   await page.reload({ waitUntil: "networkidle" });
   await waitForProjectReady(page);
   await page.getByRole("button", { name: "开始全面检查" }).click();
   await page.getByText(/确定性规则检查已完成/).waitFor({ timeout: 15000 });
-  const checkedProject = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+  const checkedProject = await readProject(page);
   check(Boolean(checkedProject.quality.fullCheck?.valid), "Step 7.1 全面检查建立有效 gate 记录");
   await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
@@ -43,16 +44,14 @@ async function main() {
 
   const originalChapterCount = checkedProject.writing.chapters.length;
   const originalFullCheckRunId = checkedProject.quality.fullCheck.runId;
-  await page.evaluate((key) => {
-    const project = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (project) => {
     delete project.finalization;
-    localStorage.setItem(key, JSON.stringify(project));
-  }, storageKey);
+  });
   await page.reload({ waitUntil: "networkidle" });
   await waitForProjectReady(page);
   await page.getByRole("button", { name: "已保存" }).click();
   await page.getByText(/已保存项目数据/).waitFor({ timeout: 10000 });
-  const migratedProject = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+  const migratedProject = await readProject(page);
   check(
     migratedProject.finalization?.schemaVersion === 1
       && migratedProject.writing.chapters.length === originalChapterCount
@@ -63,8 +62,7 @@ async function main() {
   // This fixture only prepares a closed quality state for Step 8 workflow
   // testing. It is explicitly simulated and does not claim the findings were
   // genuinely remediated.
-  await page.evaluate((key) => {
-    const project = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (project) => {
     project.quality.issues = project.quality.issues.map((issue) => ({
       ...issue,
       status: "已复检解决",
@@ -82,8 +80,7 @@ async function main() {
     };
     project.quality.readiness = "可提交定稿审核";
     project.quality.stale = false;
-    localStorage.setItem(key, JSON.stringify(project));
-  }, storageKey);
+  });
 
   await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
@@ -95,7 +92,7 @@ async function main() {
   for (const checkbox of await page.getByRole("checkbox").all()) await checkbox.check();
   await page.getByRole("button", { name: "确认并创建新定稿版本" }).click();
   await page.getByText(/已形成定稿记录/).waitFor({ timeout: 10000 });
-  const finalized = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+  const finalized = await readProject(page);
   const version = finalized.finalization.versions.at(-1);
   check(finalized.finalization.versions.length === 1 && Boolean(version.qualityFullCheckRunId), "人工声明创建持久化定稿版本");
   check(await page.getByRole("button", { name: "当前数据已完成定稿" }).isDisabled(), "同一数据不能重复创建相同定稿");
@@ -121,22 +118,18 @@ async function main() {
   check(pageCount === version.pageCount && pageCount > 2, "最终打印页使用定稿页面数量与最终页码");
   await finalPage.screenshot({ path: path.join(acceptanceDir, "03-final-print-view.png"), fullPage: false });
 
-  await page.evaluate((key) => {
-    const project = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (project) => {
     project.revision += 1;
     project.updatedAt = new Date().toISOString();
     project.lastSavedAt = new Date().toISOString();
-    localStorage.setItem(key, JSON.stringify(project));
-  }, storageKey);
+  });
   await page.reload({ waitUntil: "networkidle" });
   await waitForProjectReady(page);
   check(await page.getByText("当前有效定稿").isVisible(), "普通保存元数据变化不会错误使定稿失效");
 
-  await page.evaluate((key) => {
-    const project = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (project) => {
     project.enterprise.name = `${project.enterprise.name}（变更）`;
-    localStorage.setItem(key, JSON.stringify(project));
-  }, storageKey);
+  });
   await page.reload({ waitUntil: "networkidle" });
   await waitForProjectReady(page);
   check(await page.getByText("定稿已失效").isVisible(), "披露输入变化立即使旧定稿失效");

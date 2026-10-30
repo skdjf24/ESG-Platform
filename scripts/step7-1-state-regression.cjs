@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require("playwright");
+const fs = require("node:fs");
+const { clearProjectDatabase, mutateProject, readProject } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.STEP7_BASE_URL || "http://127.0.0.1:4325";
-const storageKey = "esg:report-project:hualan-2025:v2";
 
 function assert(condition, message) {
   if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
@@ -10,7 +11,7 @@ function assert(condition, message) {
 }
 
 async function stored(page) {
-  return page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+  return readProject(page);
 }
 
 async function waitStored(page, predicate, timeout = 10_000) {
@@ -39,7 +40,7 @@ async function openStep(page, step) {
 
 async function fresh(page) {
   await openStep(page, 7);
-  await page.evaluate(() => localStorage.clear());
+  await clearProjectDatabase(page);
   await reloadProject(page);
   return null;
 }
@@ -50,7 +51,9 @@ async function run(page, buttonName, expectedRuns) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+  const bundledChromium = chromium.executablePath();
+  const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
+  const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 } });
   const page = await context.newPage();
   const browserErrors = [];
@@ -81,8 +84,7 @@ async function main() {
   // C：SRC-002 按事实聚合，同时保留三个正文块位置。
   await fresh(page);
   await run(page, "开始全面检查", 1);
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     const fact = value.facts.find((item) => item.id === "fact-training-2025");
     fact.sourceReferences = [];
     const allBlocks = value.writing.chapters.flatMap((chapter) => chapter.blocks);
@@ -98,8 +100,7 @@ async function main() {
     for (const block of blocks) {
       block.citations = [{ factId: fact.id, factRevision: fact.revision }];
     }
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   const sourceIssues = project.quality.issues.filter((issue) => issue.ruleId === "SRC-002" && issue.factIds.includes("fact-training-2025"));
@@ -108,12 +109,10 @@ async function main() {
   assert(new Set(sourceIssues[0].locations.map((item) => item.blockId).filter(Boolean)).size === 3, "C2 聚合问题保留三个引用正文块的位置");
   assert(new Set(project.quality.issues.map((issue) => issue.issueId)).size === project.quality.issues.length, "C3 同一次检查没有重复 issueId");
   const removedLocation = sourceIssues[0].locations[0];
-  await page.evaluate(({ key, blockId }) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value, blockId) => {
     const block = value.writing.chapters.flatMap((chapter) => chapter.blocks).find((item) => item.id === blockId);
     block.citations = block.citations.filter((citation) => citation.factId !== "fact-training-2025");
-    localStorage.setItem(key, JSON.stringify(value));
-  }, { key: storageKey, blockId: removedLocation.blockId });
+  }, removedLocation.blockId);
   await reloadProject(page);
   await page.getByLabel("按章节筛选").selectOption(removedLocation.chapterId);
   project = await run(page, "检查当前章节", 3);
@@ -123,8 +122,7 @@ async function main() {
   // D：披露要求 reviewStatus 变化后，历史覆盖不能继续有效。
   await fresh(page);
   await run(page, "开始全面检查", 1);
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     const requirement = value.disclosureRequirements.find((item) => item.id === "req-gri-302-1");
     requirement.applicability = "适用";
     requirement.userConfirmed = true;
@@ -139,18 +137,15 @@ async function main() {
     block.resolved = true;
     block.reviewStatus = "已审校";
     block.mappings = [...block.mappings.filter((item) => item.requirementId !== requirement.id), { requirementId: requirement.id, coverage: "已覆盖" }];
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   assert(project.quality.coverage.find((item) => item.requirementId === "req-gri-302-1")?.status === "已核验覆盖", "D1 有效要求和人工审校正文可形成已核验覆盖记录");
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     const requirement = value.disclosureRequirements.find((item) => item.id === "req-gri-302-1");
     requirement.reviewStatus = "待复核";
     requirement.revision += 1;
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await reloadProject(page);
   assert(await page.getByText("上游已变化 · 待复检").isVisible(), "D2 输入指纹变化即时使全面检查失效");
   project = await run(page, "开始全面检查", 3);
@@ -162,12 +157,10 @@ async function main() {
   const vague = project.quality.issues.find((issue) => issue.ruleId === "WRITE-001" && issue.title.includes("高度重视"));
   assert(Boolean(vague), "E0 找到可复现的 Writing Policy 问题");
   const vagueBlockId = vague.blockId;
-  await page.evaluate(({ key, blockId }) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value, blockId) => {
     const block = value.writing.chapters.flatMap((chapter) => chapter.blocks).find((item) => item.id === blockId);
     block.html = block.html.replaceAll("高度重视", "重视");
-    localStorage.setItem(key, JSON.stringify(value));
-  }, { key: storageKey, blockId: vagueBlockId });
+  }, vagueBlockId);
   await reloadProject(page);
   project = await run(page, "开始全面检查", 2);
   let resolvedActions = project.quality.actions.filter((action) => action.issueId === vague.issueId && action.action === "系统复检解决");
@@ -175,27 +168,23 @@ async function main() {
   project = await run(page, "开始全面检查", 3);
   resolvedActions = project.quality.actions.filter((action) => action.issueId === vague.issueId && action.action === "系统复检解决");
   assert(resolvedActions.length === 1, "E2 重复全面检查不新增重复解决记录");
-  await page.evaluate(({ key, blockId }) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value, blockId) => {
     const block = value.writing.chapters.flatMap((chapter) => chapter.blocks).find((item) => item.id === blockId);
     block.html = `${block.html}<p>本公司高度重视相关工作。</p>`;
-    localStorage.setItem(key, JSON.stringify(value));
-  }, { key: storageKey, blockId: vagueBlockId });
+  }, vagueBlockId);
   await reloadProject(page);
   project = await run(page, "开始全面检查", 4);
   const reopened = project.quality.issues.find((issue) => issue.issueId === vague.issueId);
   assert(reopened?.status === "待处理", "F1 已解决问题重新出现时恢复待处理状态");
   assert(project.quality.actions.some((action) => action.issueId === vague.issueId && action.action === "问题重新打开"), "F2 重新打开动作保留在处理历史中");
   assert(project.quality.actions.some((action) => action.issueId === vague.issueId && action.action === "系统复检解决"), "F3 原解决记录未被覆盖");
-  await page.evaluate(({ key, issueId, blockId }) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value, { issueId, blockId }) => {
     const issue = value.quality.issues.find((item) => item.issueId === issueId);
     issue.status = "已接受例外";
     issue.exceptionReason = "旧输入下的人工例外，仅用于状态回归测试。";
     const block = value.writing.chapters.flatMap((chapter) => chapter.blocks).find((item) => item.id === blockId);
     block.html = block.html.replace("高度重视相关工作", "高度重视并持续推进相关工作");
-    localStorage.setItem(key, JSON.stringify(value));
-  }, { key: storageKey, issueId: vague.issueId, blockId: vagueBlockId });
+  }, { issueId: vague.issueId, blockId: vagueBlockId });
   await reloadProject(page);
   project = await run(page, "开始全面检查", 5);
   assert(project.quality.issues.find((issue) => issue.issueId === vague.issueId)?.status === "待处理", "F4 已接受例外的输入变化后需要重新处理");
@@ -204,8 +193,7 @@ async function main() {
   // G：旧 QualityCheckState v1 兼容迁移，且 Step 1-7 页面仍可打开。
   const chapterCount = project.writing.chapters.length;
   const runCount = project.quality.runs.length;
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     value.quality.schemaVersion = 1;
     delete value.quality.fullCheck;
     delete value.quality.invalidations;
@@ -213,8 +201,7 @@ async function main() {
     for (const run of value.quality.runs) { delete run.inputFingerprint; delete run.ruleSetFingerprint; }
     for (const coverage of value.quality.coverage) { delete coverage.requirementRevision; delete coverage.requirementFingerprint; }
     value.migrations = value.migrations.filter((item) => item.id !== "migration-quality-check-v2");
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await reloadProject(page);
   project = await run(page, "开始全面检查", runCount + 1);
   assert(project.quality.schemaVersion === 2 && project.quality.invalidations, "G1 QualityCheckState v1 已迁移到 v2");

@@ -6,9 +6,9 @@ import { validateChartSelection } from "../lib/presentation/chart-validation.ts"
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
+const { clearProjectDatabase, mutateProject, readProject, readProjectFiles } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:4325";
-const storageKey = "esg:report-project:hualan-2025:v2";
 const projectLabel = "E2E Prototype Test Project";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const evidenceDir = path.resolve(here, "../docs/acceptance/e2e-step1-step8");
@@ -98,10 +98,7 @@ function runChartContractChecks() {
 }
 
 async function stored(page) {
-  return page.evaluate((key) => {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  }, storageKey);
+  return readProject(page);
 }
 
 async function waitForProjectReady(page) {
@@ -126,7 +123,7 @@ async function waitForStored(page, predicate, timeout = 12_000) {
     if (project && predicate(project)) return project;
     await page.waitForTimeout(100);
   }
-  throw new Error("Timed out waiting for the expected localStorage state");
+  throw new Error("Timed out waiting for the expected IndexedDB state");
 }
 
 async function saveFooter(page) {
@@ -200,7 +197,7 @@ async function main() {
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
 
   await openStep(page, 1);
-  await page.evaluate(() => localStorage.clear());
+  await clearProjectDatabase(page);
   await reloadProject(page);
   await page.getByLabel("企业全称").fill(projectLabel);
   await page.getByLabel("报告年度").fill("2026");
@@ -225,7 +222,7 @@ async function main() {
   const industryEditable = `${industryAfter.enterprise.industryCode}:${industryAfter.enterprise.industryName}` !== industryBefore;
   record(industryEditable, "STEP1-INDUSTRY-EDIT", "行业分类可编辑并可进入保存流程");
   await page.getByLabel("选择历史报告文件").setInputFiles({ name: "E2E-历史报告-明确模拟.pdf", mimeType: "application/pdf", buffer: Buffer.from("E2E mock PDF metadata only") });
-  await page.getByRole("button", { name: "保存基础信息" }).click();
+  await page.getByText(/历史报告文件已保存到本地文件仓库/).waitFor({ timeout: 12_000 });
   project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-历史报告-明确模拟.pdf"));
   const historyUploadWorks = project.sources.length === initialSourceCount + 1 && project.sources.some((item) => item.kind === "historical" && item.state === "已上传");
   record(historyUploadWorks, "STEP1-HISTORY-UPLOAD", "历史报告可创建并保存本地来源元数据");
@@ -305,14 +302,16 @@ async function main() {
 
   const sourceCountBefore = project.sources.length;
   await page.getByRole("button", { name: /上传资料/ }).click();
-  record(await page.getByText(/文件字节不会上传或解析/).isVisible(), "STEP4-UPLOAD-MOCK-LABEL", "文件收集明确标记本地元数据边界");
+  record(await page.getByText(/文件字节保存到本地 IndexedDB；Phase 1 不执行解析/).isVisible(), "STEP4-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和未解析边界");
   await page.getByLabel("选择资料文件").setInputFiles({ name: "E2E-能源资料-明确模拟.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("E2E mock spreadsheet metadata only") });
   await page.getByRole("button", { name: "保存来源记录" }).click();
   await saveFooter(page);
   project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-能源资料-明确模拟.xlsx"));
-  record(project.sources.length === sourceCountBefore + 1, "STEP4-UPLOAD-METADATA", "Step 4 文件入口创建并保存来源元数据");
+  const uploadedSource = project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx");
+  const uploadedFiles = await readProjectFiles(page, project.projectId);
+  record(project.sources.length === sourceCountBefore + 1 && uploadedSource?.fileId && uploadedFiles.some((file) => file.fileId === uploadedSource.fileId), "STEP4-UPLOAD-BYTES", "Step 4 文件入口保存来源元数据和真实文件字节");
   record(!project.facts.some((item) => item.sourceReferences.some((reference) => reference.sourceId === project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx")?.id)), "STEP4-UPLOAD-NO-FALSE-DATA", "未解析文件不伪造事实或抽取结果");
-  finding("High", "GAP-S4-INGEST", "Step 4 尚无真实文件存储、解析和事实抽取", "现可保存本地文件元数据，但文件字节不上传，且不会生成事实。", "链路 C 可从来源登记开始，但无法处理真实原始资料内容。", "建设对象存储、解析、抽取、人工确认和来源版本管理。");
+  finding("High", "GAP-S4-PARSER", "Step 4 尚无文件解析和事实抽取", "文件字节已在 IndexedDB 中保存，但 parserStatus 保持 not-started，且不会生成事实。", "链路 C 可保留原始文件，但仍不能从文件内容抽取真实指标。", "下一阶段建设解析、抽取、人工确认和来源版本管理。");
 
   await openStep(page, 5);
   record((await page.locator("body").innerText()).includes(`当前企业：${projectLabel}`), "STEP5-UPSTREAM-ENTERPRISE", "Step 5 读取 Step 1 最新企业信息");
@@ -376,8 +375,7 @@ async function main() {
       kpi: ["mock-observation-total-2025"],
     };
     for (const type of Object.keys(chartFixtures)) {
-      await page.evaluate(({ key, type, observationIds, blockId, chapterId }) => {
-        const value = JSON.parse(localStorage.getItem(key));
+      await mutateProject(page, (value, { type, observationIds, blockId, chapterId }) => {
         const items = observationIds.map((id) => value.presentation.observations.find((item) => item.observationId === id)).filter(Boolean);
         value.presentation.preview.mode = "continuous";
         value.presentation.preview.readingMode = "editing";
@@ -386,8 +384,7 @@ async function main() {
           observationSnapshots: items.map(({ observationId, metricDefinitionId, metricName, categoryLabel, seriesName, compositionGroupId, value, unit, reportingPeriod, reportingBoundary, boundaryStatus, sourceConfirmationStatus, comparabilityStatus, revision, sourceReferences, sampleKind, sampleLabel }) => ({ observationId, metricDefinitionId, metricName, categoryLabel, seriesName, compositionGroupId, value, unit, reportingPeriod, reportingBoundary, boundaryStatus, sourceConfirmationStatus, comparabilityStatus, revision, sourceReferences, sampleKind, sampleLabel })),
           type, title: `E2E ${type}`, colors: ["#176b52", "#5aa17d", "#d2a247"], showLegend: true, showDataLabels: true, precision: 1, unit: "MWh", caption: "明确模拟数据，仅用于 E2E 图表渲染验收。", status: "已确认", layoutReviewStatus: "有效", validationIssues: [], validatedAt: new Date().toISOString(), usesMockData: true, revision: 1, updatedAt: new Date().toISOString(),
         }];
-        localStorage.setItem(key, JSON.stringify(value));
-      }, { key: storageKey, type, observationIds: chartObservationIds[type], blockId: chartBlock.block.id, chapterId: chartBlock.chapter.id });
+      }, { type, observationIds: chartObservationIds[type], blockId: chartBlock.block.id, chapterId: chartBlock.chapter.id });
       await reloadProject(page);
       const renderedChart = page.locator(`[data-chart-type="${type}"]`);
       await renderedChart.first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => null);
@@ -437,38 +434,34 @@ async function main() {
 
   // 旧 schema 加法迁移：删除后续步骤状态，再打开保存，正文和历史来源必须保留。
   const retainedSourceIds = project.sources.map((item) => item.id);
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     delete value.presentation;
     delete value.quality;
     delete value.finalization;
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await reloadProject(page);
   await page.getByRole("button", { name: /保存基础信息|基础信息已保存/ }).click();
   project = await waitForStored(page, (value) => Boolean(value.presentation && value.quality && value.finalization));
   record(project.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))) && retainedSourceIds.every((id) => project.sources.some((item) => item.id === id)), "STORAGE-MIGRATION", "旧 schema 加法迁移保留正文与来源记录");
 
-  // 容量上限：超限保存必须提示且不得覆盖旧快照。
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
-    value.report.title = `E2E-CAPACITY-${"x".repeat(4_600_000)}`;
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  // 容量上限：模拟 StorageManager 无剩余空间，保存必须提示且不得覆盖快照。
+  await page.addInitScript(() => {
+    if (navigator.storage) Object.defineProperty(navigator.storage, "estimate", { configurable: true, value: async () => ({ usage: 10_000_000, quota: 10_000_000 }) });
+  });
   await reloadProject(page, 45_000);
-  const largeRawBefore = await page.evaluate((key) => localStorage.getItem(key), storageKey);
+  const beforeCapacity = await stored(page);
   await page.getByLabel("报告联系人姓名").fill("容量测试不应落盘");
   await page.getByRole("button", { name: "保存基础信息" }).click();
-  await page.getByText(/超过安全容量|保存失败/).waitFor({ timeout: 15_000 });
-  const largeRawAfter = await page.evaluate((key) => localStorage.getItem(key), storageKey);
-  record(largeRawAfter === largeRawBefore, "STORAGE-CAPACITY", "超过容量上限明确报错且不覆盖旧快照");
+  await page.getByText(/存储剩余空间不足|保存失败/).waitFor({ timeout: 15_000 });
+  const afterCapacity = await stored(page);
+  record(afterCapacity.revision === beforeCapacity.revision && afterCapacity.enterprise.reportingContact.name === beforeCapacity.enterprise.reportingContact.name, "STORAGE-CAPACITY", "容量不足时明确报错且不覆盖旧快照");
 
   record(browserErrors.length === 0, "BROWSER-ERRORS", "浏览器无未处理 console/page error", browserErrors.join(" | "));
   const summary = {
     generatedAt: new Date().toISOString(),
     baseUrl,
     testProject: projectLabel,
-    dataPolicy: "独立浏览器 context + 清空 localStorage；图表数据明确标记为模拟，不作为正式披露。",
+    dataPolicy: "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
     totals: { pass: results.filter((item) => item.status === "PASS").length, fail: results.filter((item) => item.status === "FAIL").length, findings: findings.length },
     results,
     findings,
