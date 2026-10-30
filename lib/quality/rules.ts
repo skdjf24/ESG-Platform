@@ -6,6 +6,7 @@ import type {
   QualityCheckScope,
   QualityEvidence,
   QualityIssue,
+  QualityIssueLocation,
   QualityRuleDefinition,
   QualitySeverity,
 } from "@/lib/types/quality";
@@ -74,11 +75,21 @@ function makeFinding(input: {
   chartIds?: string[];
   sourceReferences?: QualityIssue["sourceReferences"];
   evidence?: QualityEvidence[];
+  locations?: QualityIssueLocation[];
   suggestedAction: string;
 }): Finding {
   const rule = definition(input.ruleId);
   const stableKey = `${input.ruleId}:${input.identity}`;
   const evidence = input.evidence ?? [];
+  const locations = input.locations?.length ? input.locations : [{
+    sourceStep: input.sourceStep,
+    chapterId: input.chapterId,
+    blockId: input.blockId,
+    requirementId: input.requirementIds?.[0],
+    factId: input.factIds?.[0],
+    chartId: input.chartIds?.[0],
+    label: input.blockId ?? input.chapterId ?? input.factIds?.[0] ?? input.requirementIds?.[0] ?? `Step ${input.sourceStep}`,
+  }];
   return {
     stableKey,
     ruleId: input.ruleId,
@@ -90,6 +101,7 @@ function makeFinding(input: {
     sourceStep: input.sourceStep,
     chapterId: input.chapterId,
     blockId: input.blockId,
+    locations,
     requirementIds: unique(input.requirementIds ?? []),
     factIds: unique(input.factIds ?? []),
     chartIds: unique(input.chartIds ?? []),
@@ -97,8 +109,63 @@ function makeFinding(input: {
     evidence,
     suggestedAction: input.suggestedAction,
     findingMethod: "规则检查",
-    inputFingerprint: hash(JSON.stringify({ evidence, description: input.description })),
+    inputFingerprint: hash(JSON.stringify({ evidence, description: input.description, locations })),
   };
+}
+
+const severityRank: Record<QualitySeverity, number> = { "阻断": 3, "高": 2, "提示": 1 };
+
+function mergeFindings(findings: Finding[]) {
+  const merged = new Map<string, Finding>();
+  for (const finding of findings) {
+    const previous = merged.get(finding.stableKey);
+    if (!previous) {
+      merged.set(finding.stableKey, finding);
+      continue;
+    }
+    const locations = [...new Map([...previous.locations, ...finding.locations].map((item) => [
+      [item.sourceStep, item.chapterId, item.blockId, item.requirementId, item.factId, item.chartId].join(":"),
+      item,
+    ])).values()];
+    const evidence = [...new Map([...previous.evidence, ...finding.evidence].map((item) => [
+      [item.label, item.value, item.entityType, item.entityId].join(":"),
+      item,
+    ])).values()];
+    const combined: Finding = {
+      ...previous,
+      severity: severityRank[finding.severity] > severityRank[previous.severity] ? finding.severity : previous.severity,
+      locations,
+      requirementIds: unique([...previous.requirementIds, ...finding.requirementIds]),
+      factIds: unique([...previous.factIds, ...finding.factIds]),
+      chartIds: unique([...previous.chartIds, ...finding.chartIds]),
+      sourceReferences: [...new Map([...previous.sourceReferences, ...finding.sourceReferences].map((item) => [item.id, item])).values()],
+      evidence,
+    };
+    combined.inputFingerprint = hash(JSON.stringify({
+      evidence: combined.evidence,
+      description: combined.description,
+      locations: combined.locations,
+      requirementIds: combined.requirementIds,
+      factIds: combined.factIds,
+      chartIds: combined.chartIds,
+    }));
+    merged.set(finding.stableKey, combined);
+  }
+  return [...merged.values()];
+}
+
+function requirementFingerprint(requirement: ReportProjectData["disclosureRequirements"][number]) {
+  return hash(JSON.stringify({
+    revision: requirement.revision,
+    framework: requirement.framework,
+    code: requirement.code,
+    topic: requirement.topic,
+    summary: requirement.summary,
+    applicability: requirement.applicability,
+    userConfirmed: requirement.userConfirmed,
+    reviewStatus: requirement.reviewStatus,
+    mappedSection: requirement.mappedSection,
+  }));
 }
 
 function validContentBlock(project: ReportProjectData, block: ContentBlock) {
@@ -116,6 +183,8 @@ function disclosureRules(project: ReportProjectData, now: string) {
 
   for (const requirement of project.disclosureRequirements) {
     const mapped = allBlocks.filter(({ block }) => block.mappings.some((mapping) => mapping.requirementId === requirement.id));
+    const mappedChapterIds = unique(mapped.map(({ chapter }) => chapter.id));
+    const mappedBlockIds = mapped.map(({ block }) => block.id);
     if (requirement.applicability !== "适用" || !requirement.userConfirmed) {
       if (!requirement.userConfirmed || requirement.reviewStatus !== "有效") {
         findings.push(makeFinding({
@@ -129,8 +198,27 @@ function disclosureRules(project: ReportProjectData, now: string) {
       continue;
     }
     const effective = mapped.filter(({ block }) => validContentBlock(project, block));
-    const mappedChapterIds = unique(mapped.map(({ chapter }) => chapter.id));
-    const mappedBlockIds = mapped.map(({ block }) => block.id);
+    if (requirement.reviewStatus !== "有效") {
+      coverage.push({
+        requirementId: requirement.id,
+        requirementRevision: requirement.revision,
+        requirementFingerprint: requirementFingerprint(requirement),
+        status: "待核验",
+        reason: "披露要求适用性、标准版本、条款或章节映射发生变化，原覆盖结论已经失效",
+        chapterIds: mappedChapterIds,
+        blockIds: mappedBlockIds,
+        assessedAt: now,
+        method: "规则检查",
+      });
+      findings.push(makeFinding({
+        ruleId: "DISC-003", identity: requirement.id, title: `${requirement.code} 披露要求变更后待重新确认`,
+        description: "披露要求的适用性、reviewStatus、标准版本、条款内容或章节映射发生变化后，不能沿用历史覆盖结论。", sourceStep: 3,
+        requirementIds: [requirement.id], severity: "高",
+        evidence: [{ label: "披露要求状态", value: requirement.reviewStatus, entityType: "requirement", entityId: requirement.id }],
+        suggestedAction: "返回 Step 3 核对披露要求并重新确认，再复核正文覆盖情况。",
+      }));
+      continue;
+    }
     const mappedOnlyHeading = mapped.length > 0 && mapped.every(({ block }) => block.kind === "heading");
     const pending = effective.some(({ block }) => Boolean(block.pendingKind && !block.resolved) || block.reviewStatus === "待复核");
     const partial = effective.some(({ block }) => block.mappings.find((item) => item.requirementId === requirement.id)?.coverage === "部分覆盖");
@@ -138,6 +226,8 @@ function disclosureRules(project: ReportProjectData, now: string) {
     const status: DisclosureCoverageRecord["status"] = !effective.length ? "未覆盖" : partial || pending ? "部分覆盖" : verified ? "已核验覆盖" : "待核验";
     coverage.push({
       requirementId: requirement.id,
+      requirementRevision: requirement.revision,
+      requirementFingerprint: requirementFingerprint(requirement),
       status,
       reason: !mapped.length ? "没有正文映射" : mappedOnlyHeading ? "仅关联标题" : pending ? "关联内容仍有待处理或待复核状态" : partial ? "正文映射标记为部分覆盖" : verified ? "正文映射与人工审校状态均已确认" : "存在正文，但充分性仍需人工核验",
       chapterIds: mappedChapterIds,
@@ -338,7 +428,12 @@ function layoutRules(project: ReportProjectData) {
 
 function inScope(finding: Finding, project: ReportProjectData, options: QualityCheckOptions) {
   if (options.scope === "full") return true;
-  if (options.scope === "chapter") return Boolean(options.chapterId && finding.chapterId === options.chapterId);
+  if (options.scope === "chapter") return Boolean(options.chapterId && (
+    finding.chapterId === options.chapterId
+    || finding.locations.some((location) => location.chapterId === options.chapterId)
+    || project.quality.issues.some((issue) => issue.stableKey === finding.stableKey
+      && issue.locations.some((location) => location.chapterId === options.chapterId))
+  ));
   const pending = project.quality.issues.filter((issue) => issue.status === "待复检");
   if (!pending.length) return false;
   return pending.some((issue) => issue.stableKey === finding.stableKey
@@ -358,8 +453,9 @@ export function runQualityRules(project: ReportProjectData, options: QualityChec
     ...writingRules(project),
     ...layoutRules(project),
   ];
+  const merged = mergeFindings(all);
   return {
-    findings: all.filter((finding) => inScope(finding, project, options)),
+    findings: merged.filter((finding) => inScope(finding, project, options)),
     coverage: options.scope === "full" ? disclosure.coverage : project.quality.coverage,
     rules: definitions,
   };

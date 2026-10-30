@@ -51,6 +51,10 @@ export interface UploadedSource {
   name: string;
   kind: SourceKind;
   fileType: "PDF" | "XLSX" | "DOCX" | "表单";
+  fileId?: string;
+  mimeType?: string;
+  fileStatus?: "available" | "missing" | "metadata-only";
+  parserStatus?: "not-started";
   size?: string;
   uploadedAt: string;
   uploadedBy: string;

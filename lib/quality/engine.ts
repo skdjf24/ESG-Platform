@@ -1,7 +1,8 @@
-import { readinessForIssues, summarizeQuality } from "@/lib/quality/state";
+import { summarizeQuality } from "@/lib/quality/state";
 import { runQualityRules, type QualityCheckOptions } from "@/lib/quality/rules";
+import { getStep8QualityGate, qualityInputFingerprint, qualityRuleSetFingerprint } from "@/lib/quality/validity";
 import type { ReportProjectData } from "@/lib/types/project-data";
-import type { QualityActionRecord, QualityCheckRun, QualityIssue, QualityIssueStatus } from "@/lib/types/quality";
+import type { QualityActionRecord, QualityCheckRun, QualityIssue, QualityIssueStatus, QualityInvalidationRecord } from "@/lib/types/quality";
 
 const makeId = (prefix: string) => `${prefix}-${globalThis.crypto.randomUUID()}`;
 
@@ -16,8 +17,22 @@ function issueId(stableKey: string) {
 
 function existingInScope(issue: QualityIssue, project: ReportProjectData, options: QualityCheckOptions) {
   if (options.scope === "full") return true;
-  if (options.scope === "chapter") return issue.chapterId === options.chapterId;
+  if (options.scope === "chapter") return issue.chapterId === options.chapterId
+    || issue.locations.some((location) => location.chapterId === options.chapterId);
   return issue.status === "待复检";
+}
+
+function issueMatchesEntities(issue: QualityIssue, entityIds: string[]) {
+  if (!entityIds.length) return true;
+  const issueIds = [
+    issue.chapterId,
+    issue.blockId,
+    ...issue.requirementIds,
+    ...issue.factIds,
+    ...issue.chartIds,
+    ...issue.locations.flatMap((location) => [location.chapterId, location.blockId, location.requirementId, location.factId, location.chartId]),
+  ];
+  return entityIds.some((id) => issueIds.includes(id));
 }
 
 export function executeQualityCheck(
@@ -31,10 +46,23 @@ export function executeQualityCheck(
   const result = runQualityRules(project, options);
   const previousByKey = new Map(project.quality.issues.map((issue) => [issue.stableKey, issue]));
   const detectedKeys = new Set(result.findings.map((finding) => finding.stableKey));
+  const actions: QualityActionRecord[] = [];
   const issues: QualityIssue[] = result.findings.map((finding) => {
     const previous = previousByKey.get(finding.stableKey);
     const keepException = previous?.status === "已接受例外" && previous.inputFingerprint === finding.inputFingerprint;
     const status: QualityIssueStatus = keepException ? "已接受例外" : previous?.status === "处理中" ? "处理中" : "待处理";
+    if (previous?.status === "已复检解决") {
+      actions.push({
+        actionId: makeId("quality-action"), issueId: previous.issueId, action: "问题重新打开",
+        note: "问题在后续规则检查中重新出现；原解决记录保留。", actor: "确定性规则引擎", createdAt: now, method: "规则引擎",
+      });
+    }
+    if (previous?.status === "已接受例外" && !keepException) {
+      actions.push({
+        actionId: makeId("quality-action"), issueId: previous.issueId, action: "例外失效重新确认",
+        note: "问题输入已经变化，原例外理由不能自动沿用。", actor: "确定性规则引擎", createdAt: now, method: "规则引擎",
+      });
+    }
     return {
       ...finding,
       issueId: previous?.issueId ?? issueId(finding.stableKey),
@@ -43,12 +71,12 @@ export function executeQualityCheck(
       status,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
+      resolvedAt: undefined,
       exceptionReason: keepException ? previous?.exceptionReason : undefined,
       resolutionNote: keepException ? previous?.resolutionNote : undefined,
     };
   });
 
-  const actions: QualityActionRecord[] = [];
   for (const previous of project.quality.issues) {
     if (detectedKeys.has(previous.stableKey)) continue;
     if (!existingInScope(previous, project, options)) {
@@ -56,6 +84,10 @@ export function executeQualityCheck(
       continue;
     }
     if (previous.status === "已接受例外") {
+      issues.push(previous);
+      continue;
+    }
+    if (previous.status === "已复检解决") {
       issues.push(previous);
       continue;
     }
@@ -80,6 +112,8 @@ export function executeQualityCheck(
   }
 
   const ruleVersions = Object.fromEntries(result.rules.map((rule) => [rule.ruleId, rule.ruleVersion]));
+  const inputFingerprint = qualityInputFingerprint(project);
+  const ruleSetFingerprint = qualityRuleSetFingerprint();
   const run: QualityCheckRun = {
     runId,
     projectId: project.projectId,
@@ -88,28 +122,40 @@ export function executeQualityCheck(
     scope,
     chapterId,
     inputProjectRevision: project.revision,
+    inputFingerprint,
+    ruleSetFingerprint,
     ruleVersions,
     issueIds: result.findings.map((finding) => previousByKey.get(finding.stableKey)?.issueId ?? issueId(finding.stableKey)),
     status: "已完成",
   };
   const coverage = result.coverage;
   const summary = summarizeQuality(issues, coverage, runId, now);
-  const readiness = readinessForIssues(issues, false);
-  return {
+  const nextQuality = {
+    ...project.quality,
+    issues: issues.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    runs: [...project.quality.runs, run],
+    actions: [...project.quality.actions, ...actions],
+    coverage,
+    summary,
+    checkedProjectRevision: scope === "full" ? project.revision + 1 : project.quality.checkedProjectRevision,
+    fullCheck: scope === "full" ? {
+      runId,
+      inputProjectRevision: project.revision,
+      savedProjectRevision: project.revision + 1,
+      inputFingerprint,
+      ruleSetFingerprint,
+      completedAt: now,
+      valid: true,
+    } : project.quality.fullCheck,
+    stale: scope === "full" ? false : project.quality.stale,
+    savedAt: now,
+  } as ReportProjectData["quality"];
+  const nextProject: ReportProjectData = {
     ...project,
-    quality: {
-      ...project.quality,
-      issues: issues.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
-      runs: [...project.quality.runs, run].slice(-50),
-      actions: [...project.quality.actions, ...actions].slice(-300),
-      coverage,
-      summary,
-      readiness,
-      checkedProjectRevision: project.revision + 1,
-      stale: false,
-      savedAt: now,
-    },
+    quality: nextQuality,
   };
+  nextProject.quality.readiness = getStep8QualityGate(nextProject).readiness;
+  return nextProject;
 }
 
 export function updateQualityIssue(
@@ -142,36 +188,78 @@ export function updateQualityIssue(
     method,
   };
   const summary = summarizeQuality(issues, project.quality.coverage, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt);
-  return {
+  const nextProject: ReportProjectData = {
     ...project,
     quality: {
       ...project.quality,
       issues,
-      actions: [...project.quality.actions, record].slice(-300),
+      actions: [...project.quality.actions, record],
       summary,
-      readiness: readinessForIssues(issues, project.quality.stale),
       savedAt: now,
     },
   };
+  nextProject.quality.readiness = getStep8QualityGate(nextProject).readiness;
+  return nextProject;
 }
 
-export function markQualityChecksStale(project: ReportProjectData, note: string): ReportProjectData {
-  if (!project.quality.runs.length) return project;
+export function markQualityChecksStale(
+  project: ReportProjectData,
+  note: string,
+  sourceStep: QualityInvalidationRecord["sourceStep"],
+  affectedEntityIds: string[] = [],
+): ReportProjectData {
+  if (!project.quality.runs.length && !project.quality.fullCheck) return project;
   const now = new Date().toISOString();
-  const issues = project.quality.issues.map((issue) => issue.status === "已复检解决" ? issue : {
+  const directlyAffected = project.quality.issues.filter((issue) => issueMatchesEntities(issue, affectedEntityIds));
+  // Project-level inputs (for example the enterprise name) may not have a direct
+  // entity ID on an issue, but still affect terminology and formal report output.
+  const affectedIssues = directlyAffected.length || !affectedEntityIds.length ? directlyAffected : project.quality.issues;
+  const affectedIssueIds = new Set(affectedIssues.map((issue) => issue.issueId));
+  const invalidationActions: QualityActionRecord[] = affectedIssues
+    .filter((issue) => issue.status === "已接受例外")
+    .map((issue) => ({
+      actionId: makeId("quality-action"),
+      issueId: issue.issueId,
+      action: "例外失效重新确认" as const,
+      note: `${note} 原例外结论已失效，需要重新确认。`,
+      actor: "项目数据同步",
+      createdAt: now,
+      method: "规则引擎" as const,
+    }));
+  const issues = project.quality.issues.map((issue) => affectedIssueIds.has(issue.issueId) ? {
     ...issue,
     status: "待复检" as const,
     updatedAt: now,
+    resolvedAt: undefined,
+    exceptionReason: undefined,
     resolutionNote: note,
-  });
-  return {
+  } : issue);
+  const invalidation: QualityInvalidationRecord = {
+    invalidationId: makeId("quality-invalidation"),
+    sourceStep,
+    projectRevision: project.revision + 1,
+    reason: note,
+    affectedEntityIds: [...new Set(affectedEntityIds)],
+    affectedIssueIds: affectedIssues.map((issue) => issue.issueId),
+    createdAt: now,
+  };
+  const nextProject: ReportProjectData = {
     ...project,
     quality: {
       ...project.quality,
       issues,
+      fullCheck: project.quality.fullCheck ? {
+        ...project.quality.fullCheck,
+        valid: false,
+        invalidatedAt: now,
+        invalidationReason: note,
+      } : undefined,
+      invalidations: [...project.quality.invalidations, invalidation],
+      actions: [...project.quality.actions, ...invalidationActions],
       stale: true,
-      readiness: readinessForIssues(issues, true),
       summary: summarizeQuality(issues, project.quality.coverage, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt),
     },
   };
+  nextProject.quality.readiness = getStep8QualityGate(nextProject).readiness;
+  return nextProject;
 }

@@ -1,0 +1,121 @@
+{
+  "simulatedDataOnly": true,
+  "results": [
+    {
+      "name": "Step 7.1 全面检查建立有效 gate 记录",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 7 活动问题未关闭时 Step 8 禁止定稿",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "缺少 Step 8 状态的 Step 1–7 存档加法迁移且保留质量历史",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 8 直接读取朋友版本的 Step 7.1 gate",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "人工声明创建持久化定稿版本",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "同一数据不能重复创建相同定稿",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "审计包包含版本与来源快照且明确标记模拟原型",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "当前有效版本可以打开最终打印页",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "最终报告不显示内部编辑标识、待办或 Mock 说明",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "最终打印页使用定稿页面数量与最终页码",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "普通保存元数据变化不会错误使定稿失效",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "披露输入变化立即使旧定稿失效",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "失效定稿禁止继续输出",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "披露输入变化同时关闭 Step 7.1 gate",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 1 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 2 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 3 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 4 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 5 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 6 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 7 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Step 8 既有路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "浏览器无 console/page error",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "browserErrors": []
+}

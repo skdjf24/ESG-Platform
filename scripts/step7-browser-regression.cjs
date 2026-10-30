@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require("playwright");
+const fs = require("node:fs");
+const { clearProjectDatabase, mutateProject, readProject, writeProject } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.STEP7_BASE_URL || "http://127.0.0.1:4325";
 const screenshotDir = "docs/acceptance/step7";
-const storageKey = "esg:report-project:hualan-2025:v2";
 
 function assert(condition, message) {
   if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
@@ -11,7 +12,7 @@ function assert(condition, message) {
 }
 
 async function storedProject(page) {
-  return page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+  return readProject(page);
 }
 
 async function waitForStored(page, predicate, timeout = 8_000) {
@@ -30,7 +31,9 @@ async function openStep(page, step, query = "") {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+  const bundledChromium = chromium.executablePath();
+  const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
+  const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const browserErrors = [];
@@ -38,7 +41,7 @@ async function main() {
   page.on("pageerror", (error) => browserErrors.push(`pageerror: ${error.message}`));
 
   await openStep(page, 7);
-  await page.evaluate(() => localStorage.clear());
+  await clearProjectDatabase(page);
   await page.reload({ waitUntil: "networkidle" });
   assert(await page.getByRole("heading", { name: "报告质量与披露完整性检查" }).isVisible(), "Step 7 工作台可实际打开");
   await page.getByRole("button", { name: "开始全面检查" }).click();
@@ -47,8 +50,7 @@ async function main() {
   assert(project.quality.issues.length > 0, "确定性规则从现有项目数据生成问题，而非静态清单");
   await page.screenshot({ path: `${screenshotDir}/01-quality-workbench.png`, fullPage: true });
 
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     for (const chapter of value.writing.chapters) {
       for (const block of chapter.blocks) {
         block.mappings = block.mappings.filter((mapping) => mapping.requirementId !== "req-gri-403");
@@ -93,8 +95,7 @@ async function main() {
       revision: 2,
       updatedAt: new Date().toISOString(),
     }];
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "开始全面检查" }).click();
   project = await waitForStored(page, (value) => value.quality?.runs?.length === 2);
@@ -137,14 +138,12 @@ async function main() {
   project = await storedProject(page);
   assert(project.quality.issues.some((issue) => issue.title.includes("高度重视") && issue.status === "已接受例外"), "刷新后恢复问题状态、例外理由和检查历史");
 
-  await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key));
+  await mutateProject(page, (value) => {
     for (const block of value.writing.chapters.flatMap((chapter) => chapter.blocks)) block.html = block.html.replaceAll("高度重视", "重视");
     const issue = value.quality.issues.find((item) => item.title.includes("高度重视"));
     issue.status = "待复检";
     value.quality.stale = true;
-    localStorage.setItem(key, JSON.stringify(value));
-  }, storageKey);
+  });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "重新检查已修改项" }).click();
   project = await waitForStored(page, (value) => value.quality.issues.some((issue) => issue.title.includes("高度重视") && issue.status === "已复检解决"));
@@ -178,7 +177,7 @@ async function main() {
   project.presentation.layout.lineHeight = 2.2;
   project.presentation.layout.margins.top = 28;
   project.presentation.layout.margins.bottom = 28;
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: storageKey, value: project });
+  await writeProject(page, project);
   await openStep(page, 6);
   const richResult = await page.evaluate(() => {
     const fragments = [...document.querySelectorAll('[data-preview-block-id="section-5-training"]')];
@@ -208,7 +207,7 @@ async function main() {
   delete legacy.quality;
   legacy.migrations = legacy.migrations.filter((item) => item.id !== "migration-quality-check-v1");
   await legacyPage.goto(baseUrl, { waitUntil: "networkidle" });
-  await legacyPage.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: storageKey, value: legacy });
+  await writeProject(legacyPage, legacy);
   await openStep(legacyPage, 7);
   assert(await legacyPage.getByRole("heading", { name: "报告质量与披露完整性检查" }).isVisible(), "缺少 Step 7 状态的历史项目可兼容打开");
   await legacyPage.getByRole("button", { name: "开始全面检查" }).click();

@@ -17,11 +17,12 @@ import type {
 } from "@/lib/types/writing";
 import type { ReportPresentationState } from "@/lib/types/presentation";
 import type { QualityCheckState } from "@/lib/types/quality";
+import type { FinalizationState } from "@/lib/types/finalization";
 
 export type MaterialityMethod = "综合评估" | "管理层评估" | "利益相关方问卷";
 export type EntityReviewStatus = "有效" | "待复核";
 export type SourceState = "active" | "upstream-removed";
-export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type ProjectStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export interface ReportBoundaryItem {
   id: string;
@@ -108,6 +109,7 @@ export interface ReportProjectData {
   writing: ProjectWritingState;
   presentation: ReportPresentationState;
   quality: QualityCheckState;
+  finalization: FinalizationState;
   impacts: ChangeImpact[];
   migrations: MigrationRecord[];
 }
@@ -124,10 +126,53 @@ export interface ProjectSaveResult {
   impacts: ChangeImpact[];
 }
 
+export interface ProjectSummary {
+  projectId: string;
+  title: string;
+  enterpriseName: string;
+  year: number;
+  state: ReportProjectData["report"]["state"];
+  progress: number;
+  currentStep: number;
+  revision: number;
+  updatedAt: string;
+  fileCount: number;
+}
+
+export interface CreateProjectInput {
+  projectId?: string;
+  title: string;
+  enterpriseName: string;
+  year: number;
+}
+
 export interface ReportProjectRepository {
   load(projectId: string): Promise<ReportProjectData>;
   save(projectId: string, project: ReportProjectData, context: ProjectSaveContext): Promise<ProjectSaveResult>;
+  list(): Promise<ProjectSummary[]>;
+  create(input: CreateProjectInput): Promise<ReportProjectData>;
+  importProject(project: ReportProjectData): Promise<ReportProjectData>;
+  exists(projectId: string): Promise<boolean>;
   subscribe(projectId: string, onChange: () => void): () => void;
+}
+
+export interface ProjectFileRecord {
+  fileId: string;
+  projectId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  parserStatus: "not-started";
+  blob: Blob;
+}
+
+export interface ProjectFileRepository {
+  save(projectId: string, file: File | Blob, name?: string): Promise<ProjectFileRecord>;
+  get(projectId: string, fileId: string): Promise<ProjectFileRecord | null>;
+  list(projectId: string): Promise<ProjectFileRecord[]>;
+  delete(projectId: string, fileId: string): Promise<void>;
+  import(record: ProjectFileRecord): Promise<ProjectFileRecord>;
 }
 
 export interface RequirementDecisionUpdate {

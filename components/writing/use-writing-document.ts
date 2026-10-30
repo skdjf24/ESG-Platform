@@ -1,12 +1,8 @@
 "use client";
 
 import { useProjectData } from "@/components/project/project-data-provider";
-import { projectStorageKey, legacyWritingStorageKey } from "@/lib/project/repository";
 import { applyWritingDocument, composeWritingDocument } from "@/lib/project/synchronize";
 import type { WritingDocument } from "@/lib/types/writing";
-
-export const STORAGE_KEY = legacyWritingStorageKey("hualan-2025");
-export const PROJECT_STORAGE_KEY = projectStorageKey("hualan-2025");
 
 export function useWritingDocument() {
   const projectStore = useProjectData();

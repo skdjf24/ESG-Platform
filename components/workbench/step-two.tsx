@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Users,
+  X,
 } from "lucide-react";
 import type { EsgCategory } from "@/lib/types/esg";
 import { useProjectData } from "@/components/project/project-data-provider";
@@ -26,6 +27,7 @@ import { StepPageHeader } from "@/components/workbench/step-page-header";
 
 type Filter = "全部" | EsgCategory;
 type Method = "综合评估" | "管理层评估" | "利益相关方问卷";
+type TopicEditor = { id?: string; name: string; category: EsgCategory; financialScore: number; impactScore: number };
 
 const categoryStyles: Record<EsgCategory, { badge: string; dot: string; label: string }> = {
   E: { badge: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", label: "环境" },
@@ -49,6 +51,8 @@ export function StepTwo() {
   const topics = project.topics;
   const [filter, setFilter] = useState<Filter>("全部");
   const [query, setQuery] = useState("");
+  const [topicEditor, setTopicEditor] = useState<TopicEditor | null>(null);
+  const [topicError, setTopicError] = useState("");
   const method = project.materiality.method;
   const includedIds = new Set(project.materiality.includedTopicIds);
   const confirmed = project.materiality.confirmed;
@@ -73,6 +77,59 @@ export function StepTwo() {
         confirmed: false,
         confirmedAt: undefined,
       },
+    }));
+  }
+
+  function openTopicEditor(id?: string) {
+    const topic = id ? topics.find((item) => item.id === id) : undefined;
+    setTopicError("");
+    setTopicEditor(topic ? { id: topic.id, name: topic.name, category: topic.category, financialScore: topic.financialScore, impactScore: topic.impactScore } : { name: "", category: "E", financialScore: 3, impactScore: 3 });
+  }
+
+  function saveTopicEditor() {
+    if (!topicEditor) return;
+    const name = topicEditor.name.trim();
+    if (!name) {
+      setTopicError("请填写议题名称。");
+      return;
+    }
+    if (topics.some((item) => item.id !== topicEditor.id && item.name.trim().toLowerCase() === name.toLowerCase())) {
+      setTopicError("议题名称已存在，请避免重复。");
+      return;
+    }
+    const scores = {
+      financialScore: Math.min(5, Math.max(1, topicEditor.financialScore)),
+      impactScore: Math.min(5, Math.max(1, topicEditor.impactScore)),
+    };
+    editProject((current) => {
+      const existing = topicEditor.id ? current.topics.find((item) => item.id === topicEditor.id) : undefined;
+      const id = existing?.id ?? `topic-user-${Date.now()}`;
+      const nextTopics = existing
+        ? current.topics.map((item) => item.id === id ? { ...item, name, category: topicEditor.category, ...scores, confirmed: false } : item)
+        : [...current.topics, { id, name, category: topicEditor.category, origin: "用户新增" as const, ...scores, confirmed: false }];
+      return {
+        ...current,
+        topics: nextTopics,
+        disclosureRequirements: existing && existing.name !== name
+          ? current.disclosureRequirements.map((item) => item.topic === existing.name ? { ...item, topic: name, userConfirmed: false, reviewStatus: "待复核" as const } : item)
+          : current.disclosureRequirements,
+        materiality: {
+          ...current.materiality,
+          includedTopicIds: current.materiality.includedTopicIds.includes(id) ? current.materiality.includedTopicIds : [...current.materiality.includedTopicIds, id],
+          confirmed: false,
+          confirmedAt: undefined,
+        },
+      };
+    });
+    setTopicEditor(null);
+  }
+
+  function updateScore(id: string, field: "financialScore" | "impactScore", rawValue: string) {
+    const value = Math.min(5, Math.max(1, Number(rawValue) || 1));
+    editProject((current) => ({
+      ...current,
+      topics: current.topics.map((item) => item.id === id ? { ...item, [field]: value, confirmed: false } : item),
+      materiality: { ...current.materiality, confirmed: false, confirmedAt: undefined },
     }));
   }
 
@@ -118,7 +175,7 @@ export function StepTwo() {
         <SectionCard
           title="议题池与议题调整"
           description={`当前纳入 ${includedIds.size} 项议题，可根据本年度经营与利益相关方关注进行调整`}
-          action={<button className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52] hover:bg-[#e3f0ea]"><Plus className="size-3.5" />新增议题</button>}
+          action={<button onClick={() => openTopicEditor()} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52] hover:bg-[#e3f0ea]"><Plus className="size-3.5" />新增议题</button>}
           flush
         >
           <div className="flex flex-col gap-3 border-b border-[#edf0ee] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -159,7 +216,7 @@ export function StepTwo() {
                     </div>
                     <div className="mt-1 text-[10px] text-[#85908a]">{style.label}类议题 · {active ? "已纳入本次评估" : "暂不纳入"}</div>
                   </div>
-                  <button className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8d9792] hover:bg-[#f2f5f3] hover:text-[#45534b]" aria-label={`编辑${topic.name}`}><PencilLine className="size-3.5" /></button>
+                  <button onClick={() => openTopicEditor(topic.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8d9792] hover:bg-[#f2f5f3] hover:text-[#45534b]" aria-label={`编辑${topic.name}`}><PencilLine className="size-3.5" /></button>
                 </div>
               );
             })}
@@ -228,8 +285,8 @@ export function StepTwo() {
                     <td className="px-6 py-3.5">
                       <div className="flex items-center gap-2.5"><span className={`size-2 rounded-full ${style.dot}`} /><span className="font-semibold text-[#2a372f]">{topic.name}</span></div>
                     </td>
-                    <td className="px-4 py-3.5"><ScoreMeter value={topic.financialScore} /></td>
-                    <td className="px-4 py-3.5"><ScoreMeter value={topic.impactScore} /></td>
+                    <td className="px-4 py-3.5"><ScoreMeter value={topic.financialScore} label={`${topic.name}财务重要性`} onChange={(value) => updateScore(topic.id, "financialScore", value)} /></td>
+                    <td className="px-4 py-3.5"><ScoreMeter value={topic.impactScore} label={`${topic.name}影响重要性`} onChange={(value) => updateScore(topic.id, "impactScore", value)} /></td>
                     <td className="px-4 py-3.5"><button className="inline-flex items-center gap-1 text-[#287258] hover:underline">查看依据<ArrowUpRight className="size-3" /></button></td>
                     <td className="px-5 py-3.5">{topic.confirmed ? <StatusBadge tone="green">已评分</StatusBadge> : <StatusBadge tone="amber">待复核</StatusBadge>}</td>
                   </tr>
@@ -299,17 +356,38 @@ export function StepTwo() {
       </div>
 
       <StepFooter currentStep={2} />
+
+      {topicEditor ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-[#10241c]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="topic-editor-title" onMouseDown={(event) => event.target === event.currentTarget && setTopicEditor(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#e5e9e7] px-5 py-4">
+              <div><h2 id="topic-editor-title" className="text-sm font-semibold text-[#26352d]">{topicEditor.id ? "编辑议题" : "新增议题"}</h2><p className="mt-1 text-[10px] text-[#87918c]">修改后重要性结果将回到待确认状态。</p></div>
+              <button aria-label="关闭议题编辑" onClick={() => setTopicEditor(null)} className="grid size-8 place-items-center rounded-lg text-[#7d8882] hover:bg-[#f2f5f3]"><X className="size-4" /></button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div><label htmlFor="topic-name" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">议题名称</label><input id="topic-name" autoFocus value={topicEditor.name} onChange={(event) => setTopicEditor({ ...topicEditor, name: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" /></div>
+              <div><label htmlFor="topic-category" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">ESG 类别</label><select id="topic-category" value={topicEditor.category} onChange={(event) => setTopicEditor({ ...topicEditor, category: event.target.value as EsgCategory })} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none"><option value="E">E · 环境</option><option value="S">S · 社会</option><option value="G">G · 治理</option></select></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label htmlFor="topic-financial" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">财务重要性</label><input id="topic-financial" type="number" min="1" max="5" step="0.1" value={topicEditor.financialScore} onChange={(event) => setTopicEditor({ ...topicEditor, financialScore: Number(event.target.value) })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none" /></div>
+                <div><label htmlFor="topic-impact" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">影响重要性</label><input id="topic-impact" type="number" min="1" max="5" step="0.1" value={topicEditor.impactScore} onChange={(event) => setTopicEditor({ ...topicEditor, impactScore: Number(event.target.value) })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none" /></div>
+              </div>
+              {topicError ? <p role="alert" className="text-[10px] text-rose-600">{topicError}</p> : null}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-5 py-4"><button onClick={() => setTopicEditor(null)} className="h-9 rounded-lg border border-[#dce3df] px-4 text-[11px] font-semibold text-[#5b6861]">取消</button><button onClick={saveTopicEditor} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存议题</button></div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-function ScoreMeter({ value }: { value: number }) {
+function ScoreMeter({ value, label, onChange }: { value: number; label: string; onChange: (value: string) => void }) {
   return (
     <div className="flex items-center gap-2.5">
       <div className="flex gap-0.5" aria-label={`${value} 分`}>
         {[1, 2, 3, 4, 5].map((score) => <span key={score} className={`h-1.5 w-4 rounded-full ${score <= Math.round(value) ? "bg-[#4b9b7b]" : "bg-[#e3e8e5]"}`} />)}
       </div>
-      <span className="w-6 text-[10px] font-semibold tabular-nums text-[#33423a]">{value.toFixed(1)}</span>
+      <input aria-label={label} type="number" min="1" max="5" step="0.1" value={value} onChange={(event) => onChange(event.target.value)} className="h-8 w-16 rounded-md border border-[#dce3df] bg-white px-2 text-[10px] font-semibold tabular-nums text-[#33423a] outline-none focus:border-[#6f9f8c]" />
     </div>
   );
 }

@@ -11,10 +11,11 @@ import type { ReportProjectData } from "@/lib/types/project-data";
 import { createWritingDocument } from "@/lib/writing/document";
 import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
+import { createFinalizationState } from "@/lib/finalization/state";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
 
-export function createProjectData(projectId: string): ReportProjectData {
+export function createProjectData(projectId: string, options?: { title?: string; enterpriseName?: string; year?: number }): ReportProjectData {
   const writingDocument = createWritingDocument();
   const boundary = {
     items: [
@@ -26,14 +27,23 @@ export function createProjectData(projectId: string): ReportProjectData {
     note: "覆盖华澜新材料总部及财务并表范围内的控股子公司；如无特别说明，环境与社会绩效数据均按此边界统计。",
   };
   const facts = structuredClone(writingDocument.facts);
+  const year = options?.year ?? reportProject.year;
+  const enterpriseData = structuredClone(enterprise);
+  if (options?.enterpriseName) {
+    enterpriseData.name = options.enterpriseName;
+    enterpriseData.shortName = options.enterpriseName.slice(0, 8);
+  }
+  const reportData = { ...structuredClone(reportProject), id: projectId, year };
+  if (options?.title) reportData.title = options.title;
+  reportData.reportingPeriod = { start: `${year}.01.01`, end: `${year}.12.31` };
   return {
     schemaVersion: 2,
     projectId,
     revision: 1,
     createdAt: seedTimestamp,
     updatedAt: seedTimestamp,
-    enterprise: structuredClone(enterprise),
-    report: { ...structuredClone(reportProject), id: projectId },
+    enterprise: enterpriseData,
+    report: reportData,
     boundary,
     topics: structuredClone(esgTopics),
     materiality: {
@@ -58,9 +68,14 @@ export function createProjectData(projectId: string): ReportProjectData {
       revision: 1,
       reviewStatus: "有效",
     })),
-    // Only metadata is stored. Browser File/Blob payloads are intentionally
-    // outside the project snapshot and must use object storage in production.
-    sources: structuredClone(historicalReports),
+    // The sample source rows contain metadata only. They are deliberately not
+    // represented as parsed files until a user supplies real bytes.
+    sources: structuredClone(historicalReports).map((source) => ({
+      ...source,
+      state: "已上传" as const,
+      fileStatus: "metadata-only" as const,
+      parserStatus: "not-started" as const,
+    })),
     facts,
     resources: structuredClone(writingDocument.resources),
     writing: {
@@ -72,6 +87,7 @@ export function createProjectData(projectId: string): ReportProjectData {
     },
     presentation: createPresentationState(projectId, facts),
     quality: createQualityState(),
+    finalization: createFinalizationState(),
     impacts: [],
     migrations: [],
   };
