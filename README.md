@@ -89,7 +89,7 @@ components/
 │   ├── rich-text.tsx                   # 可编辑富文本正文块
 │   ├── block-editor.tsx                # 六类结构化内容块编辑器
 │   ├── resource-panel.tsx              # 章节资料包、披露映射与来源引用
-│   ├── ai-dialog.tsx                   # Mock AI 原文/建议对照流程
+│   ├── ai-dialog.tsx                   # 真实 AI 原文/建议、来源引用与人工接受流程
 │   ├── policy-dialog.tsx               # Writing Policy 设置
 │   └── use-writing-document.ts         # Step 5 对统一项目状态的兼容适配层
 └── ui/
@@ -260,7 +260,7 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 事实来源修订后的正文“待复核/待更新”联动
 - “待补充、待确认、待更新”内部标记及资料包汇总
 - 可配置 Writing Policy 与基于词语规则的 ESG 空泛表述检查
-- 六种 Mock AI 操作及原文/建议版本对照、接受、重新生成、取消流程
+- 六种服务端 AI 操作及原文/建议版本对照、证据引用、人工接受、重新生成和取消流程
 - 草稿和版本记录保存在当前浏览器 IndexedDB，刷新后可恢复
 
 ### Step 6：数据可视化、版式与整本报告预览
@@ -309,10 +309,10 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - Step 5 的企业事实、资料包、披露映射和章节初始正文
 - Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
 - Step 6 图表/版式建议：由本地确定性 `mockPresentationAiProvider` 返回，并明确标注 `Mock AI`
-- Step 7 AI 建议：由 `mockQualityAiProvider` 返回固定演示流程，不能判断披露义务、充分性或事实真实性，也不会自动修改正文
+- Step 7 AI 语义审校：由服务端 Responses API 返回可定位的辅助发现，人工接受后保存记录，但不改变确定性质量 Gate
 - Step 1–8 统一项目保存、真实文件字节和 Step 5/8 版本记录：仅使用当前浏览器 IndexedDB，不等同于服务器持久化或多人协作
 
-项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。Step 4 文件解析及候选规则不标注为 AI；Step 5–7 原有 Mock AI 能力仍明确标注并要求人工确认。
+Step 5 与 Step 7 已提供真实 OpenAI Responses API 服务端接入；必须在服务端配置 `OPENAI_API_KEY`，请求显式使用 `store:false`。Step 4 文件解析、候选规则和 Step 6 版式建议仍不冒充真实 AI；AI 输出均须人工确认。
 
 Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选人工确认。空泛表述检查仅为可配置词语匹配规则，不宣称具备完整 AI 语义审校能力。写作与版式分别提供可注入的 `AiTaskProvider` 和 `PresentationAiTaskProvider`，均包含 Provider ID、`mock/live` 模式、显示标签和 `run(request, signal)`；后续真实服务需在服务端补充身份鉴权、数据权限、审计、超时/重试、来源校验和敏感信息治理。
 

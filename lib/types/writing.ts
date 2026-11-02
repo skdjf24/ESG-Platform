@@ -12,6 +12,10 @@ export interface ContentBlock {
   rows: string[][]; mappings: DisclosureMapping[]; citations: FactCitation[];
   sourceReferences: SourceReference[]; revision: number; updatedAt: string;
   reviewStatus: ReviewStatus; pendingKind?: PendingKind; resolved?: boolean;
+  aiProvenance?: {
+    taskId: string; providerId: string; model?: string; responseId?: string;
+    generatedAt?: string; acceptedAt: string; citations: AiClaimCitation[];
+  };
 }
 export interface WritingChapter {
   id: string; title: string; order: string; parentId?: string;
@@ -42,15 +46,33 @@ export interface WritingDocument {
   versions: ChapterVersion[]; savedAt?: string;
 }
 export type AiOperation = 'draft' | 'rewrite' | 'expand' | 'shorten' | 'tone' | 'update';
+export interface AiEvidenceItem {
+  evidenceId: string;
+  kind: 'fact' | 'resource';
+  entityId: string;
+  revision: number;
+  title: string;
+  content: string;
+  period?: string;
+  unit?: string;
+  sourceReferences: SourceReference[];
+}
+export interface AiClaimCitation {
+  evidenceId: string;
+  claim: string;
+}
 export interface AiTaskRequest {
   taskId: string; operation: AiOperation; chapter: WritingChapter;
   blockId?: string; selectedText?: string; sourceText: string;
-  facts: WritingFact[]; requirementIds: string[]; policy: WritingPolicy;
+  facts: WritingFact[]; evidence: AiEvidenceItem[];
+  requirementIds: string[]; policy: WritingPolicy;
 }
 export interface AiTaskResponse {
   taskId: string; providerId: string; providerMode: 'mock' | 'live'; label: string;
   original: string; suggestion: string; citedFactIds: string[];
+  citations: AiClaimCitation[]; unsupportedClaims: string[];
   warnings: string[]; requiresConfirmation: boolean;
+  model?: string; responseId?: string; generatedAt?: string;
 }
 export interface AiTaskProvider {
   id: string; mode: 'mock' | 'live'; label: string;

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   AlertOctagon,
   AlertTriangle,
-  Bot,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
@@ -29,11 +28,13 @@ import {
 } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { executeQualityCheck, updateQualityIssue } from "@/lib/quality/engine";
-import { mockQualityAiProvider } from "@/lib/quality/mock-ai";
+import { runLiveSemanticReview } from "@/lib/quality/live-ai";
+import { createAiEvidence } from "@/lib/ai/evidence";
+import { plainText } from "@/lib/writing/document";
 import { qualityCategoryLabel } from "@/lib/quality/rules";
 import { getStep8QualityGate } from "@/lib/quality/validity";
 import type {
-  QualityAiTaskResponse,
+  QualityAiSemanticReviewRun,
   QualityCategory,
   QualityCheckScope,
   QualityIssue,
@@ -81,7 +82,8 @@ export function StepSeven() {
   const [reportOpen, setReportOpen] = useState(false);
   const [note, setNote] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState<QualityAiTaskResponse | null>(null);
+  const [aiReview, setAiReview] = useState<QualityAiSemanticReviewRun | null>(() => project.quality.aiReviews?.at(-1) ?? null);
+  const [aiError, setAiError] = useState("");
   const [sourceOpen, setSourceOpen] = useState(false);
 
   const issues = useMemo(() => project.quality.issues.filter((issue) => {
@@ -161,25 +163,45 @@ export function StepSeven() {
     return `/reports/${project.projectId}/step/${target?.sourceStep ?? issue.sourceStep}${params.size ? `?${params.toString()}` : ""}`;
   }
 
-  async function askAi() {
-    if (!selected) return;
+  async function runSemanticReview() {
     setAiLoading(true);
-    setAiResponse(null);
+    setAiError("");
     try {
-      const response = await mockQualityAiProvider.run({
-        taskId: crypto.randomUUID(), operation: "suggest-fix", projectId: project.projectId,
-        issue: selected, policyRuleIds: project.writing.policy.rules.filter((rule) => rule.enabled).map((rule) => rule.id),
+      const evidence = createAiEvidence(project.facts, project.resources);
+      const sourceToEvidence = new Map(evidence.flatMap((item) => item.sourceReferences.map((source) => [source.id, item.evidenceId] as const)));
+      const blocks = project.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.kind !== "heading" && block.kind !== "todo").map((block) => ({
+        chapterId: chapter.id,
+        chapterTitle: chapter.title,
+        blockId: block.id,
+        blockTitle: block.title,
+        text: [plainText(block.html), ...block.rows.map((row) => row.join(" | "))].filter(Boolean).join("\n"),
+        evidenceIds: [...new Set([
+          ...block.citations.map((citation) => `fact:${citation.factId}`),
+          ...block.sourceReferences.map((source) => sourceToEvidence.get(source.id)).filter((id): id is string => Boolean(id)),
+        ].filter((id) => evidence.some((item) => item.evidenceId === id)))],
+      })).filter((block) => block.text.trim()));
+      const response = await runLiveSemanticReview({
+        taskId: crypto.randomUUID(), projectId: project.projectId, projectRevision: project.revision,
+        policyRuleIds: project.writing.policy.rules.filter((rule) => rule.enabled).map((rule) => rule.id),
+        blocks, evidence,
       });
-      setAiResponse(response);
+      setAiReview(response);
+    } catch (cause) {
+      setAiError(cause instanceof Error ? cause.message : "AI 语义审校未完成；未修改质量 Gate。");
     } finally {
       setAiLoading(false);
     }
   }
 
-  async function recordAiSuggestion() {
-    if (!selected || !aiResponse) return;
-    const next = updateQualityIssue(project, selected.issueId, selected.status, aiResponse.suggestion, "记录 Mock AI 建议", "Mock AI");
-    if (await persist(next, "Step 7 记录 Mock AI 建议")) setMessage("已将 Mock 建议记录到处理历史；未修改正式正文。 ");
+  async function acceptSemanticReview() {
+    if (!aiReview) return;
+    if (aiReview.projectRevision !== project.revision) { setMessage("项目内容已变化，请重新运行 AI 语义审校。"); return; }
+    const accepted = { ...aiReview, acceptedByUser: true, acceptedAt: new Date().toISOString() };
+    const next = { ...project, quality: { ...project.quality, aiReviews: [...(project.quality.aiReviews ?? []).filter((run) => run.taskId !== accepted.taskId), accepted] } };
+    if (await persist(next, "Step 7 人工接受 AI 语义审校记录")) {
+      setAiReview(accepted);
+      setMessage("已保存 AI 语义审校记录；确定性质量 Gate 未被改变。");
+    }
   }
 
   if (!ready) return <div className="p-12 text-center text-sm text-[#64776b]">正在读取统一项目数据与质量检查历史…</div>;
@@ -213,8 +235,16 @@ export function StepSeven() {
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#dfe7e2] bg-white p-2.5">
         <button disabled={running !== null || saving} onClick={() => void runCheck("chapter")} className={button}><ClipboardCheck className="size-3.5" />检查当前章节</button>
         <button disabled={running !== null || saving} onClick={() => void runCheck("changed")} className={button}><RefreshCcw className="size-3.5" />重新检查已修改项</button>
-        <span className="ml-auto text-[10px] text-[#87938c]">确定性规则真实执行 · Mock AI 仅提供演示建议 · 覆盖充分性由用户确认</span>
+        <button disabled={aiLoading || saving} onClick={() => void runSemanticReview()} className={button}>{aiLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}AI 语义审校</button>
+        <span className="ml-auto text-[10px] text-[#87938c]">确定性规则决定 Gate · AI 只提供需人工接受的辅助审校</span>
       </div>
+
+      {aiError ? <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{aiError}</div> : null}
+      {aiReview ? <section className="mb-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4" aria-label="AI 语义审校结果">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-sm font-semibold text-violet-900"><Sparkles className="size-4" />AI 语义审校 · {aiReview.findings.length} 项建议</h2><p className="mt-1 text-[10px] text-violet-700">模型 {aiReview.model} · 输入项目 v{aiReview.projectRevision} · 不参与 Step 8 Gate</p></div><button disabled={aiReview.acceptedByUser || aiReview.projectRevision !== project.revision} onClick={() => void acceptSemanticReview()} className="h-8 rounded-lg bg-violet-700 px-3 text-[10px] font-semibold text-white disabled:opacity-40">{aiReview.acceptedByUser ? "已人工接受记录" : "人工接受并保存记录"}</button></div>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">{aiReview.findings.length ? aiReview.findings.map((finding) => <button key={finding.findingId} onClick={() => router.push(`/reports/${project.projectId}/step/5?chapterId=${encodeURIComponent(finding.chapterId)}&blockId=${encodeURIComponent(finding.blockId)}`)} className="rounded-xl border border-violet-100 bg-white p-3 text-left"><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${finding.severity === "高" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>{finding.severity}</span><span className="text-xs font-semibold text-[#3f315b]">{finding.title}</span></div><p className="mt-2 text-[10px] leading-5 text-[#655978]">{finding.description}</p><p className="mt-1 text-[10px] font-semibold text-violet-700">建议：{finding.suggestion}</p><p className="mt-1 text-[9px] text-[#8b7da0]">置信度 {finding.confidence} · 点击定位正文</p></button>) : <p className="rounded-xl bg-white p-3 text-xs text-violet-800">本次未返回语义问题；仍需完成确定性检查与人工核验。</p>}</div>
+        {aiReview.warnings.map((warning) => <p key={warning} className="mt-2 text-[9px] text-violet-700">· {warning}</p>)}
+      </section> : null}
 
       <div className="quality-grid">
         <aside className="quality-sidebar self-start overflow-hidden rounded-2xl border border-[#dfe7e2] bg-white">
@@ -233,7 +263,7 @@ export function StepSeven() {
             <select aria-label="问题排序" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className="h-9 rounded-lg border border-[#dfe6e1] bg-white px-2.5 text-[10px]"><option value="severity">严重程度优先</option><option value="updated">最近更新优先</option></select>
           </div>
           <div className="scrollbar-subtle max-h-[680px] overflow-y-auto" aria-label="质量问题清单">
-            {issues.length ? issues.map((issue) => <button key={issue.issueId} onClick={() => { setSelectedIssueId(issue.issueId); setAiResponse(null); setSourceOpen(false); }} className={`block w-full border-b border-[#edf1ef] p-4 text-left transition ${selected?.issueId === issue.issueId ? "bg-[#f0f7f3]" : "hover:bg-[#fafcfb]"}`}>
+            {issues.length ? issues.map((issue) => <button key={issue.issueId} onClick={() => { setSelectedIssueId(issue.issueId); setSourceOpen(false); }} className={`block w-full border-b border-[#edf1ef] p-4 text-left transition ${selected?.issueId === issue.issueId ? "bg-[#f0f7f3]" : "hover:bg-[#fafcfb]"}`}>
               <div className="flex items-start gap-3"><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border ${severityClass[issue.severity]}`}>{issue.severity === "阻断" ? <AlertOctagon className="size-4" /> : issue.severity === "高" ? <AlertTriangle className="size-4" /> : <CircleAlert className="size-4" />}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-1.5"><span className="text-xs font-semibold leading-5 text-[#26362d]">{issue.title}</span><span className={`rounded-full px-2 py-0.5 text-[8px] font-semibold ${statusClass[issue.status]}`}>{issue.status}</span></span><span className="mt-1.5 block text-[10px] leading-4 text-[#7b8981]">{qualityCategoryLabel(issue.category)} · {issue.chapterId ? chapterName(project, issue.chapterId) : `Step ${issue.sourceStep}`} · {issue.findingMethod}</span><span className="mt-2 line-clamp-2 block text-[10px] leading-5 text-[#617068]">{issue.description}</span></span><ChevronRight className="mt-2 size-3.5 shrink-0 text-[#96a099]" /></div>
             </button>) : <div className="grid min-h-72 place-items-center p-8 text-center"><div><CheckCircle2 className="mx-auto size-8 text-[#68a48b]" /><p className="mt-3 text-sm font-semibold text-[#385444]">当前筛选没有问题</p><p className="mt-1 text-[10px] leading-5 text-[#87938c]">这不代表报告已经获得合规认证；请运行检查并完成必要的人工核验。</p></div></div>}
           </div>
@@ -251,12 +281,11 @@ export function StepSeven() {
               {selected.sourceReferences.length ? <Detail title="原始资料来源"><button onClick={() => setSourceOpen(!sourceOpen)} className="inline-flex items-center gap-1 font-semibold text-[#176b52]"><ExternalLink className="size-3" />{sourceOpen ? "收起来源" : `查看 ${selected.sourceReferences.length} 个来源`}</button>{sourceOpen ? <div className="mt-2 space-y-2">{selected.sourceReferences.map((source) => <div key={source.id} className="rounded-lg border border-[#e1e8e3] p-2"><p className="font-semibold">{source.fileName}</p><p className="text-[#7b8981]">{source.locator} · {source.excerpt}</p></div>)}</div> : null}</Detail> : null}
               <Detail title="处理记录"><div className="space-y-2">{project.quality.actions.filter((item) => item.issueId === selected.issueId).map((item) => <div key={item.actionId} className="border-l-2 border-[#b9d0c3] pl-2"><p className="font-semibold">{item.action} · {item.method}</p><p className="text-[#7c8982]">{item.note || "无补充说明"}</p><p className="text-[8px] text-[#9aa39e]">{new Date(item.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}</p></div>)}{!project.quality.actions.some((item) => item.issueId === selected.issueId) ? <p className="text-[#8b9790]">尚无人工处理记录。</p> : null}</div></Detail>
               <label className="block"><span className="mb-1 block font-semibold text-[#4c5d53]">处理说明 / 例外理由</span><textarea aria-label="问题处理说明" rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="接受例外和提交复检时必须填写" className="w-full resize-none rounded-lg border border-[#dce5df] p-2 text-[10px] outline-none focus:border-[#6f9f8c]" /></label>
-              {aiResponse ? <div className="rounded-xl border border-violet-200 bg-violet-50 p-3"><p className="flex items-center gap-1 font-semibold text-violet-800"><Bot className="size-3.5" />{aiResponse.label}</p><p className="mt-2 text-violet-800">{aiResponse.suggestion}</p>{aiResponse.warnings.map((warning) => <p key={warning} className="mt-1 text-[9px] text-violet-600">· {warning}</p>)}<button onClick={() => void recordAiSuggestion()} className="mt-2 font-semibold text-violet-800">记录建议（不修改正文）</button></div> : null}
             </div>
             <div className="grid grid-cols-2 gap-2 border-t border-[#edf1ef] p-3">
               <button onClick={() => router.push(locationUrl(selected))} className={button}><MapPin className="size-3.5" />定位问题</button>
               <button onClick={() => router.push(locationUrl(selected))} className={button}>返回修改</button>
-              <button disabled={aiLoading} onClick={() => void askAi()} className={button}>{aiLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}AI 建议修正</button>
+              <button onClick={() => void runSemanticReview()} className={button}><Sparkles className="size-3.5" />运行整本 AI 审校</button>
               <button onClick={() => void recordStatus("处理中", "认可问题")} className={button}>认可问题</button>
               <button onClick={() => void recordStatus("待复检", "标记已处理")} className={button}>标记已处理</button>
               <button disabled={selected.severity === "阻断"} onClick={() => void recordStatus("已接受例外", "接受例外")} className={button}>接受例外</button>

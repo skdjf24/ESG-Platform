@@ -64,14 +64,14 @@ function AiSession({ request, provider, onAccept, onClose }: AiDialogProps) {
       const result = await provider.run(request, controller.signal);
       if (!controller.signal.aborted && controllerRef.current === controller) setResponse(result);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "示例任务未完成，请重试。");
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "AI 任务未完成，请重试。");
     } finally {
       if (!controller.signal.aborted && controllerRef.current === controller) setLoading(false);
     }
   }
 
   const confirmedCount = request.facts.filter((fact) => fact.state === "已确认").length;
-  const canAccept = Boolean(response && response.taskId === request.taskId && reviewed && !loading);
+  const canAccept = Boolean(response && response.taskId === request.taskId && reviewed && !loading && response.unsupportedClaims.length === 0);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#10241c]/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -97,9 +97,11 @@ function AiSession({ request, provider, onAccept, onClose }: AiDialogProps) {
             </section>
             <section aria-live="polite" className="overflow-hidden rounded-xl border border-[#b9d8ca] bg-white">
               <div className="flex items-center justify-between border-b border-[#dceae3] bg-[#edf7f1] px-4 py-3"><h3 className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#176b52]"><Sparkles className="size-3.5" />{response?.label ?? provider.label}</h3><ArrowRight className="size-3.5 text-[#5f9a81]" /></div>
-              {loading ? <div className="flex min-h-52 items-center justify-center gap-2 text-xs text-[#6b8174]"><LoaderCircle className="size-4 animate-spin" />正在运行示例任务…</div> : response ? <div className="min-h-52 whitespace-pre-wrap break-words px-4 py-4 text-[13px] leading-7 text-[#284c39]">{response.suggestion}</div> : <div className="flex min-h-52 flex-col items-center justify-center gap-2 px-6 text-center"><Sparkles className="size-7 text-[#bfd2c7]" /><p className="text-xs leading-6 text-[#8a9a90]">点击“生成”查看建议版本。<br />原文将保留至您明确接受。</p></div>}
+              {loading ? <div className="flex min-h-52 items-center justify-center gap-2 text-xs text-[#6b8174]"><LoaderCircle className="size-4 animate-spin" />正在运行真实 AI 任务…</div> : response ? <div className="min-h-52 whitespace-pre-wrap break-words px-4 py-4 text-[13px] leading-7 text-[#284c39]">{response.suggestion}</div> : <div className="flex min-h-52 flex-col items-center justify-center gap-2 px-6 text-center"><Sparkles className="size-7 text-[#bfd2c7]" /><p className="text-xs leading-6 text-[#8a9a90]">点击“生成”查看建议版本。<br />原文将保留至您明确接受。</p></div>}
             </section>
           </div>
+          {response?.citations.length ? <section className="mt-4 rounded-xl border border-[#cde1d5] bg-white p-4"><h3 className="text-xs font-semibold text-[#315b45]">来源引用（{response.citations.length}）</h3><div className="mt-2 space-y-2">{response.citations.map((citation, index) => { const evidence = request.evidence.find(item => item.evidenceId === citation.evidenceId); return <div key={`${citation.evidenceId}-${index}`} className="rounded-lg bg-[#f3f8f5] p-2.5 text-[11px] leading-5 text-[#53675b]"><p className="font-semibold">{evidence?.title ?? citation.evidenceId}</p><p>{citation.claim}</p><p className="text-[10px] text-[#7d8e84]">{evidence?.sourceReferences.map(source => `${source.fileName} · ${source.locator}`).join('；')}</p></div>; })}</div></section> : null}
+          {response?.unsupportedClaims.length ? <section role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800"><p className="font-semibold">存在无依据陈述，已禁止接受</p><ul className="mt-2 list-disc space-y-1 pl-5">{response.unsupportedClaims.map((claim, index) => <li key={`${index}-${claim}`}>{claim}</li>)}</ul></section> : null}
           {error ? <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{error}</p> : null}
           {response?.warnings.length ? <ul className="mt-4 list-disc space-y-1 rounded-xl border border-amber-200 bg-amber-50 py-3 pl-8 pr-4 text-[11px] leading-5 text-amber-800">{response.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul> : null}
           {response ? <label className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#dfe7e2] bg-white p-3.5 text-xs leading-5 text-[#53675b]"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} className="mt-0.5 size-4 accent-[#176b52]" /><span>我已检查建议与原始资料的一致性，确认将建议应用到本次选择的范围。</span></label> : null}

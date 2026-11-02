@@ -165,6 +165,7 @@ export interface QualityCheckState {
   checkedProjectRevision?: number;
   fullCheck?: QualityFullCheckRecord;
   invalidations: QualityInvalidationRecord[];
+  aiReviews?: QualityAiSemanticReviewRun[];
   stale: boolean;
   savedAt?: string;
 }
@@ -187,6 +188,8 @@ export interface QualityAiTaskResponse {
   suggestion: string;
   warnings: string[];
   requiresHumanConfirmation: boolean;
+  model?: string;
+  responseId?: string;
 }
 
 export interface QualityAiTaskProvider {
@@ -194,4 +197,52 @@ export interface QualityAiTaskProvider {
   mode: "mock" | "live";
   label: string;
   run(request: QualityAiTaskRequest, signal?: AbortSignal): Promise<QualityAiTaskResponse>;
+}
+
+export type QualityAiSemanticCategory = "unsupported-claim" | "contradiction" | "vague-language" | "temporal-scope" | "duplication";
+
+export interface QualityAiSemanticBlock {
+  chapterId: string;
+  chapterTitle: string;
+  blockId: string;
+  blockTitle: string;
+  text: string;
+  evidenceIds: string[];
+}
+
+export interface QualityAiSemanticFinding {
+  findingId: string;
+  category: QualityAiSemanticCategory;
+  severity: "高" | "提示";
+  chapterId: string;
+  blockId: string;
+  title: string;
+  description: string;
+  suggestion: string;
+  evidenceIds: string[];
+  confidence: "高" | "中" | "低";
+}
+
+export interface QualityAiSemanticReviewRequest {
+  taskId: string;
+  projectId: string;
+  projectRevision: number;
+  policyRuleIds: string[];
+  blocks: QualityAiSemanticBlock[];
+  evidence: import("@/lib/types/writing").AiEvidenceItem[];
+}
+
+export interface QualityAiSemanticReviewRun {
+  taskId: string;
+  projectId: string;
+  projectRevision: number;
+  providerId: string;
+  providerMode: "live";
+  model: string;
+  responseId: string;
+  generatedAt: string;
+  findings: QualityAiSemanticFinding[];
+  warnings: string[];
+  acceptedByUser: boolean;
+  acceptedAt?: string;
 }

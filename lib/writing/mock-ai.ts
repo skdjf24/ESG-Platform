@@ -64,7 +64,9 @@ export const mockAiProvider: AiTaskProvider = {
     }
     return {
       taskId: request.taskId, providerId: 'mock-local-rules', providerMode: 'mock', label: 'Mock 示例建议', original: source,
-      suggestion, citedFactIds: usedFacts.map((fact) => fact.id), requiresConfirmation: true,
+      suggestion, citedFactIds: usedFacts.map((fact) => fact.id),
+      citations: usedFacts.map((fact) => ({ evidenceId: `fact:${fact.id}`, claim: factSentence(fact) })),
+      unsupportedClaims: [], requiresConfirmation: true,
       warnings: [
         '本结果由本地固定规则演示生成，未调用真实 AI，也不构成完整语义审校。',
         '接受前请对照来源确认；数值和单位取自输入事实，统计口径仍需用户复核。',

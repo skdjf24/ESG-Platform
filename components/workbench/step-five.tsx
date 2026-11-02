@@ -9,7 +9,9 @@ import { AiDialog } from '@/components/writing/ai-dialog';
 import { PolicyDialog } from '@/components/writing/policy-dialog';
 import { useWritingDocument } from '@/components/writing/use-writing-document';
 import { createBlock, getChapterResources, plainText, sanitizeHtml, scanWriting } from '@/lib/writing/document';
-import { mockAiProvider, operationLabels } from '@/lib/writing/mock-ai';
+import { operationLabels } from '@/lib/writing/mock-ai';
+import { liveAiProvider } from '@/lib/writing/live-ai';
+import { createAiEvidence } from '@/lib/ai/evidence';
 import type { AiOperation, AiTaskRequest, AiTaskResponse, BlockKind, ContentBlock, WritingChapter } from '@/lib/types/writing';
 
 const button = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#dce5df] bg-white px-3 text-xs font-medium text-[#52675a] hover:bg-[#f0f6f2] disabled:cursor-not-allowed disabled:opacity-40';
@@ -102,9 +104,10 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     if (operation === 'rewrite' && !text) { store.setMessage('请在当前正文块中选中文字，再执行局部改写。'); return; }
     const topics = store.project.reportSections.find(s => s.id === chapter.id)?.topics ?? [];
     const facts = doc.facts.filter(f => topics.includes(f.topic) || chapter.blocks.some(b => b.citations.some(c => c.factId === f.id)));
+    const resources = getChapterResources(doc.resources, chapter.id);
     setAiRequest({ taskId: crypto.randomUUID(), operation, chapter: structuredClone(chapter), blockId: operation === 'draft' ? undefined : selectedBlock?.id,
       selectedText: operation === 'rewrite' ? text : undefined, sourceText: operation === 'draft' ? chapter.blocks.map(b => plainText(b.html)).join('\n') : plainText(selectedBlock?.html ?? ''),
-      facts: structuredClone(facts), requirementIds: [...new Set(chapter.blocks.flatMap(b => b.mappings.map(m => m.requirementId)))], policy: structuredClone(doc.policy) });
+      facts: structuredClone(facts), evidence: createAiEvidence(facts, resources), requirementIds: [...new Set(chapter.blocks.flatMap(b => b.mappings.map(m => m.requirementId)))], policy: structuredClone(doc.policy) });
   }
   function acceptAi(response: AiTaskResponse) {
     const request = aiRequest;
@@ -118,19 +121,25 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
         || JSON.stringify(requested.sourceReferences) !== JSON.stringify(current.sourceReferences);
     });
     if (staleEvidence) { store.setMessage('AI 任务使用的事实或来源已经变化，请重新生成建议。'); return; }
+    const citedEvidence = response.citations.map(citation => request.evidence.find(item => item.evidenceId === citation.evidenceId));
+    if (citedEvidence.some(item => !item) || response.unsupportedClaims.length) { store.setMessage('AI 建议包含无依据陈述或未知来源，不能接受；请调整资料后重新生成。'); return; }
+    const staleResource = citedEvidence.some(item => item?.kind === 'resource' && !doc.resources.some(resource => resource.id === item.entityId && resource.confirmed && resource.revision === item.revision && JSON.stringify(resource.sourceReferences) === JSON.stringify(item.sourceReferences)));
+    if (staleResource) { store.setMessage('AI 任务使用的资料或来源已经变化，请重新生成建议。'); return; }
     const target = chapter.blocks.find(b => b.id === request.blockId);
     const facts = doc.facts.filter(f => response.citedFactIds.includes(f.id) && f.state === '已确认');
     const newBlock = request.operation === 'draft' ? createBlock(chapter.id, 'paragraph') : target;
     if (!newBlock) return;
     const html = request.operation === 'rewrite' && request.selectedText ? replaceSelection(newBlock.html, request.selectedText, response.suggestion) : textHtml(response.suggestion);
     if (html === null) { store.setMessage('所选文字跨段落、重复或已变化，无法安全定位。请选取唯一的段内文字后重新生成。'); return; }
-    const next: ContentBlock = { ...newBlock, title: request.operation === 'draft' ? '章节初稿 · Mock 示例' : newBlock.title, html,
+    const citedSources = citedEvidence.flatMap(item => item?.sourceReferences ?? []);
+    const next: ContentBlock = { ...newBlock, title: request.operation === 'draft' ? '章节初稿 · AI 建议（待人工确认）' : newBlock.title, html,
       citations: [...newBlock.citations.filter(c => !facts.some(f => f.id === c.factId)), ...facts.map(f => ({ factId: f.id, factRevision: f.revision }))],
-      sourceReferences: [...new Map([...newBlock.sourceReferences, ...facts.flatMap(f => f.sourceReferences)].map(s => [s.id, s])).values()],
+      sourceReferences: [...new Map([...newBlock.sourceReferences, ...facts.flatMap(f => f.sourceReferences), ...citedSources].map(s => [s.id, s])).values()],
       mappings: request.operation === 'draft' ? request.requirementIds.map(requirementId => ({ requirementId, coverage: '待核验' })) : newBlock.mappings,
+      aiProvenance: { taskId: response.taskId, providerId: response.providerId, model: response.model, responseId: response.responseId, generatedAt: response.generatedAt, acceptedAt: new Date().toISOString(), citations: structuredClone(response.citations) },
       reviewStatus: '待复核', pendingKind: '待确认', resolved: false, revision: newBlock.revision + 1, updatedAt: new Date().toISOString() };
     changeChapter({ ...chapter, status: '待完善', reviewStatus: '待复核', blocks: request.operation === 'draft' ? [...chapter.blocks, next] : chapter.blocks.map(b => b.id === next.id ? next : b) });
-    setBlockId(next.id); setAiRequest(null); setSelection(null); store.setMessage('已接受 Mock 示例建议，请人工复核后保存。');
+    setBlockId(next.id); setAiRequest(null); setSelection(null); store.setMessage('已人工接受 AI 建议并保留来源引用；请继续复核后保存。');
   }
   function setStatus(status: WritingChapter['status']) {
     if (status === '已审校' && (pending.length || chapter.blocks.some(b => b.mappings.some(m => m.coverage === '待核验')))) { store.setMessage('请先处理内部标记、待复核引用及待核验的披露映射，再确认已审校。'); return; }
@@ -159,7 +168,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
       <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 05 · Report writing</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">报告内容生成与编辑</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">连接披露要求、企业事实与正文，让每一项披露有据可查。</p></div>
       <div className="flex flex-wrap gap-2"><button className={button} onClick={() => setPolicyOpen(true)}><Settings2 className="size-3.5" />Writing Policy</button><button className={button} onClick={() => setVersionsOpen(true)}><FileClock className="size-3.5" />版本记录</button><button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white hover:bg-[#10543e]" onClick={() => store.save()}><Save className="size-3.5" />保存报告草稿</button></div>
     </div>
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#dbe7df] bg-[#eff6f2] px-4 py-2.5 text-[11px] text-[#587463]"><span>当前企业：{store.project.enterprise.name} · AI 操作使用 Mock 响应 · 项目数据按 projectId 本地隔离</span><span role="status">{store.dirty ? '● 有未保存更改' : doc.savedAt ? `已本地保存 ${new Date(doc.savedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' })}` : '初始示例 · 尚未保存'}</span></div>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#dbe7df] bg-[#eff6f2] px-4 py-2.5 text-[11px] text-[#587463]"><span>当前企业：{store.project.enterprise.name} · 真实 AI 仅使用已确认证据 · 建议须人工接受</span><span role="status">{store.dirty ? '● 有未保存更改' : doc.savedAt ? `已本地保存 ${new Date(doc.savedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' })}` : '初始示例 · 尚未保存'}</span></div>
     {upstreamImpacts.length ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-amber-900"><AlertTriangle className="size-4" />上游数据有 {upstreamImpacts.length} 项变化，正文未被自动覆盖</div><div className="mt-2 space-y-2">{upstreamImpacts.slice(-3).map(impact => <div key={impact.id} className="flex items-start justify-between gap-3 rounded-lg bg-white/75 px-3 py-2 text-[11px] leading-5 text-amber-900"><span>{impact.message}</span><button onClick={() => store.acknowledgeImpact(impact.id)} className="shrink-0 font-semibold text-[#176b52]">已知悉</button></div>)}</div></div> : null}
     {store.message && <div role="status" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{store.message}<button aria-label="关闭提示" onClick={() => store.setMessage('')}><X className="size-4" /></button></div>}
     <div className={`writing-grid ${panelOpen ? '' : 'writing-grid-closed'}`}>
@@ -181,7 +190,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
         <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-[#e0e7e2] bg-white p-2">
           <button className={button + ' !px-2'} disabled={!store.past.length} onClick={store.undo} aria-label="撤销"><Undo2 className="size-4" /></button><button className={button + ' !px-2'} disabled={!store.future.length} onClick={store.redo} aria-label="重做"><Redo2 className="size-4" /></button>
           <select aria-label="AI 操作" value={operation} onChange={e => setOperation(e.target.value as AiOperation)} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e0e6e2] bg-white px-2 text-xs">{Object.entries(operationLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
-          <button onClick={startAi} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52]"><Sparkles className="size-3.5" />Mock AI</button>
+          <button onClick={startAi} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52]"><Sparkles className="size-3.5" />真实 AI</button>
           <button className={button + ' !px-2'} aria-label="空泛表述检查" onClick={() => setScanOpen(!scanOpen)}><ListChecks className="size-4" /></button>
           <button className={button + ' !px-2'} aria-label={panelOpen ? '折叠章节资料包' : '展开章节资料包'} aria-expanded={panelOpen} aria-controls="writing-resource-panel" onClick={() => setPanelOpen(!panelOpen)}>{panelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</button>
         </div>
@@ -197,7 +206,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     </div>
     <div className="mt-6 flex justify-between border-t border-[#dfe7e1] pt-4 text-xs text-[#587764]"><button onClick={() => void navigateToStep(4)}>← 返回资料收集</button><button onClick={() => void navigateToStep(6)}>Step 6 可视化、版式与预览 →</button></div>
     {policyOpen && <PolicyDialog policy={doc.policy} onSave={policy => { store.edit({ ...doc, policy }); setPolicyOpen(false); store.setMessage('写作规范已应用，请保存报告草稿。'); }} onClose={() => setPolicyOpen(false)} />}
-    {aiRequest && <AiDialog request={aiRequest} provider={mockAiProvider} onAccept={acceptAi} onClose={() => setAiRequest(null)} />}
+    {aiRequest && <AiDialog request={aiRequest} provider={liveAiProvider} onAccept={acceptAi} onClose={() => setAiRequest(null)} />}
     {versionsOpen && <div className="fixed inset-0 z-[65] grid place-items-center bg-[#12271d]/40 p-4" onKeyDown={e => e.key === 'Escape' && setVersionsOpen(false)}><section role="dialog" aria-modal="true" aria-label="章节版本记录" className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"><div className="flex items-center justify-between"><h2 className="text-base font-semibold">章节版本记录</h2><button autoFocus onClick={() => setVersionsOpen(false)} aria-label="关闭版本记录"><X className="size-4" /></button></div><p className="my-3 text-xs leading-5 text-[#7b8d80]">{chapter.title} · 恢复版本后可撤销，保存时产生新记录。历史版本保留。</p>{versions.length ? versions.map(v => <div key={v.id} className="mb-2 rounded-xl border border-[#e1e7e3] p-3"><div className="flex items-center justify-between text-xs"><span className="font-semibold">v{v.number} · {v.label}</span><button className="text-[#176b52]" onClick={() => { const restored = structuredClone(v.snapshot); changeChapter({ ...restored, revision: chapter.revision, status: '待完善', reviewStatus: '待复核', blocks: restored.blocks.map(b => ({ ...b, reviewStatus: '待复核' })) }); setBlockId(restored.blocks[0]?.id ?? ''); setSelection(null); setVersionsOpen(false); store.setMessage(`已恢复 v${v.number}，请复核来源并保存为新版本。`); }}>恢复此版本</button></div><p className="mt-2 text-[10px] text-[#87978d]">{new Date(v.savedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} · {v.snapshot.blocks.length} 个内容块</p></div>) : <p className="py-8 text-center text-sm text-[#89998e]">保存草稿后建立版本记录</p>}</section></div>}
   </div>;
 }

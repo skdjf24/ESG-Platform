@@ -191,8 +191,7 @@ async function main() {
   const browser = await chromium.launch({
     headless: true,
     executablePath,
-    ignoreDefaultArgs: ["--enable-unsafe-swiftshader"],
-    args: ["--no-sandbox", "--disable-gpu", "--disable-webgl", "--disable-software-rasterizer", "--use-gl=disabled", "--disable-dev-shm-usage"],
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 }, acceptDownloads: true });
   const page = await context.newPage();
@@ -200,6 +199,24 @@ async function main() {
   page.on("dialog", (dialog) => dialog.accept());
   page.on("console", (message) => { if (message.type() === "error" && !message.text().includes("favicon")) browserErrors.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
+  await page.route("**/api/ai/writing", async (route) => {
+    const request = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      taskId: request.taskId, providerId: "openai-responses", providerMode: "live", label: "真实 AI · 验收测试替身",
+      original: request.selectedText || request.sourceText, suggestion: "E2E AI 候选建议", citedFactIds: [], citations: [], unsupportedClaims: [],
+      warnings: ["验收脚本在浏览器边界使用明确测试替身，未调用外部模型。"], requiresConfirmation: true, model: "test-double", responseId: "resp-e2e", generatedAt: new Date().toISOString(),
+    }) });
+  });
+  await page.route("**/api/ai/semantic-review", async (route) => {
+    const request = route.request().postDataJSON();
+    const target = request.blocks[0];
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      taskId: request.taskId, projectId: request.projectId, projectRevision: request.projectRevision,
+      providerId: "openai-responses", providerMode: "live", model: "test-double", responseId: "resp-semantic-e2e", generatedAt: new Date().toISOString(),
+      findings: target ? [{ findingId: `${request.taskId}:1`, category: "vague-language", severity: "提示", chapterId: target.chapterId, blockId: target.blockId, title: "E2E 语义审校建议", description: "明确测试替身返回的可定位建议。", suggestion: "请人工复核具体事实与措辞。", evidenceIds: [], confidence: "中" }] : [],
+      warnings: ["验收脚本在浏览器边界使用明确测试替身，未调用外部模型。"], acceptedByUser: false,
+    }) });
+  });
 
   await openStep(page, 1);
   await clearProjectDatabase(page);
@@ -328,13 +345,13 @@ async function main() {
   const e2eSentence = "E2E 正文保存与预览同步验证。";
   await editor.fill(`${existingText}\n${e2eSentence}`);
   const beforeAi = await editor.innerText();
-  await page.getByRole("button", { name: "Mock AI" }).click();
+  await page.getByRole("button", { name: "真实 AI" }).click();
   const aiDialog = page.getByRole("dialog");
   await aiDialog.waitFor();
   await aiDialog.getByRole("button", { name: /生成|重新生成/, exact: true }).click();
-  await page.getByText(/Mock AI|本地规则/).last().waitFor({ timeout: 10_000 }).catch(() => null);
+  await page.getByText(/真实 AI · 验收测试替身/).last().waitFor({ timeout: 10_000 }).catch(() => null);
   await aiDialog.getByRole("button", { name: /关闭/ }).click();
-  record(await editor.innerText() === beforeAi, "STEP5-MOCK-NO-OVERWRITE", "Mock AI 未经接受不覆盖用户正文");
+  record(await editor.innerText() === beforeAi, "STEP5-AI-NO-OVERWRITE", "真实 AI 候选未经人工接受不覆盖用户正文");
   await page.getByRole("button", { name: "保存报告草稿" }).click();
   await waitForStored(page, (value) => value.writing.chapters.some((chapter) => chapter.blocks.some((block) => block.html?.includes(e2eSentence))));
   await reloadProject(page);
@@ -411,6 +428,13 @@ async function main() {
   record(project.quality.issues.some((item) => item.status !== "已复检解决"), "STEP7-UNRESOLVED-PRESERVED", "未解决问题未在复检时消失");
   record(project.quality.issues.some((item) => item.severity === "阻断") ? project.quality.readiness !== "可提交定稿审核" : true, "STEP7-BLOCKER-GATE", "阻断问题不能放行 Step 8 Gate");
   record(["DISC", "SRC", "WRITE"].every((prefix) => [...ruleIds].some((id) => id.startsWith(prefix))), "STEP7-CURRENT-FINDINGS", "当前 E2E 数据真实触发披露、来源和 Writing Policy 问题", [...ruleIds].join(","));
+  const gateLabelBeforeAi = await page.getByText(/定稿准备：/).innerText();
+  await page.getByRole("button", { name: "AI 语义审校" }).click();
+  await page.getByText(/AI 语义审校 · 1 项建议/).waitFor({ timeout: 10_000 });
+  await page.getByRole("button", { name: "人工接受并保存记录" }).click();
+  project = await waitForStored(page, (value) => value.quality.aiReviews?.at(-1)?.acceptedByUser === true);
+  record(project.quality.aiReviews.at(-1).findings[0]?.blockId, "STEP7-AI-SEMANTIC", "AI 语义审校结果可定位并经人工接受后保存");
+  record(await page.getByText(/定稿准备：/).innerText() === gateLabelBeforeAi, "STEP7-AI-GATE-ISOLATION", "AI 审校记录不改变确定性 Step 8 Gate");
 
   await openStep(page, 8);
   record(await page.getByText("定稿门禁未通过").isVisible(), "STEP8-BLOCKED", "Step 7 Gate 未通过时禁止定稿");

@@ -34,6 +34,7 @@ export function createQualityState(): QualityCheckState {
     summary: emptyQualitySummary(),
     readiness: "未检查",
     invalidations: [],
+    aiReviews: [],
     stale: false,
   };
 }
