@@ -1,8 +1,10 @@
 export const PROJECT_DATABASE_NAME = "esg-disclosure-platform";
-export const PROJECT_DATABASE_VERSION = 1;
+export const PROJECT_DATABASE_VERSION = 2;
 export const PROJECT_STORE = "projects";
 export const FILE_STORE = "files";
 export const META_STORE = "meta";
+export const PARSED_DOCUMENT_STORE = "parsedDocuments";
+export const EXTRACTION_CANDIDATE_STORE = "extractionCandidates";
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
@@ -45,6 +47,20 @@ export function openProjectDatabase(): Promise<IDBDatabase> {
         files.createIndex("projectAndName", ["projectId", "name"]);
       }
       if (!database.objectStoreNames.contains(META_STORE)) database.createObjectStore(META_STORE, { keyPath: "key" });
+      if (!database.objectStoreNames.contains(PARSED_DOCUMENT_STORE)) {
+        const documents = database.createObjectStore(PARSED_DOCUMENT_STORE, { keyPath: "parsedDocumentId" });
+        documents.createIndex("projectId", "projectId");
+        documents.createIndex("fileId", "fileId");
+        documents.createIndex("projectAndFile", ["projectId", "fileId"]);
+      }
+      if (!database.objectStoreNames.contains(EXTRACTION_CANDIDATE_STORE)) {
+        const candidates = database.createObjectStore(EXTRACTION_CANDIDATE_STORE, { keyPath: "candidateId" });
+        candidates.createIndex("projectId", "projectId");
+        candidates.createIndex("fileId", "fileId");
+        candidates.createIndex("projectAndFile", ["projectId", "fileId"]);
+        candidates.createIndex("parsedDocumentId", "parsedDocumentId");
+        candidates.createIndex("status", "status");
+      }
     };
     request.onsuccess = () => {
       const database = request.result;

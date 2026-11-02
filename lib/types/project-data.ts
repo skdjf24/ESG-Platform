@@ -18,6 +18,7 @@ import type {
 import type { ReportPresentationState } from "@/lib/types/presentation";
 import type { QualityCheckState } from "@/lib/types/quality";
 import type { FinalizationState } from "@/lib/types/finalization";
+import type { ParserStatus } from "@/lib/types/parsing";
 
 export type MaterialityMethod = "综合评估" | "管理层评估" | "利益相关方问卷";
 export type EntityReviewStatus = "有效" | "待复核";
@@ -163,7 +164,13 @@ export interface ProjectFileRecord {
   mimeType: string;
   size: number;
   createdAt: string;
-  parserStatus: "not-started";
+  updatedAt: string;
+  checksum: string;
+  revision: number;
+  parserStatus: ParserStatus;
+  parserVersion?: string;
+  parsedAt?: string;
+  parseError?: string;
   blob: Blob;
 }
 
@@ -173,6 +180,8 @@ export interface ProjectFileRepository {
   list(projectId: string): Promise<ProjectFileRecord[]>;
   delete(projectId: string, fileId: string): Promise<void>;
   import(record: ProjectFileRecord): Promise<ProjectFileRecord>;
+  updateParsingState(projectId: string, fileId: string, patch: Partial<Pick<ProjectFileRecord, "parserStatus" | "parserVersion" | "parsedAt" | "parseError">>): Promise<ProjectFileRecord>;
+  replace(projectId: string, fileId: string, file: File | Blob, name?: string): Promise<ProjectFileRecord>;
 }
 
 export interface RequirementDecisionUpdate {

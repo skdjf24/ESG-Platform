@@ -308,7 +308,7 @@ async function main() {
 
   const sourceCountBefore = project.sources.length;
   await page.getByRole("button", { name: /上传资料/ }).click();
-  record(await page.getByText(/文件字节保存到本地 IndexedDB；Phase 1 不执行解析/).isVisible(), "STEP4-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和未解析边界");
+  record(await page.getByText(/文件字节保存到本地 IndexedDB；保存后可进入“解析结果 \/ 候选确认”执行本地解析/).isVisible(), "STEP4-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和待解析边界");
   await page.getByLabel("选择资料文件").setInputFiles({ name: "E2E-能源资料-明确模拟.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("E2E mock spreadsheet metadata only") });
   await page.getByRole("button", { name: "保存来源记录" }).click();
   await saveFooter(page);
@@ -317,7 +317,8 @@ async function main() {
   const uploadedFiles = await readProjectFiles(page, project.projectId);
   record(project.sources.length === sourceCountBefore + 1 && uploadedSource?.fileId && uploadedFiles.some((file) => file.fileId === uploadedSource.fileId), "STEP4-UPLOAD-BYTES", "Step 4 文件入口保存来源元数据和真实文件字节");
   record(!project.facts.some((item) => item.sourceReferences.some((reference) => reference.sourceId === project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx")?.id)), "STEP4-UPLOAD-NO-FALSE-DATA", "未解析文件不伪造事实或抽取结果");
-  finding("High", "GAP-S4-PARSER", "Step 4 尚无文件解析和事实抽取", "文件字节已在 IndexedDB 中保存，但 parserStatus 保持 not-started，且不会生成事实。", "链路 C 可保留原始文件，但仍不能从文件内容抽取真实指标。", "下一阶段建设解析、抽取、人工确认和来源版本管理。");
+  await page.getByRole("button", { name: /解析结果 \/ 候选确认/ }).click();
+  record(await page.getByRole("button", { name: "开始解析" }).isVisible(), "STEP4-PARSER-WORKBENCH", "Step 4 提供真实解析入口且未解析文件仍不自动生成事实");
 
   await openStep(page, 5);
   record((await page.locator("body").innerText()).includes(`当前企业：${projectLabel}`), "STEP5-UPSTREAM-ENTERPRISE", "Step 5 读取 Step 1 最新企业信息");

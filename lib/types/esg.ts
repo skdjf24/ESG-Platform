@@ -5,6 +5,7 @@ export type ProjectState = "draft" | "reviewing" | "finalized";
 export type Applicability = "适用" | "不适用" | "待确认";
 export type CollectionState = "待分工" | "待收集" | "收集中" | "待确认" | "已确认";
 export type SourceKind = "file" | "online" | "historical" | "manual";
+import type { ParserStatus, SourceLocator } from "@/lib/types/parsing";
 
 export interface Enterprise {
   id: string;
@@ -54,7 +55,12 @@ export interface UploadedSource {
   fileId?: string;
   mimeType?: string;
   fileStatus?: "available" | "missing" | "metadata-only";
-  parserStatus?: "not-started";
+  parserStatus?: ParserStatus;
+  parserVersion?: string;
+  parsedAt?: string;
+  parseError?: string;
+  candidateCount?: number;
+  confirmedCandidateCount?: number;
   size?: string;
   uploadedAt: string;
   uploadedBy: string;
@@ -113,6 +119,10 @@ export interface SourceReference {
   fileName: string;
   locator: string;
   excerpt: string;
+  fileId?: string;
+  parsedDocumentId?: string;
+  parsedBlockId?: string;
+  sourceLocator?: SourceLocator;
 }
 
 export interface EnterpriseFact {

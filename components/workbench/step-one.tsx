@@ -17,6 +17,8 @@ import {
   UploadCloud,
   Users,
   X,
+  FileSearch,
+  LoaderCircle,
 } from "lucide-react";
 import { frameworks } from "@/lib/data/mock-data";
 import type { EsgCategory, ListingStatus, UploadedSource } from "@/lib/types/esg";
@@ -27,6 +29,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
+import { DocumentParsingError, markProjectSourceNeedsReview, parseProjectFile } from "@/lib/parsing/service";
 
 const fieldClass = "h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-[13px] text-[#29362f] outline-none transition placeholder:text-[#a0aaa4] focus:border-[#69a28b] focus:ring-2 focus:ring-[#176b52]/10";
 const listingOptions: ListingStatus[] = ["A股", "H股", "A+H", "未上市"];
@@ -47,6 +50,7 @@ export function StepOne() {
   const { project, editProject, saveProject, dirty, saving, setMessage } = useProjectData();
   const historyInputRef = useRef<HTMLInputElement>(null);
   const [historyMessage, setHistoryMessage] = useState("");
+  const [parsingSourceId, setParsingSourceId] = useState<string>();
   const { enterprise, report, topics, boundary } = project;
   const listingStatus = enterprise.listingStatus;
   const selectedFrameworks = report.frameworks;
@@ -69,8 +73,8 @@ export function StepOne() {
       setHistoryMessage("仅支持 PDF 或 DOCX 历史报告。");
       return;
     }
-    if (file.size > 50 * 1024 * 1024) {
-      setHistoryMessage("文件超过 50 MB，本地原型未创建来源记录。");
+    if (file.size > 25 * 1024 * 1024) {
+      setHistoryMessage("文件超过 25 MB 的安全解析上限，本地原型未创建来源记录。");
       return;
     }
     const fileType: UploadedSource["fileType"] = extension === "pdf" ? "PDF" : "DOCX";
@@ -100,11 +104,50 @@ export function StepOne() {
         await projectFileRepository.delete(project.projectId, storedFile.fileId).catch(() => undefined);
         return;
       }
-      setHistoryMessage("历史报告文件已保存到本地文件仓库；解析状态为 not-started，未生成任何解析结果。");
+      setHistoryMessage("历史报告文件已保存到本地文件仓库；当前为待解析，未生成任何事实或候选。");
     } catch (error) {
       const message = error instanceof Error ? error.message : "历史报告文件保存失败。";
       setHistoryMessage(message);
       setMessage(message);
+    }
+  }
+
+  async function parseHistoricalReport(source: UploadedSource) {
+    if (!source.fileId) return;
+    setParsingSourceId(source.id);
+    setHistoryMessage("");
+    try {
+      const result = await parseProjectFile({ projectId: project.projectId, fileId: source.fileId, sourceId: source.id, sourceKind: "historical" });
+      let base = result.parserVersionChanged ? markProjectSourceNeedsReview(project, source.id) : project;
+      base = {
+        ...base,
+        sources: base.sources.map((item) => item.id === source.id ? {
+          ...item,
+          parserStatus: "parsed" as const,
+          parserVersion: result.document.parserVersion,
+          parsedAt: result.document.parsedAt,
+          parseError: undefined,
+          candidateCount: result.candidates.length,
+          confirmedCandidateCount: result.candidates.filter((candidate) => candidate.status === "confirmed").length,
+          state: "已解析" as const,
+        } : item),
+      };
+      editProject(base);
+      await saveProject(4, "解析历史报告", base);
+      setHistoryMessage(`历史报告已在浏览器本地解析（${result.document.parserVersion}）。内容明确标记为 historical，请前往 Step 4 人工创建并确认候选。`);
+    } catch (error) {
+      const failed = error instanceof DocumentParsingError ? error.document : undefined;
+      const next = failed ? {
+        ...project,
+        sources: project.sources.map((item) => item.id === source.id ? { ...item, parserStatus: "failed" as const, parseError: failed.error, state: "已上传" as const } : item),
+      } : project;
+      if (failed) {
+        editProject(next);
+        await saveProject(4, "记录历史报告解析失败", next);
+      }
+      setHistoryMessage(`解析失败：${error instanceof Error ? error.message : "未知错误"}。原始文件和项目数据仍保留。`);
+    } finally {
+      setParsingSourceId(undefined);
     }
   }
 
@@ -240,7 +283,7 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="历史报告" description="文件字节与项目数据分开保存到本地仓库；Phase 1 不执行解析。">
+          <SectionCard title="历史报告" description="文件字节与解析结果分仓保存；历史内容不会自动成为本年度事实。">
             <input
               ref={historyInputRef}
               type="file"
@@ -256,7 +299,7 @@ export function StepOne() {
             <button type="button" onClick={() => historyInputRef.current?.click()} className="soft-grid flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#a9c9bb] bg-[#f5faf7] px-4 py-7 text-center hover:bg-[#f0f7f3]">
               <span className="grid size-10 place-items-center rounded-xl bg-white text-[#176b52] shadow-sm"><UploadCloud className="size-5" /></span>
               <span className="mt-3 text-xs font-semibold text-[#33463c]">点击选择历史报告</span>
-              <span className="mt-1 text-[10px] text-[#87938d]">支持 PDF、DOCX，单个文件不超过 50 MB</span>
+              <span className="mt-1 text-[10px] text-[#87938d]">支持 PDF、DOCX，单个文件不超过 25 MB</span>
               <span className="mt-2 rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-blue-700">文件字节保存到本地 IndexedDB</span>
             </button>
             {historyMessage ? <p role="status" className="mt-2 text-[10px] leading-4 text-[#66736c]">{historyMessage}</p> : null}
@@ -265,6 +308,7 @@ export function StepOne() {
                 <div key={report.id} className="flex items-center gap-3 rounded-xl border border-[#e3e8e5] p-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600"><FileText className="size-4" /></span>
                   <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#38463e]">{report.name}</div><div className="mt-1 text-[9px] text-[#929c97]">{report.size} · {report.uploadedAt} · parser: {report.parserStatus ?? "metadata-only"}</div></div>
+                  {report.fileId && report.fileStatus !== "missing" ? <button type="button" aria-label={`解析历史报告 ${report.name}`} disabled={parsingSourceId === report.id} onClick={() => void parseHistoricalReport(report)} className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#dce3df] text-[#176b52] hover:bg-[#f5f8f6] disabled:opacity-50">{parsingSourceId === report.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <FileSearch className="size-3.5" />}</button> : null}
                   {report.fileId && report.fileStatus !== "missing" ? <button type="button" aria-label={`下载历史报告 ${report.name}`} onClick={() => void downloadHistoricalReport(report.fileId!, report.name)} className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#dce3df] text-[#526159] hover:bg-[#f5f8f6]"><Download className="size-3.5" /></button> : null}
                   <StatusBadge tone={report.fileStatus === "missing" ? "amber" : "green"}>{report.fileStatus === "missing" ? "文件缺失" : report.state}</StatusBadge>
                 </div>

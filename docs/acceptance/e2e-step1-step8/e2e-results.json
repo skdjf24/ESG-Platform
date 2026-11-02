@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-11-02T03:18:02.954Z",
+  "generatedAt": "2026-11-02T06:28:48.097Z",
   "baseUrl": "http://127.0.0.1:4325",
   "testProject": "E2E Prototype Test Project",
   "dataPolicy": "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
   "totals": {
-    "pass": 82,
+    "pass": 83,
     "fail": 0,
-    "findings": 1
+    "findings": 0
   },
   "results": [
     {
@@ -245,7 +245,7 @@
     },
     {
       "id": "STEP4-UPLOAD-STORAGE-LABEL",
-      "title": "文件收集明确标记真实本地存储和未解析边界",
+      "title": "文件收集明确标记真实本地存储和待解析边界",
       "status": "PASS",
       "detail": ""
     },
@@ -258,6 +258,12 @@
     {
       "id": "STEP4-UPLOAD-NO-FALSE-DATA",
       "title": "未解析文件不伪造事实或抽取结果",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP4-PARSER-WORKBENCH",
+      "title": "Step 4 提供真实解析入口且未解析文件仍不自动生成事实",
       "status": "PASS",
       "detail": ""
     },
@@ -502,16 +508,7 @@
       "detail": ""
     }
   ],
-  "findings": [
-    {
-      "severity": "High",
-      "id": "GAP-S4-PARSER",
-      "title": "Step 4 尚无文件解析和事实抽取",
-      "evidence": "文件字节已在 IndexedDB 中保存，但 parserStatus 保持 not-started，且不会生成事实。",
-      "impact": "链路 C 可保留原始文件，但仍不能从文件内容抽取真实指标。",
-      "recommendation": "下一阶段建设解析、抽取、人工确认和来源版本管理。"
-    }
-  ],
+  "findings": [],
   "integrity": {
     "duplicates": [],
     "orphanRequirements": [],

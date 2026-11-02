@@ -14,6 +14,7 @@ import { parseStoredDocument, validateWritingDocument } from "@/lib/writing/docu
 import { ensurePresentationState, isCompatiblePresentationState } from "@/lib/presentation/state";
 import { ensureQualityState, isCompatibleQualityState } from "@/lib/quality/state";
 import { ensureFinalizationState, isFinalizationState } from "@/lib/finalization/state";
+import { checksumBlob, validateUploadMetadata } from "@/lib/parsing/security";
 import {
   ensureStorageCapacity,
   FILE_STORE,
@@ -135,25 +136,45 @@ function slugify(value: string) {
 async function filesForProject(projectId: string) {
   const database = await openProjectDatabase();
   const transaction = database.transaction(FILE_STORE, "readonly");
-  const files = await requestResult(transaction.objectStore(FILE_STORE).index("projectId").getAll(projectId)) as ProjectFileRecord[];
+  const stored = await requestResult(transaction.objectStore(FILE_STORE).index("projectId").getAll(projectId)) as Array<Partial<ProjectFileRecord> & Pick<ProjectFileRecord, "fileId" | "projectId" | "name" | "mimeType" | "size" | "createdAt" | "blob">>;
   await transactionDone(transaction);
+  const files = await Promise.all(stored.map(async (file) => ({
+    ...file,
+    updatedAt: file.updatedAt ?? file.createdAt,
+    checksum: file.checksum ?? await checksumBlob(file.blob),
+    revision: file.revision ?? 1,
+    parserStatus: file.parserStatus ?? "not-started",
+  } satisfies ProjectFileRecord)));
+  if (stored.some((file) => !file.checksum || !file.updatedAt || !file.revision)) {
+    const write = database.transaction(FILE_STORE, "readwrite");
+    for (const file of files) write.objectStore(FILE_STORE).put(file);
+    await transactionDone(write);
+  }
   return files;
 }
 
 async function reconcileFileStatus(project: ReportProjectData) {
   const files = await filesForProject(project.projectId);
-  const fileIds = new Set(files.map((file) => file.fileId));
+  const byId = new Map(files.map((file) => [file.fileId, file]));
   return {
     ...project,
-    sources: project.sources.map((source) => source.fileId ? {
+    sources: project.sources.map((source) => {
+      if (!source.fileId) return {
+        ...source,
+        state: "已上传" as const,
+        fileStatus: source.fileStatus ?? "metadata-only" as const,
+        parserStatus: source.parserStatus ?? "not-started" as const,
+      };
+      const file = byId.get(source.fileId);
+      return {
       ...source,
-      fileStatus: fileIds.has(source.fileId) ? "available" as const : "missing" as const,
-      parserStatus: source.parserStatus ?? "not-started" as const,
-    } : {
-      ...source,
-      state: "已上传" as const,
-      fileStatus: source.fileStatus ?? "metadata-only" as const,
-      parserStatus: source.parserStatus ?? "not-started" as const,
+        fileStatus: file ? "available" as const : "missing" as const,
+        parserStatus: file?.parserStatus ?? source.parserStatus ?? "not-started" as const,
+        parserVersion: file?.parserVersion ?? source.parserVersion,
+        parsedAt: file?.parsedAt ?? source.parsedAt,
+        parseError: file?.parseError,
+        state: file?.parserStatus === "parsed" ? "已解析" as const : file?.parserStatus === "parsing" ? "解析中" as const : "已上传" as const,
+      };
     }),
   };
 }
@@ -343,15 +364,21 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
 
 export class IndexedDbProjectFileRepository implements ProjectFileRepository {
   async save(projectId: string, file: File | Blob, name?: string): Promise<ProjectFileRecord> {
+    const resolvedName = name ?? (typeof File !== "undefined" && file instanceof File ? file.name : "unnamed-file");
+    validateUploadMetadata(resolvedName, file.type || "application/octet-stream", file.size);
     await ensureStorageCapacity(file.size);
     await requestPersistentStorage();
+    const now = new Date().toISOString();
     const record: ProjectFileRecord = {
       fileId: crypto.randomUUID(),
       projectId,
-      name: name ?? (typeof File !== "undefined" && file instanceof File ? file.name : "unnamed-file"),
+      name: resolvedName,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+      checksum: await checksumBlob(file),
+      revision: 1,
       parserStatus: "not-started",
       blob: file,
     };
@@ -382,7 +409,10 @@ export class IndexedDbProjectFileRepository implements ProjectFileRepository {
     const transaction = database.transaction(FILE_STORE, "readonly");
     const record = await requestResult(transaction.objectStore(FILE_STORE).get(fileId)) as ProjectFileRecord | undefined;
     await transactionDone(transaction);
-    return record?.projectId === projectId ? record : null;
+    if (!record || record.projectId !== projectId) return null;
+    if (record.checksum && record.updatedAt && record.revision) return record;
+    const normalized = await filesForProject(projectId);
+    return normalized.find((file) => file.fileId === fileId) ?? null;
   }
 
   async list(projectId: string) {
@@ -404,6 +434,50 @@ export class IndexedDbProjectFileRepository implements ProjectFileRepository {
     }
     transaction.objectStore(FILE_STORE).delete(fileId);
     await transactionDone(transaction);
+  }
+
+  async updateParsingState(projectId: string, fileId: string, patch: Partial<Pick<ProjectFileRecord, "parserStatus" | "parserVersion" | "parsedAt" | "parseError">>) {
+    const database = await openProjectDatabase();
+    const transaction = database.transaction(FILE_STORE, "readwrite");
+    const store = transaction.objectStore(FILE_STORE);
+    const record = await requestResult(store.get(fileId)) as ProjectFileRecord | undefined;
+    if (!record || record.projectId !== projectId) {
+      transaction.abort();
+      throw new ProjectStorageError("not-found", "解析文件不存在或不属于当前项目。");
+    }
+    const next = { ...record, ...patch, updatedAt: new Date().toISOString() } satisfies ProjectFileRecord;
+    store.put(next);
+    await transactionDone(transaction);
+    return next;
+  }
+
+  async replace(projectId: string, fileId: string, file: File | Blob, name?: string) {
+    const current = await this.get(projectId, fileId);
+    if (!current) throw new ProjectStorageError("not-found", "要替换的来源文件不存在。");
+    const resolvedName = name ?? (typeof File !== "undefined" && file instanceof File ? file.name : current.name);
+    validateUploadMetadata(resolvedName, file.type || "application/octet-stream", file.size);
+    await ensureStorageCapacity(file.size);
+    const checksum = await checksumBlob(file);
+    if (checksum === current.checksum) return current;
+    const next: ProjectFileRecord = {
+      ...current,
+      name: resolvedName,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      updatedAt: new Date().toISOString(),
+      checksum,
+      revision: current.revision + 1,
+      parserStatus: "stale",
+      parserVersion: undefined,
+      parsedAt: undefined,
+      parseError: undefined,
+      blob: file,
+    };
+    const database = await openProjectDatabase();
+    const transaction = database.transaction(FILE_STORE, "readwrite");
+    transaction.objectStore(FILE_STORE).put(next);
+    await transactionDone(transaction);
+    return next;
   }
 }
 

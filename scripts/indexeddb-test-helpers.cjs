@@ -1,5 +1,5 @@
 const DATABASE_NAME = "esg-disclosure-platform";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const PROJECT_STORE = "projects";
 const FILE_STORE = "files";
 
@@ -81,7 +81,7 @@ async function clearProjectDatabase(page) {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const stores = [projectStore, fileStore, "meta"].filter((name) => database.objectStoreNames.contains(name));
+    const stores = [projectStore, fileStore, "meta", "parsedDocuments", "extractionCandidates"].filter((name) => database.objectStoreNames.contains(name));
     if (!stores.length) { database.close(); return; }
     const transaction = database.transaction(stores, "readwrite");
     for (const store of stores) transaction.objectStore(store).clear();

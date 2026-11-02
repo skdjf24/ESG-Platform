@@ -52,7 +52,8 @@ async function main() {
       "--disable-dev-shm-usage",
     ],
   };
-  if (process.env.CHROMIUM_EXECUTABLE) launchOptions.executablePath = process.env.CHROMIUM_EXECUTABLE;
+  const bundledChromium = chromium.executablePath();
+  launchOptions.executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
   const browser = await chromium.launch(launchOptions);
   const browserVersion = browser.version();
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
@@ -203,7 +204,7 @@ async function main() {
     baseUrl,
     projectId,
     browser: browserVersion,
-    browserExecutable: process.env.CHROMIUM_EXECUTABLE || chromium.executablePath(),
+    browserExecutable: launchOptions.executablePath,
     results,
     browserErrors,
   };

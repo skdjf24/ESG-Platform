@@ -2,7 +2,7 @@
 
 ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，当前覆盖企业画像、实质性议题、披露框架、资料与事实、报告内容编辑、数据可视化与整本预览、质量检查，以及 Step 8 定稿与导出。Step 1–8 共享统一的项目数据仓库。
 
-当前版本使用本地模拟业务数据，不接入真实 AI、文件解析或后端接口。结构化项目数据和用户选择的真实文件字节分别保存在当前浏览器的 IndexedDB。
+当前版本使用本地模拟业务数据，不接入真实 AI 或后端接口。用户选择的真实文件字节、真实浏览器解析结果及结构化项目数据分别保存在 IndexedDB；XLSX、DOCX 与文本型 PDF 可离线解析，并在人工确认后进入既有事实、指标和资料链路。
 
 ## 技术栈
 
@@ -12,6 +12,7 @@ ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业�
 - Tailwind CSS 4
 - Lucide React 图标
 - Recharts 3
+- ExcelJS 4、PDF.js 4、Open XML + fflate/xmldom（本地文档解析）
 - ESLint 9
 
 ## 本地启动
@@ -61,6 +62,8 @@ app/
     └── page.tsx                       # Step 1–8 动态路由与页面分发
 
 components/
+├── parsing/
+│   └── document-parsing-workbench.tsx # Step 4 文件/原文/候选三栏人工确认工作台
 ├── project/
 │   └── project-data-provider.tsx      # 项目级状态、保存、撤销/重做与跨步骤影响提示
 ├── dashboard/
@@ -104,6 +107,13 @@ lib/
 │   ├── repository.ts                   # 项目/文件 Repository 及旧 localStorage 迁移
 │   ├── operations.ts                   # 备份、恢复与下一年度复制
 │   └── synchronize.ts                  # 跨步骤差异识别、关联同步与复核标记
+├── parsing/
+│   ├── registry.ts                     # 浏览器 Parser Registry
+│   ├── service.ts                      # 解析状态、重解析与文件版本编排
+│   ├── repository.ts                   # ParsedDocument/Candidate IndexedDB Repository
+│   ├── confirmation.ts                 # Fact/Metric/Resource 人工确认适配
+│   ├── security.ts                     # 类型、大小、ZIP/PDF 安全上限与 checksum
+│   └── parsers/                        # XLSX、DOCX、文本型 PDF Parser
 ├── presentation/
 │   ├── state.ts                        # 指标观测、图表快照、迁移与修订联动
 │   ├── pages.ts                        # 内容块分页与整本报告页面生成
@@ -120,6 +130,7 @@ lib/
 │   └── state.ts                        # Step 8 版本迁移、来源指纹与有效性判断
 ├── types/
 │   ├── esg.ts                          # 基础 TypeScript 业务类型
+│   ├── parsing.ts                      # ParsedDocument、ParsedBlock、Locator 与 Candidate
 │   ├── project-data.ts                 # 项目聚合、影响记录与 Repository 契约
 │   ├── writing.ts                      # Step 5 内容块、引用、版本及 AI 类型
 │   ├── presentation.ts                 # Step 6 主题、指标、图表、版式及 AI 类型
@@ -231,7 +242,10 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 年度资料统计、搜索与资料任务表
 - 系统建议部门和可调整的实际责任部门
 - 文件上传、在线补充、企业现有 Excel 三种收集方式
-- AI 资料规整前后对照及人工确认
+- XLSX、DOCX、文本型 PDF 的真实浏览器本地解析；扫描型 PDF 明确提示未启用 OCR
+- 文件/Sheet、页面或标题导航，原始单元格/段落预览与稳定来源定位
+- Excel 表头规则生成指标候选；DOCX/PDF 原文片段可创建事实、指标、制度或案例候选
+- 候选编辑、拒绝、人工确认、重复解析去重、文件替换 stale 与失败重试
 - 企业事实库与原始文件、工作表/单元格、页码关联
 
 ### Step 5：报告内容生成与编辑
@@ -287,18 +301,18 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 以下交互仍属于产品原型或模拟业务能力，不会写入后端或产生真实业务结论：
 
 - 所有企业、议题、披露要求、资料、事实及来源数据
-- 文件解析、字段抽取和事实生成（上传本身会真实保存文件字节，`parserStatus` 保持 `not-started`）
+- Excel 指标候选识别为确定性表头规则，不是 AI；候选必须人工确认才写入事实或指标体系
 - 在线资料补充
 - 议题增删、评分方式切换、适用性及重要性确认
 - 责任部门调整、草稿保存和保存状态
-- AI 资料解析与规整结果
+- 既有示例企业与种子事实仍是模拟业务数据；真实上传文件不会自动获得未经证实的业务结论
 - Step 5 的企业事实、资料包、披露映射和章节初始正文
 - Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
 - Step 6 图表/版式建议：由本地确定性 `mockPresentationAiProvider` 返回，并明确标注 `Mock AI`
 - Step 7 AI 建议：由 `mockQualityAiProvider` 返回固定演示流程，不能判断披露义务、充分性或事实真实性，也不会自动修改正文
 - Step 1–8 统一项目保存、真实文件字节和 Step 5/8 版本记录：仅使用当前浏览器 IndexedDB，不等同于服务器持久化或多人协作
 
-所有 AI 结果在界面中明确标注为“示例 AI 规整结果”，需要人工确认后才表现为可进入事实库。项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。
+项目没有调用真实 AI 接口，也没有 API 路由或外部数据请求。Step 4 文件解析及候选规则不标注为 AI；Step 5–7 原有 Mock AI 能力仍明确标注并要求人工确认。
 
 Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选人工确认。空泛表述检查仅为可配置词语匹配规则，不宣称具备完整 AI 语义审校能力。写作与版式分别提供可注入的 `AiTaskProvider` 和 `PresentationAiTaskProvider`，均包含 Provider ID、`mock/live` 模式、显示标签和 `run(request, signal)`；后续真实服务需在服务端补充身份鉴权、数据权限、审计、超时/重试、来源校验和敏感信息治理。
 
@@ -318,7 +332,9 @@ Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选�
 ## Step 1–8 数据贯通
 
 ```text
-Step 1 企业画像 / 年度 / 框架
+真实文件 ──> ParsedDocument / SourceLocator ──> Candidate ──> 人工确认
+                                                      ↓
+Step 1 企业画像 / 年度 / 框架               Fact / Metric / Resource
              ↓
 Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需求
                                       ↓                 ↓
@@ -340,13 +356,13 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - 当前有效定稿可进入独立打印页并下载 JSON 审计包；披露输入或质量结论变化后旧定稿立即失效。
 - 通过 `projectId` 隔离 IndexedDB 项目/文件记录，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
+Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)，Phase 2 文档解析验收见 [docs/acceptance/phase2/README.md](docs/acceptance/phase2/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
 
 ## 待开发范围
 
 - Word 文件与服务器端固定渲染 PDF
 - 后端 API、数据库、真实身份与权限体系
-- 服务端文件存储、文件解析和在线协作
+- 服务端文件存储、旧版二进制 XLS 解析、图片/扫描 PDF OCR 和在线协作
 - 真实 AI 服务接入
 - 服务端数据持久化、多人协作、正式版本记录与审计日志
 - 真实 AI Provider、流式任务、提示词/模型治理及服务端事实校验
@@ -360,6 +376,8 @@ npm run lint
 npm run typecheck
 npm run build
 git diff --check
+npm run test:phase2
+npm run test:phase2:browser
 ```
 
 建议在 1024px、1280px 和 1440px 宽度下检查工作台导航、表格滚动、页内标签和弹窗/抽屉布局。

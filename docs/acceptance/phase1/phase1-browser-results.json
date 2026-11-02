@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-02T03:17:41.236Z",
+  "generatedAt": "2026-11-02T06:26:20.780Z",
   "baseUrl": "http://127.0.0.1:4325",
   "projectId": "phase-1-e2e-enterprise-2026",
-  "browser": "153.0.8010.0",
-  "browserExecutable": "/tmp/phase1-chromium/bin/chromium",
+  "browser": "154.0.8037.57",
+  "browserExecutable": "/usr/bin/chromium",
   "results": [
     {
       "id": "P1-PROJECT-ID",

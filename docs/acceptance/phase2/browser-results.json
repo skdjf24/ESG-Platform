@@ -1,0 +1,106 @@
+{
+  "generatedAt": "2026-11-02T06:24:53.131Z",
+  "baseUrl": "http://127.0.0.1:4326",
+  "projectId": "phase-2-%E9%9D%9E%E6%95%8F%E6%84%9F%E6%B5%8B%E8%AF%95%E4%BC%81%E4%B8%9A-2026",
+  "browser": "154.0.8037.57",
+  "results": [
+    {
+      "id": "P2-BROWSER-MIGRATION-STORES",
+      "status": "PASS",
+      "detail": "IndexedDB v1 原地升级为 v2 并创建两个独立解析仓"
+    },
+    {
+      "id": "P2-BROWSER-MIGRATION-FILE",
+      "status": "PASS",
+      "detail": "Phase 1 文件字节保留并惰性补充 checksum/revision"
+    },
+    {
+      "id": "P2-BROWSER-MIGRATION-PROJECT",
+      "status": "PASS",
+      "detail": "Step 1–8、quality 与 finalization 数据迁移无损"
+    },
+    {
+      "id": "P2-BROWSER-PROJECT",
+      "status": "PASS",
+      "detail": "Phase 2 验收使用独立项目 ID"
+    },
+    {
+      "id": "P2-BROWSER-QUALITY-BASELINE",
+      "status": "PASS",
+      "detail": "先建立 Step 7 全面检查基线以验证后续失效传播"
+    },
+    {
+      "id": "P2-BROWSER-EXCEL-PREVIEW",
+      "status": "PASS",
+      "detail": "XLSX 真实数值在表格预览可见"
+    },
+    {
+      "id": "P2-BROWSER-METRIC-TRACE",
+      "status": "PASS",
+      "detail": "人工确认指标保存结构化 Cell locator"
+    },
+    {
+      "id": "P2-BROWSER-STEP6",
+      "status": "PASS",
+      "detail": "确认指标实际进入 Step 6 observation 数据源"
+    },
+    {
+      "id": "P2-BROWSER-STEP7",
+      "status": "PASS",
+      "detail": "新增确认指标沿用既有同步机制使 Step 7 检查失效"
+    },
+    {
+      "id": "P2-BROWSER-DEDUPE",
+      "status": "PASS",
+      "detail": "相同文件重新解析不重复新增候选"
+    },
+    {
+      "id": "P2-BROWSER-PERSISTENCE",
+      "status": "PASS",
+      "detail": "刷新后 ParsedDocument 与已确认 candidate 仍可恢复"
+    },
+    {
+      "id": "P2-BROWSER-FACT",
+      "status": "PASS",
+      "detail": "DOCX 段落人工确认 Fact 并保留 headingPath/paragraphIndex"
+    },
+    {
+      "id": "P2-BROWSER-STEP5",
+      "status": "PASS",
+      "detail": "确认制度实际进入 Step 5 Resource 数据源"
+    },
+    {
+      "id": "P2-BROWSER-PDF",
+      "status": "PASS",
+      "detail": "文本型 PDF 第 2 页内容与页码定位真实呈现"
+    },
+    {
+      "id": "P2-BROWSER-CORRUPT",
+      "status": "PASS",
+      "detail": "损坏文件显示明确错误且 Step 4 不白屏"
+    },
+    {
+      "id": "P2-BROWSER-REPLACE-FACT",
+      "status": "PASS",
+      "detail": "替换源文件不覆盖已确认值，只标记事实待复核"
+    },
+    {
+      "id": "P2-BROWSER-REPLACE-DOCUMENT",
+      "status": "PASS",
+      "detail": "替换源文件使旧 ParsedDocument 进入 stale 并保留快照"
+    },
+    {
+      "id": "P2-BROWSER-REPARSE",
+      "status": "PASS",
+      "detail": "文件 revision 2 可重新解析且旧快照仍独立保留"
+    },
+    {
+      "id": "P2-BROWSER-ERRORS",
+      "status": "PASS",
+      "detail": "真实浏览器回归 browserErrors = 0"
+    }
+  ],
+  "browserErrors": [],
+  "pass": 19,
+  "fail": 0
+}

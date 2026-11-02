@@ -1,0 +1,113 @@
+{
+  "generatedAt": "2026-11-02T06:19:03.412Z",
+  "fixtures": [
+    "phase2-metrics.xlsx",
+    "phase2-structured.docx",
+    "phase2-text.pdf",
+    "phase2-corrupt.xlsx"
+  ],
+  "results": [
+    {
+      "id": "P2-EXCEL-SHEETS",
+      "status": "PASS",
+      "detail": "XLSX 工作表名称与顺序正确"
+    },
+    {
+      "id": "P2-EXCEL-MERGE",
+      "status": "PASS",
+      "detail": "工作表区域和合并单元格真实解析"
+    },
+    {
+      "id": "P2-EXCEL-CELL",
+      "status": "PASS",
+      "detail": "能源汇总 B4 数值 12680 正确"
+    },
+    {
+      "id": "P2-EXCEL-FORMULA",
+      "status": "PASS",
+      "detail": "公式与文件内缓存结果均保留"
+    },
+    {
+      "id": "P2-EXCEL-CANDIDATE",
+      "status": "PASS",
+      "detail": "表头规则生成指标候选并保留单位、期间和 Cell locator"
+    },
+    {
+      "id": "P2-EXCEL-PERCENT",
+      "status": "PASS",
+      "detail": "百分比按显示语义提取为 14.7 %"
+    },
+    {
+      "id": "P2-NO-AUTO-CONFIRM",
+      "status": "PASS",
+      "detail": "规则候选不会自动成为已确认指标"
+    },
+    {
+      "id": "P2-DOCX-HEADINGS",
+      "status": "PASS",
+      "detail": "DOCX Heading 1–2 层级和路径正确"
+    },
+    {
+      "id": "P2-DOCX-LIST",
+      "status": "PASS",
+      "detail": "DOCX 列表段落保留原始顺序和类型"
+    },
+    {
+      "id": "P2-DOCX-TABLE",
+      "status": "PASS",
+      "detail": "DOCX 表格及 table/row/column locator 正确"
+    },
+    {
+      "id": "P2-PDF-PAGES",
+      "status": "PASS",
+      "detail": "文本型 PDF 页数和逐页文本块正确"
+    },
+    {
+      "id": "P2-PDF-LOCATOR",
+      "status": "PASS",
+      "detail": "PDF 第 2 页文本和 page locator 可追溯"
+    },
+    {
+      "id": "P2-CANDIDATE-PRESENT",
+      "status": "PASS",
+      "detail": "指标候选存在以供确认测试"
+    },
+    {
+      "id": "P2-METRIC-TRACE",
+      "status": "PASS",
+      "detail": "人工确认 Metric 保留 File → ParsedBlock → SourceReference 链路"
+    },
+    {
+      "id": "P2-METRIC-DOWNSTREAM",
+      "status": "PASS",
+      "detail": "确认 Metric 通过既有同步机制进入 Step 6 MetricObservation"
+    },
+    {
+      "id": "P2-DOCX-PARAGRAPH",
+      "status": "PASS",
+      "detail": "DOCX 段落可供手工创建事实候选"
+    },
+    {
+      "id": "P2-CANDIDATE-DEDUPE",
+      "status": "PASS",
+      "detail": "同 checksum、位置、内容和类型产生稳定 candidate identity"
+    },
+    {
+      "id": "P2-CANDIDATE-REJECT",
+      "status": "PASS",
+      "detail": "拒绝候选保留稳定身份且不入库"
+    },
+    {
+      "id": "P2-SOURCE-STALE",
+      "status": "PASS",
+      "detail": "文件版本变化不覆盖已确认值，仅使来源及下游待复核"
+    },
+    {
+      "id": "P2-CORRUPT",
+      "status": "PASS",
+      "detail": "损坏 XLSX 返回可解释错误而非未处理崩溃"
+    }
+  ],
+  "pass": 20,
+  "fail": 0
+}

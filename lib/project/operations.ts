@@ -3,6 +3,7 @@ import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
 import { ensureStorageCapacity, FILE_STORE, openProjectDatabase, PROJECT_STORE, requestResult, transactionDone } from "@/lib/project/indexed-db";
 import { normalizeProjectData, projectFileRepository, projectRepository, ProjectStorageError } from "@/lib/project/repository";
+import { checksumBlob } from "@/lib/parsing/security";
 import type { ProjectFileRecord, ReportProjectData } from "@/lib/types/project-data";
 
 export const PROJECT_BACKUP_SCHEMA_VERSION = 1;
@@ -14,6 +15,9 @@ interface BackupFile {
   mimeType: string;
   size: number;
   createdAt: string;
+  updatedAt?: string;
+  checksum?: string;
+  revision?: number;
   parserStatus: "not-started";
   dataBase64: string;
 }
@@ -61,6 +65,9 @@ export async function createProjectBackup(projectId: string) {
       mimeType: record.mimeType,
       size: record.size,
       createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      checksum: record.checksum,
+      revision: record.revision,
       parserStatus: "not-started",
       dataBase64: bytesToBase64(new Uint8Array(await record.blob.arrayBuffer())),
     });
@@ -123,9 +130,12 @@ export async function restoreProjectBackup(file: File) {
   const unavailable = normalizedProject.sources.filter((source) => source.fileId && source.fileStatus === "available" && !archivedFileIds.has(source.fileId));
   if (unavailable.length) throw new ProjectStorageError("incompatible", `备份缺少 ${unavailable.length} 个来源文件字节，未恢复项目。`);
   const fileIdMap = new Map(archive.files.map((item) => [item.fileId, crypto.randomUUID()]));
-  const files = archive.files.map((item) => {
+  const files = await Promise.all(archive.files.map(async (item) => {
     const bytes = base64ToBytes(item.dataBase64);
     if (bytes.byteLength !== item.size || item.projectId !== normalizedProject.projectId || item.parserStatus !== "not-started") throw new ProjectStorageError("incompatible", `备份文件 ${item.name} 校验失败，未写入任何项目数据。`);
+    const blob = new Blob([bytes], { type: item.mimeType });
+    const actualChecksum = await checksumBlob(blob);
+    if (item.checksum && item.checksum !== actualChecksum) throw new ProjectStorageError("incompatible", `备份文件 ${item.name} checksum 校验失败，未写入任何项目数据。`);
     return {
       fileId: fileIdMap.get(item.fileId)!,
       projectId: item.projectId,
@@ -133,10 +143,13 @@ export async function restoreProjectBackup(file: File) {
       mimeType: item.mimeType,
       size: item.size,
       createdAt: item.createdAt,
+      updatedAt: item.updatedAt ?? item.createdAt,
+      checksum: actualChecksum,
+      revision: item.revision ?? 1,
       parserStatus: item.parserStatus,
-      blob: new Blob([bytes], { type: item.mimeType }),
+      blob,
     } satisfies ProjectFileRecord;
-  });
+  }));
   const project = {
     ...normalizedProject,
     sources: normalizedProject.sources.map((source) => source.fileId ? { ...source, fileId: fileIdMap.get(source.fileId) } : source),
@@ -161,7 +174,8 @@ export async function copyProjectToNextYear(projectId: string, targetYear?: numb
   const files = sourceFiles.map((file) => {
     const fileId = crypto.randomUUID();
     fileIdMap.set(file.fileId, fileId);
-    return { ...file, fileId, projectId: newProjectId, createdAt: new Date().toISOString(), parserStatus: "not-started" as const };
+    const createdAt = new Date().toISOString();
+    return { ...file, fileId, projectId: newProjectId, createdAt, updatedAt: createdAt, revision: 1, parserStatus: "not-started" as const, parserVersion: undefined, parsedAt: undefined, parseError: undefined };
   });
   const now = new Date().toISOString();
   const facts = structuredClone(source.facts).map((fact) => ({ ...fact, state: "待人工确认" as const, confirmedBy: undefined, sourceConfirmationStatus: "待确认" as const, boundaryStatus: "待核验" as const, comparabilityStatus: "待核验" as const, revision: fact.revision + 1 }));

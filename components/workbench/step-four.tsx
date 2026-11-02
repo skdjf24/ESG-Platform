@@ -35,8 +35,9 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
+import { DocumentParsingWorkbench } from "@/components/parsing/document-parsing-workbench";
 
-type Tab = "tasks" | "normalize" | "facts";
+type Tab = "tasks" | "parse" | "normalize" | "facts";
 type IntakeMode = "upload" | "online" | null;
 
 const statusTone: Record<CollectionState, "green" | "blue" | "amber" | "gray"> = {
@@ -65,7 +66,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
   const reviewConfirmed = energyFact?.state === "已确认";
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: "tasks", label: "资料任务", count: dataRequirements.length },
-    { id: "normalize", label: "规整与确认", count: aiNormalizationResults.length },
+    { id: "parse", label: "解析结果 / 候选确认", count: project.sources.filter((source) => source.fileId).length },
     { id: "facts", label: "企业事实库", count: enterpriseFacts.length },
   ];
 
@@ -358,6 +359,8 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
         </div>
       ) : null}
 
+      {activeTab === "parse" ? <DocumentParsingWorkbench /> : null}
+
       {activeTab === "normalize" ? (
         <div className="space-y-4 animate-fade-up">
           <Notice tone="ai" title="示例 AI 规整结果">
@@ -512,7 +515,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
               <div>
                 <span className="mb-3 grid size-10 place-items-center rounded-xl bg-[#eaf4ef] text-[#176b52]">{intakeMode === "upload" ? <UploadCloud className="size-5" /> : <MessageSquareText className="size-5" />}</span>
                 <h2 id="intake-title" className="text-base font-semibold text-[#1d2a23]">{intakeMode === "upload" ? "上传资料文件" : "在线补充资料"}</h2>
-                <p className="mt-1 text-[11px] text-[#7f8a84]">文件字节保存到本地 IndexedDB；Phase 1 不执行解析。</p>
+                <p className="mt-1 text-[11px] text-[#7f8a84]">文件字节保存到本地 IndexedDB；保存后可进入“解析结果 / 候选确认”执行本地解析。</p>
               </div>
               <button onClick={resetIntake} className="grid size-8 place-items-center rounded-lg text-[#7c8781] hover:bg-[#f1f4f2]" aria-label="关闭"><X className="size-4" /></button>
             </div>
@@ -532,7 +535,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                     <label className="mt-4 inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#d4ded9] bg-white px-3 text-[10px] font-semibold text-[#526159]">选择文件<input type="file" aria-label="选择资料文件" accept=".xlsx,.xls,.pdf,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleIntakeFile(file); event.target.value = ""; }} /></label>
                     {selectedFile ? <p className="mt-3 text-[10px] font-semibold text-[#176b52]">已选择：{selectedFile.name} · {selectedFile.size}</p> : null}
                   </div>
-                  <Notice tone="info">提交后保存文件字节及元数据，parserStatus 保持 not-started；不会伪造单元格、页码或事实抽取结果。</Notice>
+                  <Notice tone="info">提交后文件保持“待解析”；只有真实 Parser 成功运行后才生成单元格、页码及候选，且候选不会自动入库。</Notice>
                 </>
               ) : (
                 <>
