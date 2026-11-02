@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-29T08:53:05.390Z",
-  "baseUrl": "http://127.0.0.1:4346",
+  "generatedAt": "2026-11-02T03:18:02.954Z",
+  "baseUrl": "http://127.0.0.1:4325",
   "testProject": "E2E Prototype Test Project",
-  "dataPolicy": "独立浏览器 context + 清空 localStorage；图表数据明确标记为模拟，不作为正式披露。",
+  "dataPolicy": "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
   "totals": {
-    "pass": 75,
-    "fail": 5,
-    "findings": 6
+    "pass": 82,
+    "fail": 0,
+    "findings": 1
   },
   "results": [
     {
@@ -138,13 +138,19 @@
     {
       "id": "STEP1-INDUSTRY-EDIT",
       "title": "行业分类可编辑并可进入保存流程",
-      "status": "FAIL",
+      "status": "PASS",
       "detail": ""
     },
     {
       "id": "STEP1-HISTORY-UPLOAD",
-      "title": "历史报告可创建真实来源记录",
-      "status": "FAIL",
+      "title": "历史报告可创建并保存本地来源元数据",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP1-HISTORY-BOUNDARY",
+      "title": "历史报告关联真实文件且未伪造解析结果",
+      "status": "PASS",
       "detail": ""
     },
     {
@@ -185,8 +191,8 @@
     },
     {
       "id": "STEP2-ADD-TOPIC",
-      "title": "议题池支持新增议题",
-      "status": "FAIL",
+      "title": "议题池支持新增议题并保存双重重要性评分",
+      "status": "PASS",
       "detail": ""
     },
     {
@@ -209,8 +215,8 @@
     },
     {
       "id": "STEP3-ADD-SECTION",
-      "title": "Step 3 可新增章节",
-      "status": "FAIL",
+      "title": "Step 3 可新增章节并同步创建 Step 5 章节",
+      "status": "PASS",
       "detail": ""
     },
     {
@@ -238,14 +244,20 @@
       "detail": ""
     },
     {
-      "id": "STEP4-UPLOAD-MOCK-LABEL",
-      "title": "文件收集明确标记为模拟",
+      "id": "STEP4-UPLOAD-STORAGE-LABEL",
+      "title": "文件收集明确标记真实本地存储和未解析边界",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STEP4-UPLOAD-BYTES",
+      "title": "Step 4 文件入口保存来源元数据和真实文件字节",
       "status": "PASS",
       "detail": ""
     },
     {
       "id": "STEP4-UPLOAD-NO-FALSE-DATA",
-      "title": "模拟上传不伪造来源记录",
+      "title": "未解析文件不伪造事实或抽取结果",
       "status": "PASS",
       "detail": ""
     },
@@ -360,8 +372,8 @@
     {
       "id": "DATA-SOURCE-ORPHANS",
       "title": "来源引用均指向统一 sources 集合",
-      "status": "FAIL",
-      "detail": "fact:fact-energy-2025:source-energy-xlsx；fact:fact-training-2025:source-hr-xlsx"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "id": "CHART-RENDER-bar",
@@ -473,13 +485,13 @@
     },
     {
       "id": "STORAGE-MIGRATION",
-      "title": "旧 schema 加法迁移保留正文与历史来源",
+      "title": "旧 schema 加法迁移保留正文与来源记录",
       "status": "PASS",
       "detail": ""
     },
     {
       "id": "STORAGE-CAPACITY",
-      "title": "超过容量上限明确报错且不覆盖旧快照",
+      "title": "容量不足时明确报错且不覆盖旧快照",
       "status": "PASS",
       "detail": ""
     },
@@ -493,51 +505,11 @@
   "findings": [
     {
       "severity": "High",
-      "id": "GAP-S1-INDUSTRY",
-      "title": "行业分类控件不可操作",
-      "evidence": "行业按钮无处理器，点击后数据、弹层均无变化。",
-      "impact": "企业无法按实际行业创建画像。",
-      "recommendation": "实现行业选择器并经统一仓库保存、触发下游复核。"
-    },
-    {
-      "severity": "High",
-      "id": "GAP-S1-UPLOAD",
-      "title": "历史报告上传为静态 Mock",
-      "evidence": "点击模拟上传区不创建来源记录，也不打开文件处理流程。",
-      "impact": "无法用真实历史报告启动企业项目。",
-      "recommendation": "接入对象存储、文件校验和解析任务，保留原始文件哈希与版本。"
-    },
-    {
-      "severity": "High",
-      "id": "GAP-S2-EDIT",
-      "title": "Step 2 新增/编辑议题未实现",
-      "evidence": "新增议题和编辑按钮没有业务处理器；评分也只有静态显示。",
-      "impact": "无法完成真实企业的完整实质性议题评估。",
-      "recommendation": "补齐议题 CRUD、双重重要性评分、依据与确认审计。"
-    },
-    {
-      "severity": "High",
-      "id": "GAP-S3-STRUCTURE",
-      "title": "新增章节和映射编辑未实现",
-      "evidence": "新增章节、编辑关联、查看映射均为无处理器按钮。",
-      "impact": "真实报告目录与披露要求映射无法完整配置，链路 B/D 不完整。",
-      "recommendation": "实现章节 CRUD、排序与 Requirement 映射编辑，保存时只标记下游复核，不删除正文。"
-    },
-    {
-      "severity": "High",
-      "id": "GAP-S4-INGEST",
-      "title": "Step 4 无真实文件新增、解析和事实抽取",
-      "evidence": "上传/在线补充弹层明确说明不会保存真实文件；仅能编辑种子事实。",
-      "impact": "链路 C 无法由真实原始资料起始。",
-      "recommendation": "建设真实上传、解析、抽取、人工确认和来源版本管理。"
-    },
-    {
-      "severity": "Medium",
-      "id": "DATA-ORPHAN-SOURCES",
-      "title": "种子事实/资源引用了 sources 中不存在的 sourceId",
-      "evidence": "fact:fact-energy-2025:source-energy-xlsx；fact:fact-training-2025:source-hr-xlsx",
-      "impact": "来源卡片可展示嵌入快照，但无法从统一来源集合管理或撤销这些来源。",
-      "recommendation": "统一 Source 实体，迁移现有引用并在保存校验中覆盖 facts/resources/blocks。"
+      "id": "GAP-S4-PARSER",
+      "title": "Step 4 尚无文件解析和事实抽取",
+      "evidence": "文件字节已在 IndexedDB 中保存，但 parserStatus 保持 not-started，且不会生成事实。",
+      "impact": "链路 C 可保留原始文件，但仍不能从文件内容抽取真实指标。",
+      "recommendation": "下一阶段建设解析、抽取、人工确认和来源版本管理。"
     }
   ],
   "integrity": {
@@ -545,10 +517,7 @@
     "orphanRequirements": [],
     "orphanFacts": [],
     "orphanCharts": [],
-    "orphanSources": [
-      "fact:fact-energy-2025:source-energy-xlsx",
-      "fact:fact-training-2025:source-hr-xlsx"
-    ],
+    "orphanSources": [],
     "sectionGaps": [],
     "inactiveChapters": [],
     "badRevisions": []

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require("playwright");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const {
   clearProjectDatabase,
@@ -37,9 +38,23 @@ async function createProject(page, { title, enterpriseName, year }) {
 
 async function main() {
   fs.mkdirSync(evidenceDir, { recursive: true });
-  const launchOptions = { headless: true, args: ["--no-sandbox"] };
+  const launchOptions = {
+    headless: true,
+    // Keep the acceptance runner usable in restricted CI/container environments
+    // where GPU/Vulkan and Chromium's multi-process sandbox are unavailable.
+    ignoreDefaultArgs: ["--enable-unsafe-swiftshader"],
+    args: [
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-webgl",
+      "--disable-software-rasterizer",
+      "--use-gl=disabled",
+      "--disable-dev-shm-usage",
+    ],
+  };
   if (process.env.CHROMIUM_EXECUTABLE) launchOptions.executablePath = process.env.CHROMIUM_EXECUTABLE;
   const browser = await chromium.launch(launchOptions);
+  const browserVersion = browser.version();
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
   const page = await context.newPage();
   const browserErrors = [];
@@ -93,7 +108,9 @@ async function main() {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   check(await page.getByText("E2E Prototype Test Project", { exact: true }).isVisible() && await page.getByText("Second isolated project", { exact: true }).isVisible(), "P1-LIST", "项目列表可显示并打开多个项目");
 
-  const projectCard = page.locator("article").filter({ hasText: "E2E Prototype Test Project" });
+  const projectCard = page.locator("article").filter({
+    has: page.locator("span.font-mono").getByText(projectId, { exact: true }),
+  });
   const backupDownload = page.waitForEvent("download");
   await projectCard.getByRole("button", { name: "导出备份" }).click();
   const backup = await backupDownload;
@@ -111,10 +128,11 @@ async function main() {
   archive.project.projectId = restoredId;
   archive.project.report.id = restoredId;
   for (const file of archive.files) file.projectId = restoredId;
-  const restoredBackupPath = path.join(evidenceDir, "phase1-restore-fixture.esgbackup.json");
+  const restoredBackupPath = path.join(os.tmpdir(), "phase1-restore-fixture.esgbackup.json");
   fs.writeFileSync(restoredBackupPath, JSON.stringify(archive));
   await page.getByLabel("选择项目备份").setInputFiles(restoredBackupPath);
   await page.getByText(/已恢复/).waitFor({ timeout: 15_000 });
+  fs.rmSync(restoredBackupPath, { force: true });
   const restored = await readProject(page, restoredId);
   const restoredFiles = await readProjectFiles(page, restoredId);
   check(restored?.writing.chapters.length === project.writing.chapters.length && restoredFiles.length === 2 && restoredFiles.some((item) => item.text === step4Bytes.toString()), "P1-RESTORE", "恢复后 Step 1–8 状态和文件字节完整");
@@ -180,7 +198,15 @@ async function main() {
   check(await page.getByText(/不兼容|保护状态/).isVisible() && await page.getByRole("heading", { name: "创建报告与企业基础画像" }).isVisible(), "P1-CORRUPTION", "损坏数据触发保护提示而非白屏");
 
   check(browserErrors.length === 0, "P1-BROWSER", "无未处理浏览器错误");
-  const output = { generatedAt: new Date().toISOString(), baseUrl, projectId, results, browserErrors };
+  const output = {
+    generatedAt: new Date().toISOString(),
+    baseUrl,
+    projectId,
+    browser: browserVersion,
+    browserExecutable: process.env.CHROMIUM_EXECUTABLE || chromium.executablePath(),
+    results,
+    browserErrors,
+  };
   fs.writeFileSync(path.join(evidenceDir, "phase1-browser-results.json"), `${JSON.stringify(output, null, 2)}\n`);
   await browser.close();
 }

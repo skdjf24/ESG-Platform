@@ -188,7 +188,12 @@ async function main() {
   const chartFixtures = runChartContractChecks();
   const bundledChromium = chromium.executablePath();
   const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
-  const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath,
+    ignoreDefaultArgs: ["--enable-unsafe-swiftshader"],
+    args: ["--no-sandbox", "--disable-gpu", "--disable-webgl", "--disable-software-rasterizer", "--use-gl=disabled", "--disable-dev-shm-usage"],
+  });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 }, acceptDownloads: true });
   const page = await context.newPage();
   page.setDefaultNavigationTimeout(90_000);
@@ -224,9 +229,10 @@ async function main() {
   await page.getByLabel("选择历史报告文件").setInputFiles({ name: "E2E-历史报告-明确模拟.pdf", mimeType: "application/pdf", buffer: Buffer.from("E2E mock PDF metadata only") });
   await page.getByText(/历史报告文件已保存到本地文件仓库/).waitFor({ timeout: 12_000 });
   project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-历史报告-明确模拟.pdf"));
-  const historyUploadWorks = project.sources.length === initialSourceCount + 1 && project.sources.some((item) => item.kind === "historical" && item.state === "已上传");
+  const uploadedHistory = project.sources.find((item) => item.name === "E2E-历史报告-明确模拟.pdf");
+  const historyUploadWorks = project.sources.length === initialSourceCount + 1 && uploadedHistory?.kind === "historical" && uploadedHistory.state === "已上传";
   record(historyUploadWorks, "STEP1-HISTORY-UPLOAD", "历史报告可创建并保存本地来源元数据");
-  record(await page.getByText(/文件内容不会存入浏览器/).isVisible(), "STEP1-HISTORY-BOUNDARY", "历史报告入口明确不保存或解析文件内容");
+  record(Boolean(uploadedHistory?.fileId) && uploadedHistory?.parserStatus === "not-started", "STEP1-HISTORY-BOUNDARY", "历史报告关联真实文件且未伪造解析结果");
 
   await openStep(page, 7);
   await page.getByRole("button", { name: "开始全面检查" }).click();

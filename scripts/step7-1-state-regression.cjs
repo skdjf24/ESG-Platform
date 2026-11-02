@@ -53,7 +53,12 @@ async function run(page, buttonName, expectedRuns) {
 async function main() {
   const bundledChromium = chromium.executablePath();
   const executablePath = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync(bundledChromium) ? bundledChromium : "/usr/bin/chromium");
-  const browser = await chromium.launch({ headless: true, executablePath, args: ["--no-sandbox"] });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath,
+    ignoreDefaultArgs: ["--enable-unsafe-swiftshader"],
+    args: ["--no-sandbox", "--disable-gpu", "--disable-webgl", "--disable-software-rasterizer", "--use-gl=disabled", "--disable-dev-shm-usage"],
+  });
   const context = await browser.newContext({ viewport: { width: 1800, height: 1180 } });
   const page = await context.newPage();
   const browserErrors = [];
