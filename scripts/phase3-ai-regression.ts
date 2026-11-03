@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createAiEvidence } from "../lib/ai/evidence";
 import { finalizeSemanticReview, finalizeWritingResponse, validateSemanticReviewRequest, validateWritingAiRequest, type SemanticModelOutput, type WritingAiApiRequest, type WritingModelOutput } from "../lib/ai/contracts";
-import { runOpenAiSemanticReview, runOpenAiWriting } from "../lib/ai/openai-server";
+import { resolveAiProviderConfig, runAiSemanticReview, runAiWriting } from "../lib/ai/provider-server";
 import { createProjectData } from "../lib/project/seed";
 import { getStep8QualityGate } from "../lib/quality/validity";
 
@@ -40,28 +40,62 @@ async function main() {
     unsupportedClaims: [],
     warnings: [],
   };
-  const writingResult = await runOpenAiWriting(request, {
+  let lmStudioEndpoint = "";
+  let lmStudioAuthorization: string | null = null;
+  let lmStudioBody = "";
+  const lmStudioConfig = resolveAiProviderConfig({ AI_PROVIDER: "lmstudio", AI_BASE_URL: "http://127.0.0.1:1234/v1/", AI_MODEL: "test-model" });
+  const lmStudioResult = await runAiWriting(request, {
+    provider: "lmstudio",
+    baseUrl: "http://127.0.0.1:1234/v1/",
+    model: "test-model",
+    apiKey: "",
+    fetchImpl: async (input, init) => {
+      lmStudioEndpoint = String(input);
+      lmStudioAuthorization = new Headers(init?.headers).get("authorization");
+      lmStudioBody = String(init?.body ?? "");
+      return fakeResponse(writingOutput, "resp_lmstudio");
+    },
+  });
+  check(lmStudioConfig.configured && lmStudioConfig.responsesUrl === "http://127.0.0.1:1234/v1/responses", "P3-PROVIDER-01 LM Studio 配置与 Responses endpoint 正确");
+  check(lmStudioEndpoint === lmStudioConfig.responsesUrl && lmStudioAuthorization === null && lmStudioResult.providerId === "lmstudio-responses", "P3-PROVIDER-01 LM Studio 不强制 Authorization");
+  check(!("text" in JSON.parse(lmStudioBody)) && !("store" in JSON.parse(lmStudioBody)), "P3-PROVIDER-01 LM Studio adapter 不发送未确认支持的可选字段");
+
+  let openAiEndpoint = "";
+  const writingResult = await runAiWriting(request, {
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
     apiKey: "server-secret-never-client",
     model: "gpt-test",
-    fetchImpl: async (_input, init) => {
+    fetchImpl: async (input, init) => {
+      openAiEndpoint = String(input);
       capturedBody = String(init?.body ?? "");
       capturedAuthorization = new Headers(init?.headers).get("authorization") ?? "";
       return fakeResponse(writingOutput);
     },
   });
+  check(openAiEndpoint === "https://api.openai.com/v1/responses" && capturedAuthorization === "Bearer server-secret-never-client", "P3-PROVIDER-02 OpenAI endpoint 与 Authorization 正确");
   check(JSON.parse(capturedBody).store === false, "Responses API 显式 store:false");
   check(!capturedBody.includes("server-secret-never-client") && capturedAuthorization === "Bearer server-secret-never-client", "API Key 仅位于服务端 Authorization header");
   check(JSON.parse(capturedBody).text.format.type === "json_schema" && JSON.parse(capturedBody).text.format.strict === true, "AI 输出使用严格 JSON Schema");
-  await assert.rejects(() => runOpenAiWriting(request, { apiKey: "" }), /AI_NOT_CONFIGURED/);
+  const legacyConfig = resolveAiProviderConfig({ OPENAI_API_KEY: "legacy-secret", OPENAI_MODEL: "legacy-model" });
+  check(legacyConfig.configured && legacyConfig.provider === "openai" && legacyConfig.model === "legacy-model" && legacyConfig.apiKey === "legacy-secret", "P3-PROVIDER-03 旧 OpenAI 环境变量继续兼容");
+  await assert.rejects(() => runAiWriting(request, { provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-test", apiKey: "" }), /AI_NOT_CONFIGURED/);
   check(true, "未配置服务端 API Key 时明确阻止请求");
+  await assert.rejects(() => runAiWriting(request, {
+    provider: "lmstudio", baseUrl: "http://127.0.0.1:1234/v1", model: "test-model", apiKey: "",
+    fetchImpl: async () => { throw new TypeError("fetch failed"); },
+  }), /AI_PROVIDER_UNREACHABLE/);
+  check(true, "P3-PROVIDER-04 LM Studio 不可达时返回可解释错误");
   const response = finalizeWritingResponse(request, writingResult);
   check(response.providerMode === "live" && response.requiresConfirmation, "真实写作建议必须人工确认");
   check(response.citations.every((citation) => request.evidence.some((item) => item.evidenceId === citation.evidenceId)), "写作引用只能指向输入证据");
 
-  assert.throws(() => finalizeWritingResponse(request, { responseId: "bad", model: "gpt-test", output: { ...writingOutput, citations: [{ evidenceId: "fact:unknown", claim: "伪引用" }] } }), /UNKNOWN_EVIDENCE_CITATION/);
-  check(true, "未知来源引用被服务端拦截");
-  const uncitedDraft = finalizeWritingResponse(request, { responseId: "uncited", model: "gpt-test", output: { ...writingOutput, citations: [], unsupportedClaims: [] } });
+  assert.throws(() => finalizeWritingResponse(request, { responseId: "bad", model: "gpt-test", providerId: "openai-responses", output: { ...writingOutput, citations: [{ evidenceId: "fact:unknown", claim: "伪引用" }] } }), /UNKNOWN_EVIDENCE_CITATION/);
+  check(true, "P3-PROVIDER-05 未知来源引用被服务端拦截");
+  const uncitedDraft = finalizeWritingResponse(request, { responseId: "uncited", model: "gpt-test", providerId: "openai-responses", output: { ...writingOutput, citations: [], unsupportedClaims: [] } });
   check(uncitedDraft.unsupportedClaims.length === 1, "新增内容没有来源引用时自动进入禁止接受清单");
+  const wrongNumericDraft = finalizeWritingResponse(request, { responseId: "wrong-number", model: "gpt-test", providerId: "openai-responses", output: { ...writingOutput, suggestion: "本期指标为 987654321。", unsupportedClaims: [] } });
+  check(wrongNumericDraft.unsupportedClaims.some((claim) => claim.includes("987654321")), "P3-PROVIDER-06 Provider 返回证据外数值时禁止接受");
 
   const block = chapter.blocks.find((item) => item.kind === "paragraph")!;
   const semanticRequest = validateSemanticReviewRequest({
@@ -73,7 +107,7 @@ async function main() {
     evidence,
   });
   const semanticOutput: SemanticModelOutput = { findings: [{ category: "vague-language", severity: "提示", chapterId: chapter.id, blockId: block.id, title: "空泛表述", description: "缺少可验证内容", suggestion: "改为具体行动", evidenceIds: [], confidence: "高" }], warnings: ["需人工确认"] };
-  const semanticResult = await runOpenAiSemanticReview(semanticRequest, { apiKey: "server-secret-never-client", model: "gpt-test", fetchImpl: async () => fakeResponse(semanticOutput, "resp_review") });
+  const semanticResult = await runAiSemanticReview(semanticRequest, { provider: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "server-secret-never-client", model: "gpt-test", fetchImpl: async () => fakeResponse(semanticOutput, "resp_review") });
   const review = finalizeSemanticReview(semanticRequest, semanticResult);
   check(review.findings[0]?.blockId === block.id && !review.acceptedByUser, "AI 语义发现可定位且默认未接受");
   assert.throws(() => finalizeSemanticReview(semanticRequest, { ...semanticResult, output: { ...semanticOutput, findings: [{ ...semanticOutput.findings[0], blockId: "unknown" }] } }), /INVALID_SEMANTIC_FINDING_REFERENCE/);
