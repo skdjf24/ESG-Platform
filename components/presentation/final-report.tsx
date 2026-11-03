@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
@@ -15,6 +15,7 @@ export function FinalReport() {
   const pages = useMemo(() => createReportPages(project), [project]);
   const version = activeFinalVersion(project);
   const current = isFinalVersionCurrent(project, version);
+  const printStarted = useRef(false);
   const baseTheme = getReportTheme(project.presentation.themeId);
   const theme = {
     ...baseTheme,
@@ -39,6 +40,15 @@ export function FinalReport() {
       level: chapter.parentId ? 2 : 1,
     };
   });
+
+  useEffect(() => {
+    if (!ready || !version || !current || printStarted.current) return;
+    document.title = `${project.enterprise.shortName}-${project.report.year}-ESG-${version.label}`;
+    if (new URL(window.location.href).searchParams.get("print") !== "1") return;
+    printStarted.current = true;
+    const timer = window.setTimeout(() => window.print(), 500);
+    return () => window.clearTimeout(timer);
+  }, [current, project.enterprise.shortName, project.report.year, ready, version]);
 
   if (!ready) return <div className="grid min-h-screen place-items-center text-sm text-[#607269]">正在读取定稿版本…</div>;
   if (!version || !current) {

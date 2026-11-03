@@ -45,8 +45,8 @@ npm run start
 | `/reports/[projectId]/step/5` | 报告内容生成与编辑 | 已实现前端工作台 |
 | `/reports/[projectId]/step/6` | 数据可视化、版式与整本报告预览 | 已实现前端工作台 |
 | `/reports/[projectId]/step/7` | 报告质量与披露完整性检查 | 已实现前端工作台与规则引擎 |
-| `/reports/[projectId]/step/8` | 定稿与导出 | 已实现门禁、版本与输出工作台 |
-| `/reports/[projectId]/final` | 当前有效定稿打印页 | 已实现浏览器打印/PDF 页面 |
+| `/reports/[projectId]/step/8` | 定稿与导出 | 已实现门禁、版本、DOCX、PDF 打印与归档工作台 |
+| `/reports/[projectId]/final` | 当前有效定稿打印页 | 已实现正式阅读与浏览器 A4 PDF 页面 |
 
 工作台侧边导航、项目列表“打开项目”以及每一步底部的上一步/下一步均使用真实 App Router 路由。首页支持创建和打开多个本地项目；无效步骤进入 404 页面。
 
@@ -324,7 +324,7 @@ Step 5 的真实 AI 弹窗保留原文与建议对照，接受前必须勾选人
 - 资料责任部门仅由系统建议，用户可以调整实际责任部门。
 - 支持沿用企业现有 Excel 收集资料，不提供独立模板生成模块。
 - 尚未收集的资料只显示“待收集”等流程状态，不预判为数据缺失。
-- AI 模拟结果必须人工确认。
+- AI 建议（真实服务或明确 Mock）都必须人工确认。
 - 企业事实保留与原始文件及具体定位信息的关联。
 - 上游数据变化只同步共享数据和复核状态，不自动改写或删除 Step 5 已编辑正文。
 - 未确认事实不会因同步而自动变为已确认；事实修订会保留旧引用版本并提示待更新。
@@ -353,20 +353,20 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - Step 6 的图表保存指标版本快照；上游数值变化只标记“需更新”，不会覆盖旧图或 Step 5 正文。
 - Step 7 引用现有对象 ID 而不复制整份报告；Step 1–6 保存后检查状态标记待复检，旧运行和人工处理历史保留。
 - Step 8 直接读取 Step 7.1 的 `getStep8QualityGate`；不另建质量判断。只有有效全面检查且无活动问题时才能定稿。
-- 当前有效定稿可进入独立打印页并下载 JSON 审计包；披露输入或质量结论变化后旧定稿立即失效。
+- 当前有效定稿可下载 DOCX、进入独立 PDF 打印页并下载 JSON 审计包；披露输入或质量结论变化后旧定稿立即失效。
 - 通过 `projectId` 隔离 IndexedDB 项目/文件记录，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)，Phase 2 文档解析验收见 [docs/acceptance/phase2/README.md](docs/acceptance/phase2/README.md)，Phase 3 AI 接口与证据约束验收见 [docs/acceptance/phase3/README.md](docs/acceptance/phase3/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
+Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)，Phase 2 文档解析验收见 [docs/acceptance/phase2/README.md](docs/acceptance/phase2/README.md)，Phase 3 AI 接口与证据约束验收见 [docs/acceptance/phase3/README.md](docs/acceptance/phase3/README.md)，Phase 4 DOCX/PDF 输出验收见 [docs/acceptance/phase4/README.md](docs/acceptance/phase4/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
 
 ## 待开发范围
 
-- Word 文件与服务器端固定渲染 PDF
+- 服务器端固定渲染、签名和不可篡改 PDF；Word 原生图表及模板治理
 - 后端 API、数据库、真实身份与权限体系
 - 服务端文件存储、旧版二进制 XLS 解析、图片/扫描 PDF OCR 和在线协作
 - 服务端数据持久化、多人协作、正式版本记录与审计日志
 - 真实模型内容质量联调、流式任务，以及提示词/模型版本与成本治理
 
-Step 8 提供浏览器打印/PDF、定稿元数据及 JSON 审计包，但不包含服务器端不可篡改文件、电子签章、自动发布、合规认证或外部鉴证。
+Step 8 提供本地 OOXML DOCX、浏览器打印/PDF、定稿元数据及 JSON 审计包，但不包含服务器端不可篡改文件、电子签章、自动发布、合规认证或外部鉴证。
 
 ## 基础检查
 
@@ -377,6 +377,8 @@ npm run build
 git diff --check
 npm run test:phase2
 npm run test:phase2:browser
+npm run test:phase3
+npm run test:phase4
 ```
 
 建议在 1024px、1280px 和 1440px 宽度下检查工作台导航、表格滚动、页内标签和弹窗/抽屉布局。

@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { ChartConfigPanel } from "@/components/presentation/chart-config-panel";
-import { formalBlockExclusionReason, ReportPageCanvas, type TocEntry } from "@/components/presentation/report-page";
+import { ReportPageCanvas, type TocEntry } from "@/components/presentation/report-page";
+import { formalBlockExclusionReason } from "@/lib/presentation/formal";
 import { createReportPages } from "@/lib/presentation/pages";
 import { getReportTheme, reportThemes } from "@/lib/presentation/themes";
 import type { ReportChart, ReportLayoutSettings } from "@/lib/types/presentation";

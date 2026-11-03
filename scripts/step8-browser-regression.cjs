@@ -2,6 +2,7 @@
 const { chromium } = require("playwright");
 const fs = require("node:fs");
 const path = require("node:path");
+const { strFromU8, unzipSync } = require("fflate");
 const { clearProjectDatabase, mutateProject, readProject } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.STEP8_BASE_URL || "http://127.0.0.1:4325";
@@ -103,6 +104,16 @@ async function main() {
   check(await page.getByRole("button", { name: "当前数据已完成定稿" }).isDisabled(), "同一数据不能重复创建相同定稿");
   await page.screenshot({ path: path.join(acceptanceDir, "02-final-version.png"), fullPage: true });
 
+  const docxDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "下载正式 Word（DOCX）" }).click();
+  const docxDownload = await docxDownloadPromise;
+  const docxPath = await docxDownload.path();
+  const docxArchive = unzipSync(new Uint8Array(fs.readFileSync(docxPath)));
+  const docxDocument = strFromU8(docxArchive["word/document.xml"]);
+  check(Boolean(docxArchive["word/header1.xml"] && docxArchive["word/footer1.xml"] && docxArchive["docProps/custom.xml"]), "正式 DOCX 包含页眉页脚与定稿元数据");
+  check(!/blockId:|内部待办|Mock AI|独立模拟测试/.test(docxDocument), "正式 DOCX 排除内部编辑标识、待办和 Mock 内容");
+  check(docxDocument.includes(finalized.enterprise.name) && docxDocument.includes(String(finalized.report.year)), "正式 DOCX 使用动态企业和报告年度");
+
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "下载审计归档 JSON" }).click();
   const download = await downloadPromise;
@@ -113,7 +124,7 @@ async function main() {
   const finalPage = await context.newPage();
   finalPage.on("console", (message) => { if (message.type() === "error") browserErrors.push(`final console: ${message.text()}`); });
   finalPage.on("pageerror", (error) => browserErrors.push(`final page: ${error.message}`));
-  await finalPage.goto(`${baseUrl}/reports/hualan-2025/final`, { waitUntil: "networkidle" });
+  await finalPage.goto(`${baseUrl}/reports/hualan-2025/final?print=1`, { waitUntil: "networkidle" });
   await waitForProjectReady(finalPage);
   await finalPage.getByText("打印 / 保存 PDF").waitFor({ timeout: 15000 });
   check(await finalPage.getByText("打印 / 保存 PDF").isVisible(), "当前有效版本可以打开最终打印页");
@@ -121,6 +132,8 @@ async function main() {
   check(!/blockId:|编辑原文|内部待办|Mock AI|独立模拟测试/.test(reportText), "最终报告不显示内部编辑标识、待办或 Mock 说明");
   const pageCount = await finalPage.locator(".final-report-page").count();
   check(pageCount === version.pageCount && pageCount > 2, "最终打印页使用定稿页面数量与最终页码");
+  await finalPage.emulateMedia({ media: "print" });
+  check(await finalPage.locator(".final-report-toolbar").evaluate((element) => getComputedStyle(element).display === "none"), "PDF 打印媒体隐藏全部操作工具栏");
   await finalPage.screenshot({ path: path.join(acceptanceDir, "03-final-print-view.png"), fullPage: false });
 
   await mutateProject(page, (project) => {
@@ -138,7 +151,7 @@ async function main() {
   await page.reload({ waitUntil: "networkidle" });
   await waitForProjectReady(page);
   check(await page.getByText("定稿已失效").isVisible(), "披露输入变化立即使旧定稿失效");
-  check(await page.getByRole("button", { name: "打开最终打印版" }).isDisabled(), "失效定稿禁止继续输出");
+  check(await page.getByRole("button", { name: "下载正式 Word（DOCX）" }).isDisabled() && await page.getByRole("button", { name: "生成 / 保存 PDF" }).isDisabled(), "失效定稿禁止继续输出 DOCX/PDF");
   check(await page.getByText("定稿门禁未通过").isVisible(), "披露输入变化同时关闭 Step 7.1 gate");
 
   for (let step = 1; step <= 8; step += 1) {

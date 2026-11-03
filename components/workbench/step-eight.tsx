@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { StepFooter } from "@/components/workbench/step-footer";
+import { createFinalReportDocx } from "@/lib/export/docx";
 import { activeFinalVersion, finalizationFingerprint, isFinalVersionCurrent } from "@/lib/finalization/state";
 import { createReportPages } from "@/lib/presentation/pages";
 import { getStep8QualityGate } from "@/lib/quality/validity";
@@ -149,6 +150,27 @@ export function StepEight() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadDocx(version: FinalReportVersion) {
+    try {
+      const output = createFinalReportDocx(project, version);
+      const bytes = new Uint8Array(output.bytes);
+      const blob = new Blob([bytes.buffer], { type: output.contentType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = output.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage(`${output.fileName} 已生成；请在 Word 中更新域并复核目录与分页。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "DOCX 生成失败，请重新检查当前定稿。" );
+    }
+  }
+
+  function openPdfOutput() {
+    window.open(`/reports/${project.projectId}/final?print=1`, "_blank", "noopener,noreferrer");
+  }
+
   if (!ready) return <div className="p-12 text-center text-sm text-[#64776b]">正在读取 Step 7 质量状态与定稿记录…</div>;
 
   return (
@@ -201,8 +223,8 @@ export function StepEight() {
         </section>
 
         <aside className="space-y-4">
-          <section className="rounded-2xl border border-[#dfe6e2] bg-white p-5"><div className="flex items-center gap-2"><FileDown className="size-4 text-[#176b52]" /><h2 className="text-sm font-semibold text-[#293d32]">最终输出</h2></div><p className="mt-2 text-[10px] leading-5 text-[#78877e]">仅当前项目与定稿指纹一致时允许输出；PDF 由浏览器打印功能保存。</p><div className="mt-4 space-y-2"><button type="button" disabled={!activeVersion || !versionCurrent} onClick={() => window.open(`/reports/${project.projectId}/final`, "_blank", "noopener,noreferrer")} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#244d3c] text-[10px] font-semibold text-white disabled:opacity-35"><ExternalLink className="size-3.5" />打开最终打印版</button><button type="button" disabled={!activeVersion || !versionCurrent} onClick={() => activeVersion && downloadArchive(activeVersion)} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#cfdad4] text-[10px] font-semibold text-[#176b52] disabled:opacity-35"><Download className="size-3.5" />下载审计归档 JSON</button></div></section>
-          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-[10px] leading-5 text-blue-900"><p className="font-semibold">输出边界</p><p className="mt-1">不会自动对外发布，不生成服务器端电子签章；归档包明确标记为原型模拟输出。</p></section>
+          <section className="rounded-2xl border border-[#dfe6e2] bg-white p-5"><div className="flex items-center gap-2"><FileDown className="size-4 text-[#176b52]" /><h2 className="text-sm font-semibold text-[#293d32]">最终输出</h2></div><p className="mt-2 text-[10px] leading-5 text-[#78877e]">仅当前项目与定稿指纹一致时允许输出；DOCX 与 PDF 共用正式内容排除规则。</p><div className="mt-4 space-y-2"><button type="button" disabled={!activeVersion || !versionCurrent} onClick={() => activeVersion && downloadDocx(activeVersion)} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#244d3c] text-[10px] font-semibold text-white disabled:opacity-35"><FileDown className="size-3.5" />下载正式 Word（DOCX）</button><button type="button" disabled={!activeVersion || !versionCurrent} onClick={openPdfOutput} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#cfdad4] text-[10px] font-semibold text-[#176b52] disabled:opacity-35"><ExternalLink className="size-3.5" />生成 / 保存 PDF</button><button type="button" disabled={!activeVersion || !versionCurrent} onClick={() => window.open(`/reports/${project.projectId}/final`, "_blank", "noopener,noreferrer")} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#cfdad4] text-[10px] font-semibold text-[#176b52] disabled:opacity-35"><ExternalLink className="size-3.5" />打开最终阅读版</button><button type="button" disabled={!activeVersion || !versionCurrent} onClick={() => activeVersion && downloadArchive(activeVersion)} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#cfdad4] text-[10px] font-semibold text-[#176b52] disabled:opacity-35"><Download className="size-3.5" />下载审计归档 JSON</button></div></section>
+          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-[10px] leading-5 text-blue-900"><p className="font-semibold">输出边界</p><p className="mt-1">DOCX 为本地生成的 OOXML 文件；PDF 使用浏览器打印引擎按 A4 页面保存。两者都不构成服务器电子签章、自动发布或不可篡改归档。</p></section>
         </aside>
       </div>
 
