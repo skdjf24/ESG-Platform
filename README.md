@@ -2,7 +2,7 @@
 
 ESG 报告编制网站的前端产品原型。项目以一个虚构示例企业“华澜新材料股份有限公司”和其 2025 年度 ESG 报告为主线，当前覆盖企业画像、实质性议题、披露框架、资料与事实、报告内容编辑、数据可视化与整本预览、质量检查，以及 Step 8 定稿与导出。Step 1–8 共享统一的项目数据仓库。
 
-当前版本使用本地模拟业务数据，不接入真实 AI 或后端接口。用户选择的真实文件字节、真实浏览器解析结果及结构化项目数据分别保存在 IndexedDB；XLSX、DOCX 与文本型 PDF 可离线解析，并在人工确认后进入既有事实、指标和资料链路。
+当前版本使用本地模拟业务数据，结构化项目数据和真实文件字节保存在 IndexedDB；XLSX、DOCX 与文本型 PDF 可离线解析，并在人工确认后进入既有事实、指标和资料链路。Step 5 与 Step 7 已保留服务端 OpenAI Responses API 接口；未配置 `OPENAI_API_KEY` 时不会调用外部模型，也不会修改项目数据。项目仍未接入正式业务后端、账号体系或云端项目存储。
 
 ## 技术栈
 
@@ -307,14 +307,14 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 责任部门调整、草稿保存和保存状态
 - 既有示例企业与种子事实仍是模拟业务数据；真实上传文件不会自动获得未经证实的业务结论
 - Step 5 的企业事实、资料包、披露映射和章节初始正文
-- Step 5 AI 建议：由本地固定规则的 `mockAiProvider` 生成，不调用远程服务
+- Step 5 AI 建议：已接入证据约束的服务端 API；未配置服务端 Key 时明确不可用，不回退为伪造的真实结果
 - Step 6 图表/版式建议：由本地确定性 `mockPresentationAiProvider` 返回，并明确标注 `Mock AI`
 - Step 7 AI 语义审校：由服务端 Responses API 返回可定位的辅助发现，人工接受后保存记录，但不改变确定性质量 Gate
 - Step 1–8 统一项目保存、真实文件字节和 Step 5/8 版本记录：仅使用当前浏览器 IndexedDB，不等同于服务器持久化或多人协作
 
 Step 5 与 Step 7 已提供真实 OpenAI Responses API 服务端接入；必须在服务端配置 `OPENAI_API_KEY`，请求显式使用 `store:false`。Step 4 文件解析、候选规则和 Step 6 版式建议仍不冒充真实 AI；AI 输出均须人工确认。
 
-Step 5 的 AI 弹窗明确标注“Mock 示例建议”，接受前必须勾选人工确认。空泛表述检查仅为可配置词语匹配规则，不宣称具备完整 AI 语义审校能力。写作与版式分别提供可注入的 `AiTaskProvider` 和 `PresentationAiTaskProvider`，均包含 Provider ID、`mock/live` 模式、显示标签和 `run(request, signal)`；后续真实服务需在服务端补充身份鉴权、数据权限、审计、超时/重试、来源校验和敏感信息治理。
+Step 5 的真实 AI 弹窗保留原文与建议对照，接受前必须勾选人工确认；未知来源、证据版本变化或无依据陈述会阻止接受。Step 7 的 AI 语义审校只保存人工接受的辅助发现，不改变确定性规则或 Step 8 Gate。Step 6 版式建议仍使用明确标识的 `Mock AI`。公开部署前仍需补充身份鉴权、数据权限、持久化限流、服务端审计和敏感信息治理。
 
 ## 业务约束
 
@@ -356,16 +356,15 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 - 当前有效定稿可进入独立打印页并下载 JSON 审计包；披露输入或质量结论变化后旧定稿立即失效。
 - 通过 `projectId` 隔离 IndexedDB 项目/文件记录，并在 Repository 保存时校验项目 ID 与快照修订号。
 
-Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)，Phase 2 文档解析验收见 [docs/acceptance/phase2/README.md](docs/acceptance/phase2/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
+Phase 1 本地项目持久化审计见 [docs/acceptance/phase1/README.md](docs/acceptance/phase1/README.md)，Phase 2 文档解析验收见 [docs/acceptance/phase2/README.md](docs/acceptance/phase2/README.md)，Phase 3 AI 接口与证据约束验收见 [docs/acceptance/phase3/README.md](docs/acceptance/phase3/README.md)。Step 5.5 数据贯通见 [docs/acceptance/step5-5/README.md](docs/acceptance/step5-5/README.md)；Step 6–8 的专项验收记录位于 `docs/acceptance/step6`、`step7`、`step7-1` 与 `step8`。
 
 ## 待开发范围
 
 - Word 文件与服务器端固定渲染 PDF
 - 后端 API、数据库、真实身份与权限体系
 - 服务端文件存储、旧版二进制 XLS 解析、图片/扫描 PDF OCR 和在线协作
-- 真实 AI 服务接入
 - 服务端数据持久化、多人协作、正式版本记录与审计日志
-- 真实 AI Provider、流式任务、提示词/模型治理及服务端事实校验
+- 真实模型内容质量联调、流式任务，以及提示词/模型版本与成本治理
 
 Step 8 提供浏览器打印/PDF、定稿元数据及 JSON 审计包，但不包含服务器端不可篡改文件、电子签章、自动发布、合规认证或外部鉴证。
 

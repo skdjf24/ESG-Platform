@@ -68,4 +68,6 @@ git diff --check
 
 真实 OpenAI API 连通尚未执行：验收环境没有提供服务端 `OPENAI_API_KEY`。这不影响代码和安全边界验收，但在配置有效 Key 并完成人工内容质量验收前，Phase 3 不能标记为“真实模型联调完成”。没有 Key 时系统会明确返回“服务端尚未配置真实 AI”，且不修改项目数据。
 
+产品决定暂不配置 API Key：保留 `/api/ai/status`、`/api/ai/writing` 与 `/api/ai/semantic-review` 服务端接口，后续可在不改动浏览器端数据边界的前提下继续真实模型联调。本阶段不把未执行的外部模型调用记录为通过。
+
 机器可读结果见 `phase3-results.json`。
