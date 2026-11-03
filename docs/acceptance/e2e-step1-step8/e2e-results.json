@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-02T09:40:47.394Z",
+  "generatedAt": "2026-11-03T04:00:57.473Z",
   "baseUrl": "http://127.0.0.1:4325",
   "testProject": "E2E Prototype Test Project",
   "dataPolicy": "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
