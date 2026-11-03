@@ -2,6 +2,9 @@
   "name": "esg-disclosure-platform",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
@@ -17,7 +20,8 @@
     "test:phase2": "node --import tsx scripts/phase2-document-parsing-regression.ts",
     "test:phase2:browser": "node scripts/phase2-document-parsing-browser.cjs",
     "test:phase3": "node --import tsx scripts/phase3-ai-regression.ts",
-    "test:phase4": "node --import tsx scripts/phase4-export-regression.ts"
+    "test:phase4": "node --import tsx scripts/phase4-export-regression.ts",
+    "test:public-preview": "node scripts/public-preview-smoke.cjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.8",

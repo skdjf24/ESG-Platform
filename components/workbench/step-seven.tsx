@@ -30,6 +30,7 @@ import { useProjectData } from "@/components/project/project-data-provider";
 import { executeQualityCheck, updateQualityIssue } from "@/lib/quality/engine";
 import { runLiveSemanticReview } from "@/lib/quality/live-ai";
 import { createAiEvidence } from "@/lib/ai/evidence";
+import { useAiStatus } from "@/lib/ai/use-ai-status";
 import { plainText } from "@/lib/writing/document";
 import { qualityCategoryLabel } from "@/lib/quality/rules";
 import { getStep8QualityGate } from "@/lib/quality/validity";
@@ -85,6 +86,7 @@ export function StepSeven() {
   const [aiReview, setAiReview] = useState<QualityAiSemanticReviewRun | null>(() => project.quality.aiReviews?.at(-1) ?? null);
   const [aiError, setAiError] = useState("");
   const [sourceOpen, setSourceOpen] = useState(false);
+  const aiStatus = useAiStatus();
 
   const issues = useMemo(() => project.quality.issues.filter((issue) => {
     const text = `${issue.title}${issue.description}${issue.suggestedAction}`.toLowerCase();
@@ -164,6 +166,7 @@ export function StepSeven() {
   }
 
   async function runSemanticReview() {
+    if (!aiStatus.configured) { setAiError("AI 服务暂未启用。确定性质量规则仍可正常运行，且继续决定 Step 8 Gate。"); return; }
     setAiLoading(true);
     setAiError("");
     try {
@@ -235,9 +238,11 @@ export function StepSeven() {
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#dfe7e2] bg-white p-2.5">
         <button disabled={running !== null || saving} onClick={() => void runCheck("chapter")} className={button}><ClipboardCheck className="size-3.5" />检查当前章节</button>
         <button disabled={running !== null || saving} onClick={() => void runCheck("changed")} className={button}><RefreshCcw className="size-3.5" />重新检查已修改项</button>
-        <button disabled={aiLoading || saving} onClick={() => void runSemanticReview()} className={button}>{aiLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}AI 语义审校</button>
+        <button disabled={aiLoading || saving || aiStatus.loading || !aiStatus.configured} title={!aiStatus.configured ? "AI 服务暂未启用" : undefined} onClick={() => void runSemanticReview()} className={button}>{aiLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}AI 语义审校</button>
         <span className="ml-auto text-[10px] text-[#87938c]">确定性规则决定 Gate · AI 只提供需人工接受的辅助审校</span>
       </div>
+
+      <div aria-label="AI 服务状态" className={`mb-4 rounded-xl border px-4 py-3 text-[11px] leading-5 ${aiStatus.configured ? "border-violet-200 bg-violet-50 text-violet-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>{aiStatus.loading ? "正在检查 AI 服务状态…" : aiStatus.configured ? `AI 服务已配置：${aiStatus.provider}${aiStatus.model ? ` · ${aiStatus.model}` : ""}。语义建议不参与 Step 8 Gate。` : "AI 服务暂未启用。当前仍可运行全部确定性质量规则、处理问题清单，并完成质量 Gate。"}</div>
 
       {aiError ? <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{aiError}</div> : null}
       {aiReview ? <section className="mb-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4" aria-label="AI 语义审校结果">
@@ -285,7 +290,7 @@ export function StepSeven() {
             <div className="grid grid-cols-2 gap-2 border-t border-[#edf1ef] p-3">
               <button onClick={() => router.push(locationUrl(selected))} className={button}><MapPin className="size-3.5" />定位问题</button>
               <button onClick={() => router.push(locationUrl(selected))} className={button}>返回修改</button>
-              <button onClick={() => void runSemanticReview()} className={button}><Sparkles className="size-3.5" />运行整本 AI 审校</button>
+              <button disabled={aiStatus.loading || !aiStatus.configured} title={!aiStatus.configured ? "AI 服务暂未启用" : undefined} onClick={() => void runSemanticReview()} className={button}><Sparkles className="size-3.5" />运行整本 AI 审校</button>
               <button onClick={() => void recordStatus("处理中", "认可问题")} className={button}>认可问题</button>
               <button onClick={() => void recordStatus("待复检", "标记已处理")} className={button}>标记已处理</button>
               <button disabled={selected.severity === "阻断"} onClick={() => void recordStatus("已接受例外", "接受例外")} className={button}>接受例外</button>

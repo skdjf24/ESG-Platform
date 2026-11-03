@@ -13,10 +13,13 @@ import {
   CopyPlus,
   Database,
   Download,
+  ExternalLink,
   FileText,
   FolderOpen,
   HardDrive,
+  Info,
   LayoutDashboard,
+  PlayCircle,
   Plus,
   Search,
   ShieldCheck,
@@ -29,6 +32,8 @@ import { Notice } from "@/components/ui/notice";
 import { projectRepository } from "@/lib/project/repository";
 import { copyProjectToNextYear, downloadProjectBackup, restoreProjectBackup } from "@/lib/project/operations";
 import { requestPersistentStorage, storageEstimate } from "@/lib/project/indexed-db";
+import { createProjectData } from "@/lib/project/seed";
+import { APP_VERSION, PUBLIC_FEEDBACK_URL, PUBLIC_PREVIEW_SAMPLE_PROJECT_ID } from "@/lib/app-config";
 import type { ProjectSummary } from "@/lib/types/project-data";
 
 function formatBytes(value?: number) {
@@ -129,24 +134,48 @@ export function DashboardPage() {
     }
   }
 
+  async function openSampleProject() {
+    setBusy(true);
+    try {
+      if (!await projectRepository.exists(PUBLIC_PREVIEW_SAMPLE_PROJECT_ID)) {
+        await projectRepository.importProject(createProjectData(PUBLIC_PREVIEW_SAMPLE_PROJECT_ID, { title: "示例 ESG 报告项目", enterpriseName: "华澜新材料（示例）", year: 2025 }));
+        await refreshProjects();
+      }
+      router.push(`/reports/${PUBLIC_PREVIEW_SAMPLE_PROJECT_ID}/step/1`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "示例项目创建失败。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f6f5]">
       <header className="sticky top-0 z-30 border-b border-[#e4e9e6] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-[1480px] items-center justify-between px-5 lg:px-8">
           <div className="flex items-center gap-10"><BrandMark /><nav className="hidden md:block"><Link href="/" className="flex items-center gap-2 rounded-lg bg-[#edf5f1] px-3 py-2 text-sm font-semibold text-[#176b52]"><LayoutDashboard className="size-4" />报告项目</Link></nav></div>
-          <div className="flex items-center gap-3 text-[10px] text-[#68766e]"><HardDrive className="size-4 text-[#176b52]" /><span>本地 IndexedDB · {storage.persisted ? "持久存储已授权" : storage.supported ? "已请求持久存储" : "浏览器管理存储"}</span><button aria-label="帮助" className="grid size-9 place-items-center rounded-full hover:bg-[#f2f5f3]"><CircleHelp className="size-[18px]" /></button></div>
+          <div className="flex items-center gap-3 text-[10px] text-[#68766e]"><span className="hidden rounded-full bg-[#edf5f1] px-2.5 py-1 font-semibold text-[#176b52] sm:inline">{APP_VERSION}</span><HardDrive className="size-4 text-[#176b52]" /><span className="hidden lg:inline">本地 IndexedDB · {storage.persisted ? "持久存储已授权" : storage.supported ? "已请求持久存储" : "浏览器管理存储"}</span><a href={PUBLIC_FEEDBACK_URL} target="_blank" rel="noreferrer" aria-label="反馈问题" title="反馈问题" className="grid size-9 place-items-center rounded-full hover:bg-[#f2f5f3]"><CircleHelp className="size-[18px]" /></a></div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1480px] px-5 pb-16 pt-8 lg:px-8 lg:pt-10">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-          <div><h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#17201c] sm:text-[32px]">我的 ESG 报告项目</h1><p className="mt-2 text-sm text-[#6e7973]">项目结构化数据与原始文件分别保存在当前浏览器的 IndexedDB。</p></div>
+          <div><div className="mb-2 inline-flex rounded-full bg-[#edf5f1] px-2.5 py-1 text-[10px] font-semibold text-[#176b52] sm:hidden">{APP_VERSION}</div><h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#17201c] sm:text-[32px]">我的 ESG 报告项目</h1><p className="mt-2 text-sm text-[#6e7973]">项目结构化数据与原始文件分别保存在当前浏览器的 IndexedDB。</p></div>
           <div className="flex flex-wrap gap-2">
             <input ref={restoreInputRef} type="file" accept=".json,.esgbackup.json,application/json" aria-label="选择项目备份" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void restore(file); event.target.value = ""; }} />
             <button disabled={busy} onClick={() => restoreInputRef.current?.click()} className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#d6dfda] bg-white px-4 text-xs font-semibold text-[#506057] disabled:opacity-50"><ArchiveRestore className="size-4" />恢复备份</button>
             <button disabled={busy} onClick={() => { setDraft({ title: "", enterpriseName: "", year: new Date().getFullYear() }); setIsCreateOpen(true); }} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#176b52] px-5 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(23,107,82,0.18)] disabled:opacity-50"><Plus className="size-4" />新建报告</button>
           </div>
         </div>
+
+        <section aria-label="公开试用版说明" className="mt-6 rounded-2xl border border-[#cfe0d7] bg-[#edf6f1] p-5 text-[#355748]">
+          <div className="flex items-start gap-3"><Info className="mt-0.5 size-5 shrink-0 text-[#176b52]" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">公开试用版说明</h2><a href={PUBLIC_FEEDBACK_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#176b52]">反馈问题<ExternalLink className="size-3" /></a></div><p className="mt-1.5 text-xs leading-6">当前为 {APP_VERSION}。项目数据及上传文件默认保存在当前浏览器本地，不会作为云端项目保存；XLSX、DOCX 与文本型 PDF 在浏览器中解析。重要项目请及时导出备份，公开试用建议使用脱敏或非敏感资料。清除本站浏览器数据可能删除本地项目。</p><p className="mt-1 text-[10px] leading-5 text-[#5d7669]">AI 服务默认未启用；以后如配置远程 AI Provider，您明确提交给 AI 的结构化文本可能发送至该服务。</p></div></div>
+        </section>
+
+        <section aria-label="示例项目" className="mt-4 flex flex-col justify-between gap-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-[0_10px_30px_rgba(26,47,38,0.03)] sm:flex-row sm:items-center">
+          <div><div className="flex items-center gap-2"><span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-semibold text-violet-700">示例项目</span><h2 className="text-sm font-semibold text-[#27382f]">示例 ESG 报告项目</h2></div><p className="mt-2 text-xs leading-5 text-[#708078]">无需上传文件即可浏览 Step 1–8、正文、图表、质量检查和定稿工作台；示例内容不代表真实企业披露。</p></div>
+          <button disabled={busy} onClick={() => void openSampleProject()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 text-xs font-semibold text-violet-700 disabled:opacity-50"><PlayCircle className="size-4" />打开示例项目</button>
+        </section>
 
         <section className="mt-8 grid gap-4 sm:grid-cols-3">
           {[
@@ -163,7 +192,7 @@ export function DashboardPage() {
           <div className="grid gap-4 xl:grid-cols-2">
             {visibleProjects.map((project) => (
               <article key={project.projectId} className="rounded-2xl border border-[#dfe5e1] bg-white p-6 shadow-[0_10px_30px_rgba(26,47,38,0.04)]">
-                <div className="flex items-start justify-between gap-4"><div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#163f32] text-xs font-semibold text-white">{project.enterpriseName.slice(0, 2)}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#17231d]">{project.title}</h3><StatusBadge tone={project.state === "finalized" ? "green" : "blue"}>{project.state === "finalized" ? "已定稿" : "编制中"}</StatusBadge></div><div className="mt-2 flex flex-wrap gap-3 text-[10px] text-[#748079]"><span className="inline-flex items-center gap-1"><Building2 className="size-3" />{project.enterpriseName}</span><span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{project.year}</span><span className="inline-flex items-center gap-1"><FileText className="size-3" />{project.fileCount} 个文件</span></div></div></div><span className="rounded bg-[#f1f4f2] px-2 py-1 font-mono text-[9px] text-[#69766f]">{project.projectId}</span></div>
+                <div className="flex items-start justify-between gap-4"><div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#163f32] text-xs font-semibold text-white">{project.enterpriseName.slice(0, 2)}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#17231d]">{project.title}</h3>{project.projectId === PUBLIC_PREVIEW_SAMPLE_PROJECT_ID ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-semibold text-violet-700">示例项目</span> : null}<StatusBadge tone={project.state === "finalized" ? "green" : "blue"}>{project.state === "finalized" ? "已定稿" : "编制中"}</StatusBadge></div><div className="mt-2 flex flex-wrap gap-3 text-[10px] text-[#748079]"><span className="inline-flex items-center gap-1"><Building2 className="size-3" />{project.enterpriseName}</span><span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{project.year}</span><span className="inline-flex items-center gap-1"><FileText className="size-3" />{project.fileCount} 个文件</span></div></div></div><span className="rounded bg-[#f1f4f2] px-2 py-1 font-mono text-[9px] text-[#69766f]">{project.projectId}</span></div>
                 <div className="mt-5"><div className="mb-2 flex justify-between text-[10px]"><span>Step {project.currentStep} · revision {project.revision}</span><span>{project.progress}%</span></div><ProgressBar value={project.progress} /></div>
                 <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-[#edf0ee] pt-4"><div className="flex gap-2"><button disabled={busy} onClick={() => void downloadProjectBackup(project.projectId).catch((error) => setMessage(error instanceof Error ? error.message : "备份失败"))} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d8e0dc] px-3 text-[10px] font-semibold text-[#536159] disabled:opacity-40"><Download className="size-3.5" />导出备份</button><button disabled={busy} onClick={() => void copyNextYear(project.projectId)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d8e0dc] px-3 text-[10px] font-semibold text-[#536159] disabled:opacity-40"><CopyPlus className="size-3.5" />复制下一年度</button></div><Link href={`/reports/${project.projectId}/step/${project.currentStep}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#176b52] px-4 text-[10px] font-semibold text-white">打开项目<ArrowRight className="size-3.5" /></Link></div>
               </article>

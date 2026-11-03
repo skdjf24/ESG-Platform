@@ -12,6 +12,7 @@ import { createBlock, getChapterResources, plainText, sanitizeHtml, scanWriting 
 import { operationLabels } from '@/lib/writing/mock-ai';
 import { liveAiProvider } from '@/lib/writing/live-ai';
 import { createAiEvidence } from '@/lib/ai/evidence';
+import { useAiStatus } from '@/lib/ai/use-ai-status';
 import type { AiOperation, AiTaskRequest, AiTaskResponse, BlockKind, ContentBlock, WritingChapter } from '@/lib/types/writing';
 
 const button = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#dce5df] bg-white px-3 text-xs font-medium text-[#52675a] hover:bg-[#f0f6f2] disabled:cursor-not-allowed disabled:opacity-40';
@@ -63,6 +64,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
   const [selection, setSelection] = useState<{ blockId: string; text: string } | null>(null);
   const [operation, setOperation] = useState<AiOperation>('draft');
   const [aiRequest, setAiRequest] = useState<AiTaskRequest | null>(null);
+  const aiStatus = useAiStatus();
   const chapter = doc.chapters.find(c => c.id === chapterId) ?? doc.chapters[0];
   const selectedBlock = chapter.blocks.find(b => b.id === blockId);
   const issues = scanWriting(chapter, doc.policy);
@@ -99,6 +101,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     changeChapter({ ...chapter, status: '撰写中', reviewStatus: '未审校', blocks: [...chapter.blocks, block] }); setBlockId(block.id);
   }
   function startAi() {
+    if (!aiStatus.configured) { store.setMessage('AI 服务暂未启用。您仍可继续编辑正文、核对来源并使用全部非 AI 功能。'); return; }
     if (operation !== 'draft' && (!selectedBlock || selectedBlock.kind === 'table' || selectedBlock.kind === 'heading')) { store.setMessage('请先选择正文段落、案例或说明内容块。'); return; }
     const text = selection?.blockId === blockId ? selection.text : '';
     if (operation === 'rewrite' && !text) { store.setMessage('请在当前正文块中选中文字，再执行局部改写。'); return; }
@@ -169,6 +172,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
       <div className="flex flex-wrap gap-2"><button className={button} onClick={() => setPolicyOpen(true)}><Settings2 className="size-3.5" />Writing Policy</button><button className={button} onClick={() => setVersionsOpen(true)}><FileClock className="size-3.5" />版本记录</button><button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white hover:bg-[#10543e]" onClick={() => store.save()}><Save className="size-3.5" />保存报告草稿</button></div>
     </div>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#dbe7df] bg-[#eff6f2] px-4 py-2.5 text-[11px] text-[#587463]"><span>当前企业：{store.project.enterprise.name} · 真实 AI 仅使用已确认证据 · 建议须人工接受</span><span role="status">{store.dirty ? '● 有未保存更改' : doc.savedAt ? `已本地保存 ${new Date(doc.savedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' })}` : '初始示例 · 尚未保存'}</span></div>
+    <div aria-label="AI 服务状态" className={`mb-4 rounded-xl border px-4 py-3 text-[11px] leading-5 ${aiStatus.configured ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>{aiStatus.loading ? '正在检查 AI 服务状态…' : aiStatus.configured ? `AI 服务已配置：${aiStatus.provider}${aiStatus.model ? ` · ${aiStatus.model}` : ''}。建议仍须人工接受。` : 'AI 服务暂未启用。当前仍可使用资料解析、事实确认、正文编辑、图表、质量规则检查及正式报告导出功能。'}</div>
     {upstreamImpacts.length ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-amber-900"><AlertTriangle className="size-4" />上游数据有 {upstreamImpacts.length} 项变化，正文未被自动覆盖</div><div className="mt-2 space-y-2">{upstreamImpacts.slice(-3).map(impact => <div key={impact.id} className="flex items-start justify-between gap-3 rounded-lg bg-white/75 px-3 py-2 text-[11px] leading-5 text-amber-900"><span>{impact.message}</span><button onClick={() => store.acknowledgeImpact(impact.id)} className="shrink-0 font-semibold text-[#176b52]">已知悉</button></div>)}</div></div> : null}
     {store.message && <div role="status" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{store.message}<button aria-label="关闭提示" onClick={() => store.setMessage('')}><X className="size-4" /></button></div>}
     <div className={`writing-grid ${panelOpen ? '' : 'writing-grid-closed'}`}>
@@ -190,7 +194,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
         <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-[#e0e7e2] bg-white p-2">
           <button className={button + ' !px-2'} disabled={!store.past.length} onClick={store.undo} aria-label="撤销"><Undo2 className="size-4" /></button><button className={button + ' !px-2'} disabled={!store.future.length} onClick={store.redo} aria-label="重做"><Redo2 className="size-4" /></button>
           <select aria-label="AI 操作" value={operation} onChange={e => setOperation(e.target.value as AiOperation)} className="h-9 min-w-0 flex-1 rounded-lg border border-[#e0e6e2] bg-white px-2 text-xs">{Object.entries(operationLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
-          <button onClick={startAi} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52]"><Sparkles className="size-3.5" />真实 AI</button>
+          <button disabled={aiStatus.loading || !aiStatus.configured} onClick={startAi} title={!aiStatus.configured ? 'AI 服务暂未启用' : undefined} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52] disabled:cursor-not-allowed disabled:opacity-45"><Sparkles className="size-3.5" />真实 AI</button>
           <button className={button + ' !px-2'} aria-label="空泛表述检查" onClick={() => setScanOpen(!scanOpen)}><ListChecks className="size-4" /></button>
           <button className={button + ' !px-2'} aria-label={panelOpen ? '折叠章节资料包' : '展开章节资料包'} aria-expanded={panelOpen} aria-controls="writing-resource-panel" onClick={() => setPanelOpen(!panelOpen)}>{panelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</button>
         </div>
