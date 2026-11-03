@@ -2,7 +2,7 @@
 
 Run date: 2026-11-03  
 Release base: `e7de71044926fb5da0ebab44a4d21a4dc845cee5`  
-Preview code commit: `fcf60deeaa4283b008d4799615c0f7f97e0d16e5`
+Preview code commit: `08cdaf23d90e6bc76bbc35cf61757c70f26d2538`
 
 ## Release-candidate checks executed in this work session
 

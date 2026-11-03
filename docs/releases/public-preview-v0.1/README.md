@@ -3,7 +3,7 @@
 - Version: `Public Preview v0.1`
 - Release branch: `release/public-preview-v0.1`
 - Stable base commit: `e7de71044926fb5da0ebab44a4d21a4dc845cee5`
-- Preview preparation commit: `fcf60deeaa4283b008d4799615c0f7f97e0d16e5`
+- Preview code commit: `08cdaf23d90e6bc76bbc35cf61757c70f26d2538`
 - Release tag: pending; only create `v0.1-public-preview` after production deployment and public smoke pass
 - Planned provider: Vercel
 - Production URL: pending first-time Vercel/GitHub authorization
