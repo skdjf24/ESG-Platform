@@ -32,6 +32,21 @@
       "detail": ""
     },
     {
+      "name": "正式 DOCX 包含页眉页脚与定稿元数据",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "正式 DOCX 排除内部编辑标识、待办和 Mock 内容",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "正式 DOCX 使用动态企业和报告年度",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "name": "审计包包含版本与来源快照且明确标记模拟原型",
       "status": "PASS",
       "detail": ""
@@ -52,6 +67,11 @@
       "detail": ""
     },
     {
+      "name": "PDF 打印媒体隐藏全部操作工具栏",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "name": "普通保存元数据变化不会错误使定稿失效",
       "status": "PASS",
       "detail": ""
@@ -62,7 +82,7 @@
       "detail": ""
     },
     {
-      "name": "失效定稿禁止继续输出",
+      "name": "失效定稿禁止继续输出 DOCX/PDF",
       "status": "PASS",
       "detail": ""
     },

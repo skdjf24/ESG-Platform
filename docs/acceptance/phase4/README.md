@@ -10,6 +10,7 @@
 - PDF 继续使用 Step 6 已验证的 A4 分页模型和浏览器打印引擎，并支持从 Step 8 直接进入打印/保存流程；
 - 网页正式阅读、DOCX 与 PDF 共用 `formalBlockExclusionReason`，排除内部待办、待复核/未确认内容、Mock 说明、模拟图表和内部 blockId；
 - 上游输入或 Step 7 结论变化后，旧定稿不能继续生成 DOCX/PDF。
+- 已同步 Phase 3 最新 OpenAI-compatible Provider 改造，Step 5/7 的证据、人工确认和客户端 Secret 隔离边界保持不变。
 
 ## 自动化验收
 
@@ -25,10 +26,12 @@ git diff --check
 结果：
 
 - Phase 4 DOCX 回归：15 PASS / 0 FAIL；
+- Phase 3 Provider 回归：20 PASS / 0 FAIL；
 - lint：PASS；
 - typecheck：PASS；
 - production build：PASS；
 - Step 6 分页/图表回归：PASS；
+- Step 1–8 Chromium 回归：85 PASS / 0 FAIL / browserErrors 0；
 - git diff --check：PASS。
 
 `test:phase4` 会真实创建 ZIP/OOXML 字节并重新解包核对，不把 JSON 或文本文件伪装成 DOCX。它验证必需部件、完整长正文、表格、案例、已确认图表数据、动态页眉页脚、页码域、定稿属性、内部内容排除和旧定稿失效保护。
@@ -43,9 +46,18 @@ Step 8 浏览器脚本已扩展，覆盖：
 - 失效定稿同时禁用 DOCX/PDF；
 - 浏览器 console/page error。
 
-当前执行环境没有 Chrome/Chromium。`npx playwright install chromium` 与运行时自带 Playwright 安装器均尝试下载，但网络代理返回 0 MiB 非 ZIP 内容；系统路径也不存在可用浏览器。因此本轮没有生成或伪造浏览器 PASS，`npm run test:step8:browser` 明确失败于 `/usr/bin/chromium` 不存在。
+2026-11-03 已使用系统 `/usr/bin/chromium`（Chromium 154.0.8037.57）完成真实浏览器验收：
 
-结论：Phase 4 代码与非浏览器工程验收通过；真实浏览器最终验收待在有 Chromium 的 Codespace/CI 环境执行。
+- Step 7 活动问题真实阻止 Step 8 定稿；Gate 通过后可创建且持久化 FinalReportVersion；
+- 相同输入不能重复创建相同定稿；
+- 点击“下载正式 Word（DOCX）”触发真实 download event，下载字节可重新解包，并包含 `word/document.xml`、`word/header1.xml`、`word/footer1.xml` 与 `docProps/custom.xml`；
+- DOCX 使用动态企业名称和年度，且不包含 blockId、内部待办、Mock AI 或独立模拟测试说明；
+- `/reports/[projectId]/final?print=1` 正常显示正式页面，页面数与定稿记录一致；
+- `page.emulateMedia({ media: "print" })` 后 `.final-report-toolbar` 隐藏，A4 报告内容保留；
+- 修改真实披露输入后，定稿、DOCX、PDF 与 Step 7/8 Gate 同时失效；
+- 27 项 Step 8 浏览器断言全部通过，console errors = 0，page errors = 0。
+
+结论：Phase 4：通过。
 
 ## 已知限制
 

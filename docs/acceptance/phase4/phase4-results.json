@@ -1,7 +1,10 @@
 {
-  "generatedAt": "2026-11-03T02:13:54Z",
-  "sourceBranch": "feature/phase2-document-parsing",
-  "baseHead": "3dd3538dc12a3fbb12997c338ca36b1c56c768ea",
+  "generatedAt": "2026-11-03T04:06:22Z",
+  "testedBranch": "feature/phase4-docx-pdf-export-20261103",
+  "testedCommit": "9efe73a8dbcc2ae73aa488f8e8e8bfe4bb21b466",
+  "baseBranch": "feature/phase3-evidence-ai-20261103",
+  "baseCommit": "35e7e278a0ea906aa60760b92b24ca81f98ca876",
+  "phase3Sync": "Phase 3 新增提交已安全 cherry-pick；Phase 4 原提交 99aa6f2 保留。",
   "unitRegression": {
     "command": "npm run test:phase4",
     "pass": 15,
@@ -14,11 +17,30 @@
     "step6": "PASS",
     "diffCheck": "PASS"
   },
+  "providerRegression": {
+    "command": "npm run test:phase3",
+    "pass": 20,
+    "fail": 0,
+    "liveLmStudio": "SKIPPED — 当前执行环境无可访问的 LM Studio 服务"
+  },
   "browserRegression": {
     "attempted": true,
-    "completed": false,
-    "status": "ENVIRONMENT_BLOCKED",
-    "reason": "No Chrome/Chromium executable exists in the environment; both Playwright download attempts returned a 0 MiB non-ZIP response through the network proxy. No browser PASS was recorded."
+    "completed": true,
+    "status": "PASS",
+    "browser": "Chromium 154.0.8037.57 (system /usr/bin/chromium)",
+    "assertions": 27,
+    "docxBrowserDownload": "PASS — real download event and OOXML parts verified",
+    "pdfFinalView": "PASS — final route, fixed page count and formal-content exclusions verified",
+    "printMedia": "PASS — toolbar hidden and report pages retained",
+    "staleProtection": "PASS — disclosure input change disables finalization, DOCX and PDF",
+    "browserErrors": 0
   },
-  "phaseStatus": "CODE_COMPLETE_BROWSER_ACCEPTANCE_PENDING"
+  "step1To8Regression": {
+    "command": "CHROMIUM_EXECUTABLE=/usr/bin/chromium E2E_BASE_URL=http://127.0.0.1:4325 npm run test:e2e:step1-8",
+    "pass": 85,
+    "fail": 0,
+    "findings": 0,
+    "browserErrors": 0
+  },
+  "phaseStatus": "PASS"
 }
