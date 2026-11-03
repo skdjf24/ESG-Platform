@@ -1,25 +1,29 @@
 {
-  "generatedAt": "2026-11-02T09:40:53Z",
-  "branch": "feature/phase2-document-parsing",
-  "baseHead": "10143010f36d90554233c11f0f84700a4b6f5a17",
-  "liveApiExecuted": false,
-  "liveApiReason": "验收环境未提供 OPENAI_API_KEY；未伪造真实模型连通结果。",
+  "generatedAt": "2026-11-03T04:00:57Z",
+  "testedBranch": "feature/phase3-evidence-ai-20261103",
+  "testedCommit": "6a183270424fd8ab3f01d568a221b3a677bc8a62",
+  "baseBranch": "feature/phase2-document-parsing",
+  "baseCommit": "10143010f36d90554233c11f0f84700a4b6f5a17",
+  "providerArchitecture": "OpenAI-compatible Responses Provider with openai, lmstudio and openai-compatible adapters",
+  "liveLmStudio": {
+    "executed": false,
+    "status": "SKIPPED",
+    "reason": "当前执行环境无可访问的 LM Studio 服务；未伪造 Live PASS。"
+  },
   "protocolRegression": {
     "command": "npm run test:phase3",
-    "pass": 13,
+    "pass": 20,
     "fail": 0
   },
   "browserRegression": {
     "command": "E2E_BASE_URL=http://127.0.0.1:4325 npm run test:e2e:step1-8",
-    "browser": "Chromium 153",
+    "browser": "Chromium 154.0.8037.57 (system /usr/bin/chromium)",
     "aiBoundary": "同源 API 使用明确测试替身；未调用外部模型",
     "pass": 85,
     "fail": 0,
     "browserErrors": 0
   },
   "regressions": {
-    "step6": "PASS",
-    "phase2DocumentParsing": "20 PASS / 0 FAIL",
     "lint": "PASS",
     "typecheck": "PASS",
     "build": "PASS",
