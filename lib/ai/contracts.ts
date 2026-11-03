@@ -19,9 +19,10 @@ export interface WritingAiApiRequest {
   evidence: AiEvidenceItem[];
 }
 
-export interface OpenAiStructuredResult<T> {
+export interface AiStructuredResult<T> {
   responseId: string;
   model: string;
+  providerId: string;
   output: T;
 }
 
@@ -90,18 +91,51 @@ export function validateSemanticReviewRequest(value: unknown): QualityAiSemantic
   return value as unknown as QualityAiSemanticReviewRequest;
 }
 
-export function finalizeWritingResponse(request: WritingAiApiRequest, result: OpenAiStructuredResult<WritingModelOutput>): AiTaskResponse {
+function numericTokens(value: string): Set<string> {
+  const matches = value.match(/[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?/g) ?? [];
+  return new Set(matches.map((token) => {
+    const percent = token.endsWith("%");
+    const number = Number(token.replace(/,/g, "").replace(/%$/, ""));
+    return Number.isFinite(number) ? `${number}${percent ? "%" : ""}` : token;
+  }));
+}
+
+function unsupportedNumericClaims(request: WritingAiApiRequest, output: WritingModelOutput): string[] {
+  const allowedText = [
+    request.chapter.order,
+    request.chapter.title,
+    request.sourceText,
+    request.selectedText ?? "",
+    ...request.evidence.flatMap((item) => [item.content, ...item.sourceReferences.map((source) => source.excerpt)]),
+  ].join("\n");
+  const allowed = numericTokens(allowedText);
+  const unknownSuggestionNumbers = [...numericTokens(output.suggestion)].filter((value) => !allowed.has(value));
+  const messages = unknownSuggestionNumbers.length
+    ? [`AI 建议包含输入正文或证据中不存在的数值：${unknownSuggestionNumbers.join("、")}。`]
+    : [];
+
+  for (const citation of output.citations) {
+    const evidence = request.evidence.find((item) => item.evidenceId === citation.evidenceId);
+    if (!evidence) continue;
+    const evidenceNumbers = numericTokens([evidence.content, ...evidence.sourceReferences.map((source) => source.excerpt)].join("\n"));
+    const unsupported = [...numericTokens(citation.claim)].filter((value) => !evidenceNumbers.has(value));
+    if (unsupported.length) messages.push(`来源 ${citation.evidenceId} 的引用陈述包含证据中不存在的数值：${unsupported.join("、")}。`);
+  }
+  return messages;
+}
+
+export function finalizeWritingResponse(request: WritingAiApiRequest, result: AiStructuredResult<WritingModelOutput>): AiTaskResponse {
   const allowed = new Map(request.evidence.map((item) => [item.evidenceId, item]));
   const invalidCitation = result.output.citations.find((citation) => !allowed.has(citation.evidenceId));
   if (invalidCitation) throw new Error("UNKNOWN_EVIDENCE_CITATION");
   const citedFactIds = [...new Set(result.output.citations.map((citation) => allowed.get(citation.evidenceId)).filter((item) => item?.kind === "fact").map((item) => item!.entityId))];
-  const unsupportedClaims = [...result.output.unsupportedClaims];
+  const unsupportedClaims = [...new Set([...result.output.unsupportedClaims, ...unsupportedNumericClaims(request, result.output)])];
   if (["draft", "expand", "update"].includes(request.operation) && result.output.suggestion.trim() && result.output.citations.length === 0 && unsupportedClaims.length === 0) {
     unsupportedClaims.push("AI 未为新增内容提供可验证的输入证据引用。");
   }
   return {
     taskId: request.taskId,
-    providerId: "openai-responses",
+    providerId: result.providerId,
     providerMode: "live",
     label: "真实 AI · 证据约束建议",
     original: request.selectedText || request.sourceText,
@@ -117,7 +151,7 @@ export function finalizeWritingResponse(request: WritingAiApiRequest, result: Op
   };
 }
 
-export function finalizeSemanticReview(request: QualityAiSemanticReviewRequest, result: OpenAiStructuredResult<SemanticModelOutput>): QualityAiSemanticReviewRun {
+export function finalizeSemanticReview(request: QualityAiSemanticReviewRequest, result: AiStructuredResult<SemanticModelOutput>): QualityAiSemanticReviewRun {
   const blockIds = new Set(request.blocks.map((block) => block.blockId));
   const chapterIds = new Set(request.blocks.map((block) => block.chapterId));
   const evidenceIds = new Set(request.evidence.map((item) => item.evidenceId));
@@ -128,7 +162,7 @@ export function finalizeSemanticReview(request: QualityAiSemanticReviewRequest, 
     taskId: request.taskId,
     projectId: request.projectId,
     projectRevision: request.projectRevision,
-    providerId: "openai-responses",
+    providerId: result.providerId,
     providerMode: "live",
     model: result.model,
     responseId: result.responseId,

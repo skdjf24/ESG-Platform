@@ -7,7 +7,7 @@ async function apiError(response: Response) {
 }
 
 export const liveAiProvider: AiTaskProvider = {
-  id: "openai-responses",
+  id: "openai-compatible-responses",
   mode: "live",
   label: "真实 AI · 证据约束",
   async run(request: AiTaskRequest, signal?: AbortSignal): Promise<AiTaskResponse> {

@@ -36,14 +36,19 @@ export async function readLimitedJson(request: Request): Promise<unknown> {
 
 export function aiErrorResponse(cause: unknown) {
   const code = cause instanceof Error ? cause.message : "AI_REQUEST_FAILED";
-  const status = code === "AI_NOT_CONFIGURED" ? 503
+  const status = code === "AI_NOT_CONFIGURED" || code === "AI_PROVIDER_CONFIG_INVALID" ? 503
     : code === "LOCAL_RATE_LIMITED" || code === "AI_RATE_LIMITED" ? 429
-      : code === "AI_UPSTREAM_UNAVAILABLE" ? 502
+      : code === "AI_PROVIDER_TIMEOUT" ? 504
+        : code === "AI_UPSTREAM_UNAVAILABLE" || code === "AI_PROVIDER_UNREACHABLE" ? 502
         : code === "CROSS_ORIGIN_REJECTED" ? 403
           : code.startsWith("INVALID") || code === "DUPLICATE_EVIDENCE_ID" || code === "PAYLOAD_TOO_LARGE" || code === "UNKNOWN_EVIDENCE_CITATION" ? 400
             : 502;
   const messages: Record<string, string> = {
-    AI_NOT_CONFIGURED: "服务端尚未配置真实 AI。请设置 OPENAI_API_KEY 后重试。",
+    AI_NOT_CONFIGURED: "服务端尚未完成 AI Provider 配置，请检查 Provider、Base URL 与模型设置。",
+    AI_PROVIDER_CONFIG_INVALID: "AI Provider 配置无效，请检查服务端 Base URL 与 Provider 类型。",
+    AI_PROVIDER_UNREACHABLE: "当前 AI 服务无法连接；如使用 LM Studio，请确认本地服务已启动且地址可访问。",
+    AI_PROVIDER_TIMEOUT: "AI 服务响应超时，请确认 Provider 服务状态后重试。",
+    AI_INVALID_STRUCTURED_OUTPUT: "AI Provider 未返回符合约定的结构化结果，建议已被拦截。",
     LOCAL_RATE_LIMITED: "AI 请求过于频繁，请稍后重试。",
     AI_RATE_LIMITED: "AI 服务当前限流，请稍后重试。",
     AI_UPSTREAM_UNAVAILABLE: "AI 服务暂时不可用，请稍后重试。",

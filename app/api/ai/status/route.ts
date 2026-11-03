@@ -1,7 +1,7 @@
-import { openAiServerStatus } from "@/lib/ai/openai-server";
+import { aiServerStatus } from "@/lib/ai/provider-server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return Response.json(openAiServerStatus(), { headers: { "Cache-Control": "no-store" } });
+  return Response.json(aiServerStatus(), { headers: { "Cache-Control": "no-store" } });
 }
