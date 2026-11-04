@@ -22,7 +22,7 @@
 
 1. **一个 PR 只做一件事**，base 一律为 `main`，不再使用堆叠 base。堆叠会让后续 PR 的 diff 依赖前一个 PR 是否合并，评审与回滚都会失控。
 2. **合并方式用 squash merge**，PR 标题即提交信息，`main` 保持线性可读。
-3. **合并前必须全绿**：`npm run lint`、`npm run typecheck`、`npm run build`，以及与改动范围相关的回归脚本（见第 5 节）。
+3. **合并前必须全绿**：`npm run lint`、`npm run typecheck`、`npm run build`，以及与改动范围相关的回归脚本（见第 5 节）。仓库已配置 CI（`.github/workflows/ci.yml`），在每次 push 到 `main` 和每个 PR 上运行这三项检查与四个非浏览器回归；回归 job 是本次新接入的，需要一次干净的绿灯确认。
 4. **发布流程**：`release/<version>` 冻结 → 部署 → 公网冒烟 → 打 tag `vX.Y.Z` → 如发布分支有额外改动，再合回 `main`。
 5. 不对 `main` 使用 force push；已推送的历史只追加不改写。
 
