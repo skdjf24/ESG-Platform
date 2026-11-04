@@ -8,6 +8,7 @@
 - Planned provider: Vercel
 - Production URL: pending first-time Vercel/GitHub authorization
 - Prepared on: 2026-11-03
+- Code integration: merged into `main` on 2026-11-04 (fast-forward to `a3551cf`); the release gate below is unchanged and still open
 
 ## Included scope
 
@@ -31,3 +32,5 @@ Phase 2, Phase 3, Phase 4 and Step 6 non-browser regressions pass on the release
 `Public Preview v0.1：未通过`
 
 The remaining release gates are a successful production deployment, execution of the browser suite against the release candidate, and the public-URL smoke test. No formal tag has been created.
+
+代码整合不属于发布门禁：发布候选代码已于 2026-11-04 进入 `main`。未通过的是「公开发布」——生产部署、发布候选的浏览器回归、公网冒烟三项。在此之前不打 tag，也不对外宣称已发布。分支规则见 [分支模型与仓库治理](../../development/branching.md)。
