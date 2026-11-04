@@ -1,0 +1,148 @@
+{
+  "generatedAt": "2026-11-04T12:46:33.966Z",
+  "baseUrl": "https://esg-platform-lilac.vercel.app",
+  "browser": "Chromium",
+  "executablePath": "/usr/bin/chromium",
+  "results": [
+    {
+      "name": "公开首页 HTTP 200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Public Preview 版本可见",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "本地存储与隐私说明可见",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "示例项目入口可见",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "新建报告入口可见",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开版 AI 默认未配置",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "AI 状态接口不暴露 Secret 字段",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "示例项目可直接打开且明确标识为示例",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 1 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 2 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 3 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 4 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 5 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 6 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 7 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开 Step 8 路由可打开",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "新项目获得动态 projectId",
+      "status": "PASS",
+      "detail": "%E5%85%AC%E5%BC%80%E8%AF%95%E7%94%A8%E4%BC%81%E4%B8%9A-a-2026"
+    },
+    {
+      "name": "Context A 刷新后项目仍存在",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开首页 HTTP 200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Context B 看不到 Context A 项目",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Context B 可创建独立项目",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Context A 看不到 Context B 项目",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "清除 Context A 站点数据后其本地项目消失",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "清除 Context A 不影响 Context B",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "公开预览 console/page error 为 0",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "browserErrors": [],
+  "productCommit": "cd5f612d318e29755f118cdcf1095773de548c61",
+  "browserVersion": "Chromium 154.0.8037.57 built on Debian GNU/Linux 13 (trixie)",
+  "functionalSmokeStatus": "PASS — functional public smoke",
+  "passCount": 25,
+  "failCount": 0,
+  "tlsHandling": "ignoreHTTPSErrors=true",
+  "tlsReason": "Codex cloud TLS interception / untrusted proxy CA",
+  "testHarnessTemporaryModified": true,
+  "testHarnessSourceModified": false,
+  "testHarnessTemporaryChanges": [
+    "Both Browser Contexts used ignoreHTTPSErrors=true in a /tmp test copy.",
+    "Both Browser Contexts used the Codex cloud HTTPS proxy so Playwright API requests could resolve the public host.",
+    "The sample enterprise field was awaited after hydration before the existing assertion."
+  ]
+}
