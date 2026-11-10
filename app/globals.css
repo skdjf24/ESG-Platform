@@ -76,6 +76,34 @@ input[type="radio"]:not(:disabled) {
   background: #c9d2cd;
 }
 
+/* Workbench tables scroll horizontally so their data and controls stay readable. */
+.workbench-data-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workbench-data-table :is(th, td) {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.workbench-data-table th {
+  font-weight: 600;
+}
+
+.workbench-data-table :is(th, td) :is(span, div, p, a, button, input, select) {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.workbench-data-table select {
+  min-width: max-content;
+}
+
 .matrix-grid {
   background-image:
     linear-gradient(to right, rgba(92, 111, 101, 0.12) 1px, transparent 1px),

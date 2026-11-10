@@ -287,7 +287,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
             flush
           >
             <div className="scrollbar-subtle overflow-x-auto">
-              <table className="w-full min-w-[1080px] border-collapse text-left">
+              <table className="workbench-data-table">
                 <thead className="bg-[#f8faf9] text-[10px] font-semibold uppercase tracking-wide text-[#78837d]">
                   <tr>
                     <th className="w-[270px] px-5 py-3.5">资料项</th>

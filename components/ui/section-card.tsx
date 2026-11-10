@@ -16,7 +16,7 @@ export function SectionCard({
   flush?: boolean;
 }) {
   return (
-    <section className={`overflow-hidden rounded-2xl border border-[#e3e8e5] bg-white shadow-[0_1px_2px_rgba(20,40,30,0.02)] ${className}`}>
+    <section className={`min-w-0 overflow-hidden rounded-2xl border border-[#e3e8e5] bg-white shadow-[0_1px_2px_rgba(20,40,30,0.02)] ${className}`}>
       {title || description || action ? (
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#edf0ee] px-5 py-4 sm:px-6">
           <div>

@@ -87,6 +87,9 @@ export interface DisclosureRequirement {
   applicability: Applicability;
   mappedSection: string;
   userConfirmed: boolean;
+  sourceTitle?: string;
+  sourceVersion?: string;
+  sourceUrl?: string;
 }
 
 export interface ReportSection {

@@ -16,6 +16,7 @@
     "test:step7-1:browser": "node scripts/step7-1-state-regression.cjs",
     "test:step8:browser": "node scripts/step8-browser-regression.cjs",
     "test:e2e:step1-8": "node --experimental-strip-types scripts/e2e-step1-step8-regression.mjs",
+    "test:step1-3:browser": "node scripts/step1-3-ui-materiality-regression.cjs",
     "test:phase1:browser": "node scripts/phase1-local-persistence-regression.cjs",
     "test:phase2": "node --import tsx scripts/phase2-document-parsing-regression.ts",
     "test:phase2:browser": "node scripts/phase2-document-parsing-browser.cjs",

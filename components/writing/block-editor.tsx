@@ -76,7 +76,7 @@ export function BlockEditor({ block, selected, onSelect, onChange, onDelete, onS
         {block.kind === "table" && (
           <div>
             <div className="overflow-x-auto rounded-lg border border-[#e2e9e4]">
-              <table className="w-full min-w-[350px] text-left text-xs" aria-label={`${block.title}指标表格`}>
+              <table className="workbench-data-table" aria-label={`${block.title}指标表格`}>
                 <tbody>
                   {block.rows.map((row, rowIndex) => (
                     <tr key={rowIndex} className={rowIndex === 0 ? "bg-[#eff6f2] font-semibold" : "border-t border-[#e7ede9]"}>

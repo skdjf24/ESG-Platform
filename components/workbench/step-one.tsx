@@ -13,15 +13,13 @@ import {
   Globe2,
   MapPin,
   Paperclip,
-  Plus,
   UploadCloud,
   Users,
-  X,
   FileSearch,
   LoaderCircle,
 } from "lucide-react";
-import { frameworks } from "@/lib/data/mock-data";
-import type { EsgCategory, ListingStatus, UploadedSource } from "@/lib/types/esg";
+import { bseDisclosureRequirements, frameworks } from "@/lib/data/mock-data";
+import type { ListingStatus, UploadedSource } from "@/lib/types/esg";
 import { projectFileRepository } from "@/lib/project/repository";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
@@ -40,12 +38,6 @@ const industryOptions = [
   { code: "D44", name: "电力、热力生产和供应业" },
   { code: "I65", name: "软件和信息技术服务业" },
 ] as const;
-const categoryMeta: Record<EsgCategory, { label: string; className: string }> = {
-  E: { label: "环境", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  S: { label: "社会", className: "border-blue-200 bg-blue-50 text-blue-700" },
-  G: { label: "治理", className: "border-violet-200 bg-violet-50 text-violet-700" },
-};
-
 export function StepOne() {
   const { project, editProject, saveProject, dirty, saving, setMessage } = useProjectData();
   const historyInputRef = useRef<HTMLInputElement>(null);
@@ -54,17 +46,21 @@ export function StepOne() {
   const { enterprise, report, topics, boundary } = project;
   const listingStatus = enterprise.listingStatus;
   const selectedFrameworks = report.frameworks;
+  const legacyFrameworks = selectedFrameworks.filter((item) => item.startsWith("CASS-ESG"));
+  const selectedFrameworkCount = selectedFrameworks.filter((item) => frameworks.includes(item)).length;
 
   const toggleFramework = (framework: string) => {
-    editProject((current) => ({ ...current, report: { ...current.report, frameworks: current.report.frameworks.includes(framework) ? current.report.frameworks.filter((item) => item !== framework) : [...current.report.frameworks, framework] } }));
-  };
-
-  function removeTopic(topicId: string) {
-    const topic = topics.find((item) => item.id === topicId);
-    if (!topic) return;
-    const affected = project.disclosureRequirements.filter((item) => item.topic === topic.name).length;
-    if (affected && !window.confirm(`移除“${topic.name}”将影响 ${affected} 项披露要求。已有正文和映射不会删除，但会标记为待复核。是否继续？`)) return;
-    editProject((current) => ({ ...current, topics: current.topics.filter((item) => item.id !== topicId) }));
+    editProject((current) => {
+      const selected = current.report.frameworks.includes(framework);
+      const existingRequirementIds = new Set(current.disclosureRequirements.map((item) => item.id));
+      return {
+        ...current,
+        report: { ...current.report, frameworks: selected ? current.report.frameworks.filter((item) => item !== framework) : [...current.report.frameworks, framework] },
+        disclosureRequirements: !selected && framework === "北交所指引"
+          ? [...current.disclosureRequirements, ...bseDisclosureRequirements.filter((item) => !existingRequirementIds.has(item.id)).map((item) => ({ ...item, revision: 1, reviewStatus: "待复核" as const }))]
+          : current.disclosureRequirements,
+      };
+    });
   }
 
   async function addHistoricalReport(file: File) {
@@ -175,7 +171,7 @@ export function StepOne() {
       <StepPageHeader
         eyebrow="Step 1 · 基础设置"
         title="创建报告与企业基础画像"
-        description="确认本年度报告的企业信息、编制边界与参考框架，并建立可继续调整的初始 ESG 议题池。"
+        description="确认本年度报告的企业信息、编制边界与参考框架。议题范围与评分请在 Step 2 调整。"
         completed
         action={<button disabled={saving} onClick={() => void saveProject(1, "Step 1 基础信息保存")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#506057] hover:bg-[#f7f9f8] disabled:opacity-50"><FileCheck2 className="size-4 text-[#176b52]" />{saving ? "保存中…" : dirty ? "保存基础信息" : "基础信息已保存"}</button>}
       />
@@ -184,8 +180,8 @@ export function StepOne() {
         平台不会根据上市身份或行业自动判断企业是否具有强制披露义务。请结合适用监管规则与专业意见，由企业完成确认。
       </Notice>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)]">
-        <div className="space-y-5">
+      <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)]">
+        <div className="min-w-0 space-y-5">
           <SectionCard title="企业基本信息" description="用于报告抬头、披露范围及后续章节引用。">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="企业全称" icon={<Building2 className="size-3.5" />}><input aria-label="企业全称" className={fieldClass} value={enterprise.name} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, name: event.target.value } }))} /></Field>
@@ -230,44 +226,47 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="披露框架" description="可多选。后续披露要求仍需逐条确认适用性。" action={<StatusBadge tone="teal">已选择 {selectedFrameworks.length} 项</StatusBadge>}>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {frameworks.map((framework) => {
-                const selected = selectedFrameworks.includes(framework);
-                return (
-                  <label key={framework} className={`flex min-h-12 items-center gap-3 rounded-xl border px-3.5 py-3 transition ${selected ? "border-[#9bc6b4] bg-[#f1f8f5]" : "border-[#e0e5e2] hover:bg-[#fafcfb]"}`}>
-                    <input type="checkbox" checked={selected} onChange={() => toggleFramework(framework)} className="sr-only" />
-                    <span className={`grid size-5 shrink-0 place-items-center rounded-md border ${selected ? "border-[#176b52] bg-[#176b52] text-white" : "border-[#cbd3cf] bg-white"}`}>{selected ? <Check className="size-3" strokeWidth={3} /> : null}</span>
-                    <span className={`text-xs font-medium ${selected ? "text-[#245443]" : "text-[#56635c]"}`}>{framework}</span>
-                  </label>
-                );
-              })}
+          <SectionCard title="披露框架" description="可多选。后续披露要求仍需逐条确认适用性。" action={<StatusBadge tone="teal">已选择 {selectedFrameworkCount} 项</StatusBadge>}>
+            <div className="scrollbar-subtle overflow-x-auto">
+              <div className="grid min-w-[540px] grid-cols-3 gap-2">
+                {frameworks.map((framework) => {
+                  const selected = selectedFrameworks.includes(framework);
+                  return (
+                    <label key={framework} className={`flex min-h-12 items-center gap-3 rounded-xl border px-3.5 py-3 transition ${selected ? "border-[#9bc6b4] bg-[#f1f8f5]" : "border-[#e0e5e2] hover:bg-[#fafcfb]"}`}>
+                      <input type="checkbox" checked={selected} onChange={() => toggleFramework(framework)} className="sr-only" />
+                      <span className={`grid size-5 shrink-0 place-items-center rounded-md border ${selected ? "border-[#176b52] bg-[#176b52] text-white" : "border-[#cbd3cf] bg-white"}`}>{selected ? <Check className="size-3" strokeWidth={3} /> : null}</span>
+                      <span className={`whitespace-nowrap text-xs font-medium ${selected ? "text-[#245443]" : "text-[#56635c]"}`}>{framework}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
+            {legacyFrameworks.length ? (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900" role="alert">
+                <p>旧项目保留了 {legacyFrameworks.join("、")}。该选项不会自动转换为北交所指引；请重新确认参考框架与相关披露要求。</p>
+                <button type="button" className="mt-2 font-semibold underline" onClick={() => editProject((current) => ({ ...current, report: { ...current.report, frameworks: current.report.frameworks.filter((item) => !item.startsWith("CASS-ESG")) } }))}>移除旧框架选项并标记相关要求待复核</button>
+              </div>
+            ) : null}
           </SectionCard>
 
-          <SectionCard title="初始 ESG 议题池" description="综合所选框架与历史报告形成，可由用户增删调整。" action={<button className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#dce3df] px-3 text-[11px] font-semibold text-[#4e5e55] hover:bg-[#f5f8f6]"><Plus className="size-3.5" />新增议题</button>}>
-            <div className="space-y-5">
-              {(["E", "S", "G"] as EsgCategory[]).map((category) => (
-                <div key={category} className="grid gap-3 sm:grid-cols-[100px_1fr]">
-                  <div className="flex items-center gap-2 self-start pt-1">
-                    <span className={`grid size-7 place-items-center rounded-lg border text-[11px] font-bold ${categoryMeta[category].className}`}>{category}</span>
-                    <span className="text-xs font-semibold text-[#4b5851]">{categoryMeta[category].label}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {topics.filter((topic) => topic.category === category).map((topic) => (
-                      <span key={topic.id} className="inline-flex items-center gap-2 rounded-lg border border-[#e0e6e2] bg-[#fafcfb] px-3 py-2 text-xs font-medium text-[#405047]">
-                        {topic.name}<span className="text-[9px] font-normal text-[#98a19c]">{topic.origin}</span>
-                        <button aria-label={`移除${topic.name}`} onClick={() => removeTopic(topic.id)} className="text-[#a5aea9] hover:text-rose-500"><X className="size-3" /></button>
-                      </span>
-                    ))}
-                  </div>
+          <SectionCard title="画像摘要" description="基于当前已填写信息实时汇总。">
+            <div className="space-y-3">
+              {[
+                { icon: Globe2, label: "行业", value: `${enterprise.industryCode} ${enterprise.industryName}` },
+                { icon: CircleDot, label: "上市身份", value: listingStatus },
+                { icon: Paperclip, label: "披露框架", value: `${selectedFrameworkCount} 项` },
+                { icon: FileText, label: "议题记录", value: `${topics.length} 项（Step 2 调整）` },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[#edf0ee] pb-3 last:border-0 last:pb-0">
+                  <span className="flex items-center gap-2 text-[11px] text-[#7b8680]"><item.icon className="size-3.5" />{item.label}</span>
+                  <span className="max-w-[210px] truncate text-right text-[11px] font-semibold text-[#35443c]">{item.value}</span>
                 </div>
               ))}
             </div>
           </SectionCard>
         </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <SectionCard title="报告边界" description="勾选本年度纳入披露的组织范围。">
             <div className="space-y-3">
               {boundary.items.map((item) => (
@@ -316,21 +315,6 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="画像摘要" description="基于当前已填写信息实时汇总。">
-            <div className="space-y-3">
-              {[
-                { icon: Globe2, label: "行业", value: `${enterprise.industryCode} ${enterprise.industryName}` },
-                { icon: CircleDot, label: "上市身份", value: listingStatus },
-                { icon: Paperclip, label: "披露框架", value: `${selectedFrameworks.length} 项` },
-                { icon: FileText, label: "初始议题", value: `${topics.length} 项` },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[#edf0ee] pb-3 last:border-0 last:pb-0">
-                  <span className="flex items-center gap-2 text-[11px] text-[#7b8680]"><item.icon className="size-3.5" />{item.label}</span>
-                  <span className="max-w-[210px] truncate text-right text-[11px] font-semibold text-[#35443c]">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
         </div>
       </div>
 

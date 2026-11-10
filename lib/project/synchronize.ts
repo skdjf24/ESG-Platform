@@ -143,7 +143,13 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
     const affectedRequirements = next.disclosureRequirements.filter((requirement) => removedFrameworks.some((framework) => frameworkMatches(framework, requirement.framework)) || removedTopics.some((topic) => topic.name === requirement.topic));
     if (affectedRequirements.length) {
       const ids = affectedRequirements.map((item) => item.id);
-      next.disclosureRequirements = next.disclosureRequirements.map((item) => ids.includes(item.id) ? { ...item, userConfirmed: false, reviewStatus: "待复核" } : item);
+      next.disclosureRequirements = next.disclosureRequirements.map((item) => ids.includes(item.id) ? {
+        ...item,
+        // Keep a legacy CASS decision in the project record for audit; its
+        // pending review status prevents it from counting as a current decision.
+        userConfirmed: item.framework === "CASS-ESG" ? item.userConfirmed : false,
+        reviewStatus: "待复核",
+      } : item);
       next = markRequirementMappings(next, ids);
       impacts.push(createImpact(1, removedTopics.length ? "topic" : "framework", removedTopics[0]?.id ?? removedFrameworks[0], "企业画像中的框架或议题已调整，相关披露要求、正文映射、报告版面、质量结论及定稿状态需要复核。", ids, [2, 3, 5, 6, 7, 8]));
     }
@@ -152,13 +158,22 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   if (sourceStep === 2) {
     const topicIds = unique([...previous.materiality.includedTopicIds, ...next.materiality.includedTopicIds])
       .filter((id) => previous.materiality.includedTopicIds.includes(id) !== next.materiality.includedTopicIds.includes(id));
-    const topicNames = previous.topics.filter((topic) => topicIds.includes(topic.id)).map((topic) => topic.name);
+    const changedScoresOrTopics = next.topics.filter((topic) => {
+      const before = previous.topics.find((item) => item.id === topic.id);
+      return next.materiality.includedTopicIds.includes(topic.id) && Boolean(before && (
+        before.financialScore !== topic.financialScore || before.impactScore !== topic.impactScore
+        || before.name !== topic.name || before.category !== topic.category
+      ));
+    }).map((topic) => topic.id);
+    const methodChanged = previous.materiality.method !== next.materiality.method;
+    const affectedTopicIds = unique([...topicIds, ...changedScoresOrTopics, ...(methodChanged ? next.materiality.includedTopicIds : [])]);
+    const topicNames = unique([...previous.topics, ...next.topics].filter((topic) => affectedTopicIds.includes(topic.id)).map((topic) => topic.name));
     const requirementIds = next.disclosureRequirements.filter((item) => topicNames.includes(item.topic)).map((item) => item.id);
-    if (topicIds.length) {
+    if (affectedTopicIds.length) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
       next.disclosureRequirements = next.disclosureRequirements.map((item) => requirementIds.includes(item.id) ? { ...item, userConfirmed: false, reviewStatus: "待复核" } : item);
       next = markRequirementMappings(next, requirementIds);
-      impacts.push(createImpact(2, "topic", topicIds[0], "实质性议题范围已变化，关联披露要求、正文覆盖、报告版面、质量结论及定稿状态需要复核。", requirementIds, [3, 5, 6, 7, 8]));
+      impacts.push(createImpact(2, "topic", affectedTopicIds[0], "实质性议题范围、评分或评估方式已变化，关联披露要求与正文覆盖保留并待复核；质量结论及定稿状态需要复检。", requirementIds, [3, 5, 6, 7, 8]));
     } else if (changed(previous.materiality, next.materiality, ["revision", "confirmedAt"])) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
     }

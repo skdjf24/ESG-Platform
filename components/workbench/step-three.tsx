@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import type { Applicability } from "@/lib/types/esg";
+import { frameworkRequirementNames } from "@/lib/data/mock-data";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
@@ -30,13 +31,13 @@ import { StepPageHeader } from "@/components/workbench/step-page-header";
 
 type Tab = "requirements" | "outline" | "materials";
 
-const tabs: Array<{ id: Tab; label: string; detail: string; icon: typeof Layers3 }> = [
-  { id: "requirements", label: "披露要求矩阵", detail: "58 项要求", icon: Layers3 },
-  { id: "outline", label: "报告目录", detail: "7 个章节", icon: BookOpen },
-  { id: "materials", label: "年度资料清单", detail: "32 项资料", icon: ClipboardList },
-];
-
 function TabNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+  const { project } = useProjectData();
+  const tabs: Array<{ id: Tab; label: string; detail: string; icon: typeof Layers3 }> = [
+    { id: "requirements", label: "披露要求矩阵", detail: `${project.disclosureRequirements.length} 项要求`, icon: Layers3 },
+    { id: "outline", label: "报告目录", detail: `${project.reportSections.filter((item) => item.sourceState === "active").length} 个章节`, icon: BookOpen },
+    { id: "materials", label: "年度资料清单", detail: `${project.dataRequirements.length} 项资料`, icon: ClipboardList },
+  ];
   return (
     <div className="mb-5 overflow-x-auto rounded-xl border border-[#e0e6e2] bg-white p-1.5">
       <div className="grid min-w-[650px] grid-cols-3 gap-1">
@@ -65,6 +66,9 @@ function TabNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab)
 function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: string }) {
   const { project, editProject } = useProjectData();
   const requirements = project.disclosureRequirements;
+  const availableFrameworks = [...new Set([...project.report.frameworks.map((item) => frameworkRequirementNames[item] ?? item), ...requirements.map((item) => item.framework)])];
+  const withoutCatalog = project.report.frameworks.filter((item) => !requirements.some((requirement) => requirement.framework === (frameworkRequirementNames[item] ?? item)));
+  const hasLegacyCass = project.report.frameworks.some((item) => item.startsWith("CASS-ESG")) || requirements.some((item) => item.framework === "CASS-ESG");
   const sections = project.reportSections.filter((item) => item.sourceState === "active");
   const [search, setSearch] = useState(() => requirements.find((item) => item.id === initialRequirementId)?.code ?? "");
   const [framework, setFramework] = useState("全部框架");
@@ -108,13 +112,15 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
     });
   };
 
-  const pendingCount = requirements.filter((item) => !item.userConfirmed).length;
+  const pendingCount = requirements.filter((item) => !item.userConfirmed || item.reviewStatus !== "有效").length;
 
   return (
     <div className="space-y-5 animate-fade-up">
       <Notice tone="warning" title="适用性须由用户确认">
         系统仅根据已选框架和企业画像提供适用性建议，不会替企业作出结论；请逐项核对并确认。
       </Notice>
+      {hasLegacyCass ? <Notice tone="warning" title="旧版 CASS 条款需要复核">旧项目中的 CASS 条款与原有确认、章节映射和正文均已保留，不会转换为北交所条款。请回到 Step 1 重新选择参考框架，并逐条复核历史披露要求。</Notice> : null}
+      {withoutCatalog.length ? <Notice tone="warning" title="部分已选框架尚无经核对条款">{withoutCatalog.join("、")} 当前没有可用的条款库；本矩阵与确认进度仅覆盖已建档条款，不代表这些框架无需披露或已经合规。</Notice> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -163,15 +169,13 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
               className="h-9 rounded-lg border border-[#dfe5e1] bg-white px-3 text-xs text-[#536159] outline-none focus:border-[#6f9f8c]"
             >
               <option>全部框架</option>
-              <option>GRI</option>
-              <option>上交所</option>
-              <option>CASS-ESG</option>
+              {availableFrameworks.map((item) => <option key={item} value={item}>{item === "CASS-ESG" ? "CASS-ESG（旧项目）" : item}</option>)}
             </select>
           </div>
         </div>
 
         <div className="scrollbar-subtle overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-collapse text-left">
+          <table className="workbench-data-table">
             <thead className="bg-[#fafbf9] text-[10px] font-semibold uppercase tracking-wide text-[#7a8580]">
               <tr>
                 <th className="sticky left-0 z-10 w-[125px] border-b border-[#e7ebe9] bg-[#fafbf9] px-6 py-3.5">框架 / 条款</th>
@@ -184,8 +188,9 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf0ee] text-xs">
+              {filteredRequirements.length === 0 ? <tr><td colSpan={7} className="px-6 py-8 text-center text-[#65736b]">当前筛选没有已建档条款；请核对正式指引后再作披露判断。</td></tr> : null}
               {filteredRequirements.map((item) => {
-                const confirmed = item.userConfirmed;
+                const confirmed = item.userConfirmed && item.reviewStatus === "有效";
                 return (
                   <tr id={`requirement-${item.id}`} key={item.id} className={`group scroll-mt-24 hover:bg-[#fbfcfb] ${initialRequirementId === item.id ? "bg-amber-50/60" : ""}`}>
                     <td className="sticky left-0 z-10 bg-white px-6 py-4 group-hover:bg-[#fbfcfb]">
@@ -193,16 +198,20 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
                       <span className="ml-2 text-[11px] text-[#708078]">{item.code}</span>
                     </td>
                     <td className="px-4 py-4"><StatusBadge tone="teal">{item.topic}</StatusBadge></td>
-                    <td className="px-4 py-4 leading-5 text-[#4d5b54]">{item.summary}</td>
+                    <td className="px-4 py-4 leading-5 text-[#4d5b54]">
+                      <span className="block">{item.summary}</span>
+                      {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block text-[#176b52] underline">来源：{item.sourceTitle} · {item.sourceVersion}</a> : null}
+                      {item.framework === "CASS-ESG" ? <span className="mt-1 block text-amber-700">旧项目条款，需人工复核；不会视为北交所要求</span> : null}
+                    </td>
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-700"><Sparkles className="size-3" />建议{item.systemSuggestion}</span>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-700"><Sparkles className="size-3" />{item.systemSuggestion === "待确认" ? "待用户确认" : `建议${item.systemSuggestion}`}</span>
                     </td>
                     <td className="px-4 py-4">
                       <select
                         value={item.applicability}
                         onChange={(event) => updateDecision(item.id, event.target.value as Applicability)}
                         aria-label={`${item.code} 用户确认适用性`}
-                        className={`h-8 w-[112px] rounded-lg border bg-white px-2 text-[11px] font-medium outline-none ${item.applicability === "待确认" ? "border-amber-200 text-amber-700" : "border-[#dce3df] text-[#3d554a]"}`}
+                        className={`h-8 min-w-[112px] rounded-lg border bg-white px-2 text-[11px] font-medium outline-none ${item.applicability === "待确认" ? "border-amber-200 text-amber-700" : "border-[#dce3df] text-[#3d554a]"}`}
                       >
                         <option>适用</option>
                         <option>不适用</option>
@@ -212,7 +221,7 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
                     <td className="px-4 py-4">
                       <div className="relative">
                         <Link2 className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-[#176b52]" />
-                        <select aria-label={`${item.code} 对应章节`} value={item.mappedSection} onChange={(event) => updateMapping(item.id, event.target.value)} className="h-8 w-full rounded-lg border border-[#dce3df] bg-white pl-7 pr-2 text-[10px] font-medium text-[#176b52] outline-none focus:border-[#6f9f8c]">
+                        <select aria-label={`${item.code} 对应章节`} value={item.mappedSection} onChange={(event) => updateMapping(item.id, event.target.value)} className="h-8 min-w-[190px] rounded-lg border border-[#dce3df] bg-white pl-7 pr-2 text-xs font-medium text-[#176b52] outline-none focus:border-[#6f9f8c]">
                           <option value="">未映射</option>
                           {sections.map((section) => <option key={section.id} value={`${section.order} ${section.title}`}>{section.order} {section.title}</option>)}
                         </select>
@@ -238,7 +247,7 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-[#edf0ee] px-6 py-3 text-[10px] text-[#88928d]">
-          <span>显示 {filteredRequirements.length} 条示例数据 · 全部共 58 项</span>
+          <span>显示 {filteredRequirements.length} 条 · 当前项目共 {requirements.length} 条</span>
           <span>适用性结论以用户确认为准</span>
         </div>
       </SectionCard>
@@ -294,7 +303,7 @@ function ReportOutline() {
         flush
         action={<button onClick={() => setAddingSection(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52]"><Plus className="size-3.5" />新增章节</button>}
       >
-        <div className="border-b border-[#edf0ee] px-5 py-3 text-[10px] text-[#84908a]">共 7 个一级章节 · 1 个示例二级章节</div>
+        <div className="border-b border-[#edf0ee] px-5 py-3 text-[10px] text-[#84908a]">共 {sections.filter((item) => item.level === 1).length} 个一级章节 · {sections.filter((item) => item.level === 2).length} 个二级章节</div>
         <div className="scrollbar-subtle max-h-[555px] overflow-y-auto p-3">
           {sections.map((section) => {
             const active = section.id === selectedId;
@@ -396,9 +405,9 @@ function MaterialsList() {
       </Notice>
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          { label: "本年度所需资料", value: "32", note: "覆盖 7 个报告章节", icon: ClipboardList },
-          { label: "定量数据", value: "14", note: "含能源、排放与员工指标", icon: FileSpreadsheet },
-          { label: "定性与制度资料", value: "18", note: "含管理制度、说明与案例", icon: FileText },
+          { label: "本年度所需资料", value: String(dataRequirements.length), note: `覆盖 ${new Set(dataRequirements.map((item) => item.section)).size} 个章节`, icon: ClipboardList },
+          { label: "定量数据", value: String(dataRequirements.filter((item) => item.type === "定量数据").length), note: "含能源、排放与员工指标", icon: FileSpreadsheet },
+          { label: "定性与制度资料", value: String(dataRequirements.filter((item) => item.type !== "定量数据").length), note: "含管理制度、说明与案例", icon: FileText },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-[#e3e8e5] bg-white p-4">
             <div className="flex items-start justify-between">
@@ -418,7 +427,7 @@ function MaterialsList() {
         action={<button className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#dce3df] bg-white px-3 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f6f8f7]"><Download className="size-3.5" />导出清单</button>}
       >
         <div className="scrollbar-subtle overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left">
+          <table className="workbench-data-table">
             <thead className="bg-[#fafbf9] text-[10px] font-semibold text-[#7a8580]">
               <tr>
                 <th className="border-b border-[#e7ebe9] px-6 py-3.5">资料名称</th>
@@ -450,7 +459,7 @@ function MaterialsList() {
           </table>
         </div>
         <div className="flex flex-col gap-2 border-t border-[#edf0ee] px-6 py-3 text-[10px] text-[#88928d] sm:flex-row sm:items-center sm:justify-between">
-          <span>显示 5 条典型资料项 · 完整清单共 32 项</span>
+          <span>当前项目共 {dataRequirements.length} 条资料项</span>
           <span>责任部门将在 Step 4 由用户最终确认</span>
         </div>
       </SectionCard>
@@ -460,6 +469,10 @@ function MaterialsList() {
 
 export function StepThree({ initialRequirementId }: { initialRequirementId?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>(initialRequirementId ? "requirements" : "requirements");
+  const { project } = useProjectData();
+  const requirementCount = project.disclosureRequirements.length;
+  const confirmedCount = project.disclosureRequirements.filter((item) => item.userConfirmed && item.reviewStatus === "有效").length;
+  const completion = requirementCount ? Math.round(confirmedCount / requirementCount * 100) : 0;
 
   return (
     <>
@@ -470,8 +483,8 @@ export function StepThree({ initialRequirementId }: { initialRequirementId?: str
         completed
         action={
           <div className="rounded-xl border border-[#dfe6e2] bg-white px-4 py-3 text-right">
-            <div className="text-[10px] text-[#8a948f]">框架映射完成度</div>
-            <div className="mt-0.5 text-lg font-semibold text-[#176b52]">100%</div>
+            <div className="text-[10px] text-[#8a948f]">已建档条款确认度</div>
+            <div className="mt-0.5 text-lg font-semibold tabular-nums text-[#176b52]">{completion}%</div>
           </div>
         }
       />
