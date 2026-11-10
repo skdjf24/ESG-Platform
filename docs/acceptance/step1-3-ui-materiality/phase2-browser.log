@@ -1,0 +1,28 @@
+
+> esg-disclosure-platform@0.1.0 test:phase2:browser
+> node scripts/phase2-document-parsing-browser.cjs
+
+PASS P2-BROWSER-MIGRATION-STORES IndexedDB v1 原地升级为 v2 并创建两个独立解析仓
+PASS P2-BROWSER-MIGRATION-FILE Phase 1 文件字节保留并惰性补充 checksum/revision
+PASS P2-BROWSER-MIGRATION-PROJECT Step 1–8、quality 与 finalization 数据迁移无损
+PASS P2-BROWSER-PROJECT Phase 2 验收使用独立项目 ID
+PASS P2-BROWSER-QUALITY-BASELINE 先建立 Step 7 全面检查基线以验证后续失效传播
+PASS P2-BROWSER-EXCEL-PREVIEW XLSX 真实数值在表格预览可见
+PASS P2-BROWSER-METRIC-TRACE 人工确认指标保存结构化 Cell locator
+PASS P2-BROWSER-STEP6 确认指标实际进入 Step 6 observation 数据源
+PASS P2-BROWSER-STEP7 新增确认指标沿用既有同步机制使 Step 7 检查失效
+PASS P2-BROWSER-DEDUPE 相同文件重新解析不重复新增候选
+PASS P2-BROWSER-PERSISTENCE 刷新后 ParsedDocument 与已确认 candidate 仍可恢复
+PASS P2-BROWSER-FACT DOCX 段落人工确认 Fact 并保留 headingPath/paragraphIndex
+PASS P2-BROWSER-STEP5 确认制度实际进入 Step 5 Resource 数据源
+PASS P2-BROWSER-PDF 文本型 PDF 第 2 页内容与页码定位真实呈现
+PASS P2-BROWSER-CORRUPT 损坏文件显示明确错误且 Step 4 不白屏
+PASS P2-BROWSER-REPLACE-FACT 替换源文件不覆盖已确认值，只标记事实待复核
+PASS P2-BROWSER-REPLACE-DOCUMENT 替换源文件使旧 ParsedDocument 进入 stale 并保留快照
+PASS P2-BROWSER-REPARSE 文件 revision 2 可重新解析且旧快照仍独立保留
+PASS P2-BROWSER-ERRORS 真实浏览器回归 browserErrors = 0
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice

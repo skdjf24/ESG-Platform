@@ -1,0 +1,25 @@
+
+> esg-disclosure-platform@0.1.0 test:phase3
+> node --import tsx scripts/phase3-ai-regression.ts
+
+PASS 仅组装带来源的 AI 证据
+PASS 未确认事实不进入 AI 证据
+PASS P3-PROVIDER-01 LM Studio 配置与 Responses endpoint 正确
+PASS P3-PROVIDER-01 LM Studio 不强制 Authorization
+PASS P3-PROVIDER-01 LM Studio adapter 不发送未确认支持的可选字段
+PASS P3-PROVIDER-02 OpenAI endpoint 与 Authorization 正确
+PASS Responses API 显式 store:false
+PASS API Key 仅位于服务端 Authorization header
+PASS AI 输出使用严格 JSON Schema
+PASS P3-PROVIDER-03 旧 OpenAI 环境变量继续兼容
+PASS 未配置服务端 API Key 时明确阻止请求
+PASS P3-PROVIDER-04 LM Studio 不可达时返回可解释错误
+PASS 真实写作建议必须人工确认
+PASS 写作引用只能指向输入证据
+PASS P3-PROVIDER-05 未知来源引用被服务端拦截
+PASS 新增内容没有来源引用时自动进入禁止接受清单
+PASS P3-PROVIDER-06 Provider 返回证据外数值时禁止接受
+PASS AI 语义发现可定位且默认未接受
+PASS 无法定位的语义发现被服务端拦截
+PASS AI 审校记录不改变确定性 Step 8 Gate
+RESULT 20 PASS / 0 FAIL

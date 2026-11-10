@@ -1,0 +1,241 @@
+{
+  "testedCommit": "8f093dd6b96b2fa12149551355cb9203f22cf597",
+  "browserVersion": "154.0.8037.57",
+  "baseUrl": "http://127.0.0.1:4325",
+  "passCount": 46,
+  "failCount": 0,
+  "results": [
+    {
+      "id": "STEP1-SEED",
+      "status": "PASS",
+      "detail": "新项目保留初始议题数据且使用动态 projectId"
+    },
+    {
+      "id": "STEP1-NO-CASS",
+      "status": "PASS",
+      "detail": "新项目未选择 CASS，矩阵也没有 CASS 条款"
+    },
+    {
+      "id": "STEP1-FRAMEWORK-ORDER",
+      "status": "PASS",
+      "detail": "披露框架固定顺序为三列两行，港交所在第二行"
+    },
+    {
+      "id": "STEP1-FRAMEWORK-GRID",
+      "status": "PASS",
+      "detail": "桌面框架实际呈现三列两行"
+    },
+    {
+      "id": "STEP1-TOPIC-UI",
+      "status": "PASS",
+      "detail": "Step 1 初始议题池及其操作入口已移除"
+    },
+    {
+      "id": "STEP1-BSE-SELECT",
+      "status": "PASS",
+      "detail": "北交所可选中，已选数量更新"
+    },
+    {
+      "id": "STEP1-BSE-DESELECT",
+      "status": "PASS",
+      "detail": "北交所可取消，已选数量更新"
+    },
+    {
+      "id": "STEP1-BSE-SOURCE",
+      "status": "PASS",
+      "detail": "北交所第35/36条独立建档，标明官网来源和修订版本且待用户确认"
+    },
+    {
+      "id": "ROUTE-3",
+      "status": "PASS",
+      "detail": "Step 3 HTTP 200"
+    },
+    {
+      "id": "STEP3-FILTER",
+      "status": "PASS",
+      "detail": "新项目矩阵有北交所筛选且无 CASS 筛选"
+    },
+    {
+      "id": "STEP3-BSE-MAPPING",
+      "status": "PASS",
+      "detail": "北交所条款和独立来源在矩阵内可查看"
+    },
+    {
+      "id": "STEP3-DESKTOP-TYPE",
+      "status": "PASS",
+      "detail": "表头与正文使用 12px 单行排版"
+    },
+    {
+      "id": "STEP3-DESKTOP-SCROLL",
+      "status": "PASS",
+      "detail": "各列与控件不重叠或裁剪"
+    },
+    {
+      "id": "ROUTE-7",
+      "status": "PASS",
+      "detail": "Step 7 HTTP 200"
+    },
+    {
+      "id": "STEP7-BASELINE",
+      "status": "PASS",
+      "detail": "修改评分前建立有效质量检查快照"
+    },
+    {
+      "id": "ROUTE-2",
+      "status": "PASS",
+      "detail": "Step 2 HTTP 200"
+    },
+    {
+      "id": "STEP2-CONTROLS",
+      "status": "PASS",
+      "detail": "议题池分类与搜索保留，评分表无无效筛选按钮"
+    },
+    {
+      "id": "STEP2-SEARCH",
+      "status": "PASS",
+      "detail": "议题搜索可筛选列表"
+    },
+    {
+      "id": "STEP2-CATEGORY",
+      "status": "PASS",
+      "detail": "E/S/G 分类筛选仍可用"
+    },
+    {
+      "id": "STEP2-REMOVE",
+      "status": "PASS",
+      "detail": "移出议题同步排除评分行和矩阵点，但保留原始议题"
+    },
+    {
+      "id": "STEP2-REINCLUDE",
+      "status": "PASS",
+      "detail": "纳入议题同步恢复评分行和矩阵点"
+    },
+    {
+      "id": "STEP2-ADD",
+      "status": "PASS",
+      "detail": "新增议题立即出现在评分表和矩阵"
+    },
+    {
+      "id": "STEP2-EMPTY-SCORE",
+      "status": "PASS",
+      "detail": "编辑中清空评分不写入 1，也不移动矩阵点"
+    },
+    {
+      "id": "STEP2-SCORE-VALIDATION",
+      "status": "PASS",
+      "detail": "超出 1–5 分或 0.1 步长的输入不会提交"
+    },
+    {
+      "id": "STEP2-FINANCE-LINK",
+      "status": "PASS",
+      "detail": "财务评分更新矩阵，并使旧确认失效"
+    },
+    {
+      "id": "STEP2-IMPACT-LINK",
+      "status": "PASS",
+      "detail": "影响评分立即更新矩阵点位"
+    },
+    {
+      "id": "STEP2-PRIORITY",
+      "status": "PASS",
+      "detail": "评分跨过阈值后重点议题与结果统计立即重算"
+    },
+    {
+      "id": "STEP2-DESKTOP-TYPE",
+      "status": "PASS",
+      "detail": "表头与正文使用 12px 单行排版"
+    },
+    {
+      "id": "STEP2-DESKTOP-SCROLL",
+      "status": "PASS",
+      "detail": "各列与控件不重叠或裁剪"
+    },
+    {
+      "id": "STEP2-PERSIST",
+      "status": "PASS",
+      "detail": "评分与待确认状态保存到 IndexedDB"
+    },
+    {
+      "id": "STEP2-DOWNSTREAM",
+      "status": "PASS",
+      "detail": "关联披露和质量快照待复核，旧记录与正文保留"
+    },
+    {
+      "id": "STEP2-REFRESH",
+      "status": "PASS",
+      "detail": "切换步骤并刷新后评分、矩阵与确认状态一致"
+    },
+    {
+      "id": "STEP2-RECONFIRM",
+      "status": "PASS",
+      "detail": "用户可重新确认更新后的结果"
+    },
+    {
+      "id": "STEP2-METHOD-INVALIDATE",
+      "status": "PASS",
+      "detail": "评估方式变化使确认恢复待确认"
+    },
+    {
+      "id": "STEP2-METHOD-PERSIST",
+      "status": "PASS",
+      "detail": "评估方式与待确认状态持久化"
+    },
+    {
+      "id": "ROUTE-1",
+      "status": "PASS",
+      "detail": "Step 1 HTTP 200"
+    },
+    {
+      "id": "LEGACY-WARNING",
+      "status": "PASS",
+      "detail": "旧 CASS 选项有明确提示，但不出现在新选项中"
+    },
+    {
+      "id": "LEGACY-PRESERVE",
+      "status": "PASS",
+      "detail": "移除旧选项保留历史确认与正文，仅使该确认待复核且不转成北交所"
+    },
+    {
+      "id": "STEP1-NARROW-SCROLL",
+      "status": "PASS",
+      "detail": "窄屏披露框架仍为三列两行并可横向滚动"
+    },
+    {
+      "id": "ROUTE-3",
+      "status": "PASS",
+      "detail": "Step 3 HTTP 200"
+    },
+    {
+      "id": "STEP3-NARROW-TYPE",
+      "status": "PASS",
+      "detail": "表头与正文使用 12px 单行排版"
+    },
+    {
+      "id": "STEP3-NARROW-SCROLL",
+      "status": "PASS",
+      "detail": "窄屏可横向滚动，按钮和选项单行且各列不重叠"
+    },
+    {
+      "id": "ROUTE-4",
+      "status": "PASS",
+      "detail": "Step 4 HTTP 200"
+    },
+    {
+      "id": "STEP4-NARROW-TYPE",
+      "status": "PASS",
+      "detail": "表头与正文使用 12px 单行排版"
+    },
+    {
+      "id": "STEP4-NARROW-SCROLL",
+      "status": "PASS",
+      "detail": "窄屏可横向滚动，按钮和选项单行且各列不重叠"
+    },
+    {
+      "id": "BROWSER-ERRORS",
+      "status": "PASS",
+      "detail": "Chromium console/page errors = 0"
+    }
+  ],
+  "browserErrors": [],
+  "fatal": null
+}

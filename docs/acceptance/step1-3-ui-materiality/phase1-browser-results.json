@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-11-10T07:31:59.871Z",
+  "baseUrl": "http://127.0.0.1:4325",
+  "projectId": "phase-1-e2e-enterprise-2026",
+  "browser": "154.0.8037.57",
+  "browserExecutable": "/usr/bin/chromium",
+  "results": [
+    {
+      "id": "P1-PROJECT-ID",
+      "status": "PASS",
+      "detail": "新项目获得动态 projectId"
+    },
+    {
+      "id": "P1-CREATE",
+      "status": "PASS",
+      "detail": "项目结构化数据写入 IndexedDB"
+    },
+    {
+      "id": "P1-HISTORY-LINK",
+      "status": "PASS",
+      "detail": "Step 1 来源以 fileId 关联真实文件且未伪造解析"
+    },
+    {
+      "id": "P1-HISTORY-BYTES",
+      "status": "PASS",
+      "detail": "Step 1 历史报告真实字节可读取"
+    },
+    {
+      "id": "P1-FILE-REFRESH",
+      "status": "PASS",
+      "detail": "刷新后历史报告文件仍可下载且字节一致"
+    },
+    {
+      "id": "P1-STEP4-BYTES",
+      "status": "PASS",
+      "detail": "Step 4 资料文件保存真实字节"
+    },
+    {
+      "id": "P1-NO-FAKE-PARSE",
+      "status": "PASS",
+      "detail": "未解析文件没有伪造事实或解析结果"
+    },
+    {
+      "id": "P1-ISOLATION",
+      "status": "PASS",
+      "detail": "第二项目使用独立 ID 且看不到第一项目文件"
+    },
+    {
+      "id": "P1-LIST",
+      "status": "PASS",
+      "detail": "项目列表可显示并打开多个项目"
+    },
+    {
+      "id": "P1-BACKUP",
+      "status": "PASS",
+      "detail": "备份含 manifest、项目数据和真实文件字节"
+    },
+    {
+      "id": "P1-RESTORE-CONFLICT",
+      "status": "PASS",
+      "detail": "同 ID 恢复被明确阻止且不覆盖原项目"
+    },
+    {
+      "id": "P1-RESTORE",
+      "status": "PASS",
+      "detail": "恢复后 Step 1–8 状态和文件字节完整"
+    },
+    {
+      "id": "P1-COPY-UI",
+      "status": "PASS",
+      "detail": "下一年度项目出现在项目列表"
+    },
+    {
+      "id": "P1-COPY-RESET",
+      "status": "PASS",
+      "detail": "年度、Materiality 和 Requirement 确认正确重置"
+    },
+    {
+      "id": "P1-COPY-GATES",
+      "status": "PASS",
+      "detail": "Facts、Step 7 和 Step 8 状态正确重置"
+    },
+    {
+      "id": "P1-COPY-FILES",
+      "status": "PASS",
+      "detail": "年度复制获得隔离的新文件记录"
+    },
+    {
+      "id": "P1-CONFLICT",
+      "status": "PASS",
+      "detail": "旧 revision 写入被阻止且未覆盖新数据"
+    },
+    {
+      "id": "P1-MIGRATION",
+      "status": "PASS",
+      "detail": "旧 localStorage 项目迁移有记录且旧数据未删除"
+    },
+    {
+      "id": "P1-MISSING-NONDESTRUCTIVE",
+      "status": "PASS",
+      "detail": "读取时缺失标记不静默改写原项目快照"
+    },
+    {
+      "id": "P1-MISSING-UI",
+      "status": "PASS",
+      "detail": "文件缺失在界面明确标记且应用不白屏"
+    },
+    {
+      "id": "P1-CORRUPTION",
+      "status": "PASS",
+      "detail": "损坏数据触发保护提示而非白屏"
+    },
+    {
+      "id": "P1-BROWSER",
+      "status": "PASS",
+      "detail": "无未处理浏览器错误"
+    }
+  ],
+  "browserErrors": []
+}

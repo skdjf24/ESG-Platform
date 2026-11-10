@@ -1,0 +1,25 @@
+
+> esg-disclosure-platform@0.1.0 test:phase2
+> node --import tsx scripts/phase2-document-parsing-regression.ts
+
+PASS P2-EXCEL-SHEETS XLSX 工作表名称与顺序正确
+PASS P2-EXCEL-MERGE 工作表区域和合并单元格真实解析
+PASS P2-EXCEL-CELL 能源汇总 B4 数值 12680 正确
+PASS P2-EXCEL-FORMULA 公式与文件内缓存结果均保留
+PASS P2-EXCEL-CANDIDATE 表头规则生成指标候选并保留单位、期间和 Cell locator
+PASS P2-EXCEL-PERCENT 百分比按显示语义提取为 14.7 %
+PASS P2-NO-AUTO-CONFIRM 规则候选不会自动成为已确认指标
+PASS P2-DOCX-HEADINGS DOCX Heading 1–2 层级和路径正确
+PASS P2-DOCX-LIST DOCX 列表段落保留原始顺序和类型
+PASS P2-DOCX-TABLE DOCX 表格及 table/row/column locator 正确
+PASS P2-PDF-PAGES 文本型 PDF 页数和逐页文本块正确
+PASS P2-PDF-LOCATOR PDF 第 2 页文本和 page locator 可追溯
+PASS P2-CANDIDATE-PRESENT 指标候选存在以供确认测试
+PASS P2-METRIC-TRACE 人工确认 Metric 保留 File → ParsedBlock → SourceReference 链路
+PASS P2-METRIC-DOWNSTREAM 确认 Metric 通过既有同步机制进入 Step 6 MetricObservation
+PASS P2-DOCX-PARAGRAPH DOCX 段落可供手工创建事实候选
+PASS P2-CANDIDATE-DEDUPE 同 checksum、位置、内容和类型产生稳定 candidate identity
+PASS P2-CANDIDATE-REJECT 拒绝候选保留稳定身份且不入库
+PASS P2-SOURCE-STALE 文件版本变化不覆盖已确认值，仅使来源及下游待复核
+PASS P2-CORRUPT 损坏 XLSX 返回可解释错误而非未处理崩溃
+RESULT 20 PASS / 0 FAIL

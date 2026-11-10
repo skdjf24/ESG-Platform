@@ -1,0 +1,44 @@
+
+> esg-disclosure-platform@0.1.0 test:step7-1:browser
+> node scripts/step7-1-state-regression.cjs
+
+PASS A1 全面检查建立有效的全局检查记录
+PASS A2 上游输入变化生成失效记录并保留全面检查历史
+PASS A3 局部章节检查没有清除整本报告 stale 状态
+PASS A4 局部检查后仍不可提交定稿审核
+PASS B1 局部检查不会伪造全面检查记录
+PASS B2 未全面检查时保持未检查状态
+PASS C1 同一缺陷事实只生成一个 SRC-002 稳定问题身份
+C_LOCATIONS [{"sourceStep":4,"chapterId":"section-4-2","blockId":"section-4-2-paragraph","factId":"fact-training-2025","label":"section-4-2-paragraph"},{"sourceStep":4,"chapterId":"section-4-2","blockId":"section-4-2-table","factId":"fact-training-2025","label":"section-4-2-table"},{"sourceStep":4,"chapterId":"section-5","blockId":"section-5-training","factId":"fact-training-2025","label":"section-5-training"}]
+PASS C2 聚合问题保留三个引用正文块的位置
+PASS C3 同一次检查没有重复 issueId
+PASS C4 章节检查只移除实际修复位置，不会误解决其他章节仍存在的聚合问题
+PASS D1 有效要求和人工审校正文可形成已核验覆盖记录
+PASS D2 输入指纹变化即时使全面检查失效
+PASS D3 reviewStatus 待复核后覆盖状态失效为待核验
+PASS E0 找到可复现的 Writing Policy 问题
+PASS E1 首次复检解决只写入一条系统解决记录
+PASS E2 重复全面检查不新增重复解决记录
+PASS F1 已解决问题重新出现时恢复待处理状态
+PASS F2 重新打开动作保留在处理历史中
+PASS F3 原解决记录未被覆盖
+PASS F4 已接受例外的输入变化后需要重新处理
+PASS F5 例外失效动作保留在处理历史中
+PASS G1 QualityCheckState v1 已迁移到 v2
+PASS G2 迁移保留章节和历史检查运行
+PASS G3 项目保存迁移审计记录
+PASS G4 Step 1 页面回归可打开
+PASS G4 Step 2 页面回归可打开
+PASS G4 Step 3 页面回归可打开
+PASS G4 Step 4 页面回归可打开
+PASS G4 Step 5 页面回归可打开
+PASS G4 Step 6 页面回归可打开
+PASS G4 Step 7 页面回归可打开
+PASS G5 刷新后检查状态、历史和迁移结果正常恢复
+PASS 浏览器无 console/page error（0）
+RESULT Step 7.1 A-G passed
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
