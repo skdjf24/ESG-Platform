@@ -1,0 +1,96 @@
+
+> esg-disclosure-platform@0.1.0 test:e2e:step1-8
+> node --experimental-strip-types scripts/e2e-step1-step8-regression.mjs
+
+(node:3738) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///workspace/ESG-Platform/lib/presentation/chart-validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /workspace/ESG-Platform/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS CHART-bar bar 合规模拟数据通过确认校验
+PASS CHART-bar-LABEL bar 模拟数据具有明确警示
+PASS CHART-line line 合规模拟数据通过确认校验
+PASS CHART-line-LABEL line 模拟数据具有明确警示
+PASS CHART-stacked-bar stacked-bar 合规模拟数据通过确认校验
+PASS CHART-stacked-bar-LABEL stacked-bar 模拟数据具有明确警示
+PASS CHART-pie pie 合规模拟数据通过确认校验
+PASS CHART-pie-LABEL pie 模拟数据具有明确警示
+PASS CHART-kpi kpi 合规模拟数据通过确认校验
+PASS CHART-kpi-LABEL kpi 模拟数据具有明确警示
+PASS CHART-BLOCK-line-metric 拦截 line-metric — 折线图只能选择同一指标定义的时间序列。
+PASS CHART-BLOCK-unit 拦截 unit — 图表显示单位与指标单位不一致；当前原型不执行单位换算。；同一柱状图中的指标单位必须一致。
+PASS CHART-BLOCK-boundary 拦截 boundary — 同一柱状图中的指标统计边界必须一致。
+PASS CHART-BLOCK-pie-period 拦截 pie-period — 饼图构成项目必须属于同一报告期间。
+PASS CHART-BLOCK-stack-duplicate 拦截 stack-duplicate — 堆叠柱状图中“2024年度 + 外购电力”存在重复数据；每个期间与系列只能对应一项观测。
+PASS ROUTE-1 Step 1 路由可打开 — 200
+PASS STEP1-MARKET 市场类别保存
+PASS STEP1-BOUNDARY 报告边界保存
+PASS STEP1-HISTORY 历史报告记录保留
+PASS STEP1-REFRESH Step 1 刷新后恢复
+PASS STEP1-DYNAMIC Step 1 使用最新企业信息作为当前项目状态
+PASS STEP1-INDUSTRY-EDIT 行业分类可编辑并可进入保存流程
+PASS STEP1-HISTORY-UPLOAD 历史报告可创建并保存本地来源元数据
+PASS STEP1-HISTORY-BOUNDARY 历史报告关联真实文件且未伪造解析结果
+PASS ROUTE-7 Step 7 路由可打开 — 200
+PASS STEP7-FULL-CHECK 全面检查建立有效运行记录
+PASS ROUTE-2 Step 2 路由可打开 — 200
+PASS CHAIN-B-STEP2-3 Step 2 议题变化使相关披露要求待复核
+PASS STEP2-NO-DELETE 议题变化不删除既有正文
+PASS STEP2-INVALIDATE-QA 议题变化保留历史并使原全面检查失效
+PASS STEP2-ADD-TOPIC 议题池支持新增议题并保存双重重要性评分
+PASS ROUTE-3 Step 3 路由可打开 — 200
+PASS CHAIN-D-STEP3-5 Step 3 章节改名同步 Step 5 目录
+PASS CHAIN-B-STEP3-MAPPING Step 3 章节改名同步披露要求映射
+PASS STEP3-ADD-SECTION Step 3 可新增章节并同步创建 Step 5 章节
+PASS ROUTE-4 Step 4 路由可打开 — 200
+PASS STEP4-FACT-REVISION Step 4 事实修订保存并增加版本
+PASS CHAIN-A-STEP4-5 事实版本变化保留旧引用快照并使正文待复核
+PASS CHAIN-A-STEP4-6 图表引用数据变化后进入需更新
+PASS STEP4-UPLOAD-STORAGE-LABEL 文件收集明确标记真实本地存储和待解析边界
+PASS STEP4-UPLOAD-BYTES Step 4 文件入口保存来源元数据和真实文件字节
+PASS STEP4-UPLOAD-NO-FALSE-DATA 未解析文件不伪造事实或抽取结果
+PASS STEP4-PARSER-WORKBENCH Step 4 提供真实解析入口且未解析文件仍不自动生成事实
+PASS ROUTE-5 Step 5 路由可打开 — 200
+PASS STEP5-UPSTREAM-ENTERPRISE Step 5 读取 Step 1 最新企业信息
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: '真实 AI' })[22m
+[2m    - locator resolved to <button disabled title="AI 服务暂未启用" class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52] disabled:cursor-not-allowed disabled:opacity-45">…</button>[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    58 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is not enabled[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+
+    at main (/workspace/ESG-Platform/scripts/e2e-step1-step8-regression.mjs:348:53) {
+  log: [
+    "  - waiting for getByRole('button', { name: '真实 AI' })",
+    '    - locator resolved to <button disabled title="AI 服务暂未启用" class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#eaf3ee] px-3 text-xs font-semibold text-[#176b52] disabled:cursor-not-allowed disabled:opacity-45">…</button>',
+    '  - attempting click action',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is not enabled',
+    '    - retrying click action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is not enabled',
+    '    - retrying click action',
+    '      - waiting 100ms',
+    '    58 × waiting for element to be visible, enabled and stable',
+    '       - element is not enabled',
+    '     - retrying click action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice

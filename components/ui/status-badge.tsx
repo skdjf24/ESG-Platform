@@ -13,7 +13,7 @@ const toneStyles: Record<Tone, string> = {
 
 export function StatusBadge({ children, tone = "gray", dot = false }: { children: ReactNode; tone?: Tone; dot?: boolean }) {
   return (
-    <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none ${toneStyles[tone]}`}>
+    <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none ${toneStyles[tone]}`}>
       {dot ? <span className="size-1.5 rounded-full bg-current opacity-75" /> : null}
       {children}
     </span>

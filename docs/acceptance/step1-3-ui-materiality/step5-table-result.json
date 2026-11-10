@@ -1,0 +1,28 @@
+{
+  "testedCommit": "8f093dd6b96b2fa12149551355cb9203f22cf597",
+  "browserVersion": "154.0.8037.57",
+  "layout": {
+    "wrapperClientWidth": 330,
+    "wrapperScrollWidth": 1125,
+    "bodyScrollWidth": 390,
+    "viewportWidth": 390,
+    "cellWhiteSpaces": [
+      "nowrap",
+      "nowrap",
+      "nowrap",
+      "nowrap",
+      "nowrap",
+      "nowrap"
+    ],
+    "inputFontSizes": [
+      "12px",
+      "12px",
+      "12px",
+      "12px",
+      "12px"
+    ],
+    "clipped": false
+  },
+  "browserErrors": [],
+  "pass": true
+}

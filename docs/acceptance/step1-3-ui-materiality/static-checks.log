@@ -1,0 +1,43 @@
+
+> esg-disclosure-platform@0.1.0 lint
+> eslint .
+
+
+> esg-disclosure-platform@0.1.0 typecheck
+> tsc --noEmit
+
+
+> esg-disclosure-platform@0.1.0 build
+> next build --webpack
+
+▲ Next.js 16.4.3 (webpack)
+✓ Running next.config.ts took 26ms
+- Experiments (use with caution):
+  ⨯ useTypeScriptCli
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.4s
+  Running TypeScript ...
+  Finished TypeScript in 5.1s ...
+  Collecting page data using 2 workers ...
+  Generating static pages using 2 workers (0/4) ...
+  Generating static pages using 2 workers (1/4)
+  Generating static pages using 2 workers (2/4)
+  Generating static pages using 2 workers (3/4)
+✓ Generating static pages using 2 workers (4/4) in 294ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/ai/semantic-review
+├ ƒ /api/ai/status
+├ ƒ /api/ai/writing
+├ ○ /icon.svg
+├ ƒ /reports/[projectId]/final
+└ ƒ /reports/[projectId]/step/[step]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

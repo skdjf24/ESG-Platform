@@ -1,0 +1,43 @@
+
+> esg-disclosure-platform@0.1.0 test:step7:browser
+> node scripts/step7-browser-regression.cjs
+
+PASS Step 7 工作台可实际打开
+PASS 全面检查生成独立 QualityCheckRun
+PASS 确定性规则从现有项目数据生成问题，而非静态清单
+PASS 移除已确认适用要求的映射后发现未覆盖问题
+PASS 仅有标题映射时不判定为充分披露
+PASS 修改已引用事实后识别旧引用版本
+PASS 删除事实来源后发现来源定位问题
+PASS 正文指标与同口径已确认事实不一致时发现冲突
+PASS 不同统计期间或边界的数据未被错误判为冲突
+PASS 图表处于需更新时生成对应问题
+PASS Writing Policy 规则识别空泛表述并生成建议
+PASS 未解决内部待办和占位信息被发现
+PASS 问题可通过稳定 ID 定位到具体 Step、章节和内容块
+PASS 接受例外强制保存理由和人工处理记录
+PASS 刷新后恢复问题状态、例外理由和检查历史
+PASS 用户修正后规则复检通过，且不把人工已处理直接视为通过
+PASS Step 1 上游内容变化后旧检查结果标记待复检
+PASS 工作台明确提示上游版本变化
+PASS Step 1 既有页面回归可打开
+PASS Step 2 既有页面回归可打开
+PASS Step 3 既有页面回归可打开
+PASS Step 4 既有页面回归可打开
+PASS Step 5 既有页面回归可打开
+PASS Step 6 既有页面回归可打开
+RICH_RESULT {"fragmentCount":7,"strongCount":2,"linkHref":"https://example.com/evidence","listMarkerCount":45,"boldMarkerCount":80,"maxOverflow":0}
+PASS 长段落按版面安全拆分为多个预览片段
+PASS 跨页后完整保留加粗文本和原文内容
+PASS 跨页富文本保留经过安全校验的链接
+PASS 跨页后完整保留列表内容
+PASS 最大字号、行距和页边距下没有静默裁切正文
+PASS 缺少 Step 7 状态的历史项目可兼容打开
+PASS 历史项目迁移保留 Step 1–6 数据并记录迁移
+PASS 浏览器无 console/page error（0）
+RESULT quality_runs=3 issues=19 screenshots=6
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice

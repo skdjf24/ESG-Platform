@@ -1,0 +1,20 @@
+
+> esg-disclosure-platform@0.1.0 test:phase4
+> node --import tsx scripts/phase4-export-regression.ts
+
+PASS P4-01 输出真实 DOCX MIME 与文件名
+PASS P4-02 OOXML 必需部件完整
+PASS P4-03 封面使用动态企业与年度
+PASS P4-04 报告期进入正式文档
+PASS P4-05 表格内容完整进入 DOCX
+PASS P4-06 已确认图表数据与边界进入 DOCX
+PASS P4-07 案例内容进入 DOCX
+PASS P4-08 长正文未截断
+PASS P4-09 待办与 Mock 内容排除
+PASS P4-10 内部 blockId 不进入正式文档
+PASS P4-11 页眉动态信息正确
+PASS P4-12 页脚包含版本与动态页码域
+PASS P4-13 定稿指纹与质量检查记录写入文档属性
+PASS P4-14 Word 打开时更新页码域
+PASS P4-15 上游变化后旧定稿禁止导出
+{"pass":15,"fail":0}

@@ -1,0 +1,31 @@
+
+> esg-disclosure-platform@0.1.0 test:phase1:browser
+> node scripts/phase1-local-persistence-regression.cjs
+
+PASS P1-PROJECT-ID 新项目获得动态 projectId
+PASS P1-CREATE 项目结构化数据写入 IndexedDB
+PASS P1-HISTORY-LINK Step 1 来源以 fileId 关联真实文件且未伪造解析
+PASS P1-HISTORY-BYTES Step 1 历史报告真实字节可读取
+PASS P1-FILE-REFRESH 刷新后历史报告文件仍可下载且字节一致
+PASS P1-STEP4-BYTES Step 4 资料文件保存真实字节
+PASS P1-NO-FAKE-PARSE 未解析文件没有伪造事实或解析结果
+PASS P1-ISOLATION 第二项目使用独立 ID 且看不到第一项目文件
+PASS P1-LIST 项目列表可显示并打开多个项目
+PASS P1-BACKUP 备份含 manifest、项目数据和真实文件字节
+PASS P1-RESTORE-CONFLICT 同 ID 恢复被明确阻止且不覆盖原项目
+PASS P1-RESTORE 恢复后 Step 1–8 状态和文件字节完整
+PASS P1-COPY-UI 下一年度项目出现在项目列表
+PASS P1-COPY-RESET 年度、Materiality 和 Requirement 确认正确重置
+PASS P1-COPY-GATES Facts、Step 7 和 Step 8 状态正确重置
+PASS P1-COPY-FILES 年度复制获得隔离的新文件记录
+PASS P1-CONFLICT 旧 revision 写入被阻止且未覆盖新数据
+PASS P1-MIGRATION 旧 localStorage 项目迁移有记录且旧数据未删除
+PASS P1-MISSING-NONDESTRUCTIVE 读取时缺失标记不静默改写原项目快照
+PASS P1-MISSING-UI 文件缺失在界面明确标记且应用不白屏
+PASS P1-CORRUPTION 损坏数据触发保护提示而非白屏
+PASS P1-BROWSER 无未处理浏览器错误
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
