@@ -480,7 +480,7 @@ export function StepThree({ initialRequirementId }: { initialRequirementId?: str
         eyebrow="Step 3 · 框架与大纲"
         title="构建披露框架与报告大纲"
         description="将已选披露框架映射到报告章节，逐项确认适用性，并形成可执行的本年度资料清单。"
-        completed
+        completed={requirementCount > 0 && confirmedCount === requirementCount}
         action={
           <div className="rounded-xl border border-[#dfe6e2] bg-white px-4 py-3 text-right">
             <div className="text-[10px] text-[#8a948f]">已建档条款确认度</div>

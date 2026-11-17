@@ -199,6 +199,7 @@ async function main() {
   page.on("dialog", (dialog) => dialog.accept());
   page.on("console", (message) => { if (message.type() === "error" && !message.text().includes("favicon")) browserErrors.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
+  await page.route("**/api/ai/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ configured: true, provider: "openai", model: "e2e-test-double" }) }));
   await page.route("**/api/ai/writing", async (route) => {
     const request = route.request().postDataJSON();
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
@@ -502,7 +503,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     baseUrl,
     testProject: projectLabel,
-    dataPolicy: "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
+    dataPolicy: "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。AI status 与写作/审校接口在浏览器边界使用测试替身，未调用外部模型。",
     totals: { pass: results.filter((item) => item.status === "PASS").length, fail: results.filter((item) => item.status === "FAIL").length, findings: findings.length },
     results,
     findings,

@@ -59,7 +59,7 @@ async function main() {
     check(a.topics.length > 0 && a.topics.every((topic) => topic.financialScore === 0 && topic.impactScore === 0 && !topic.confirmed) && !a.materiality.confirmed, "BLANK-TOPICS", "通用候选议题未评分、未确认");
     check(a.quality.runs.length === 0 && a.finalization.versions.length === 0 && a.report.progress === 0, "BLANK-PROGRESS", "质量未检查、未定稿且进度为零");
     await page.getByRole("button", { name: "下一步" }).click();
-    check(decodeURIComponent(new URL(page.url()).pathname).endsWith("/step/1") && await page.getByText(/请先选择主营行业/).count() > 0, "PRIMARY-REQUIRED", "未选主营行业不能完成 Step 1");
+    check(decodeURIComponent(new URL(page.url()).pathname).endsWith("/step/1") && await page.getByText(/请先选择主营行业/).count() > 0 && await page.getByText("进行中", { exact: true }).count() > 0, "PRIMARY-REQUIRED", "未选主营行业时 Step 1 保持进行中，不能进入下一步");
     await page.screenshot({ path: path.join(evidenceDir, "blank-step1-desktop.png"), fullPage: true });
 
     await selectSearch(page, "软件和信息技术服务业", "65");
@@ -84,7 +84,7 @@ async function main() {
     check(await page.getByText(/65 · 软件和信息技术服务业/).count() > 0 && await page.getByRole("button", { name: "删除其他行业 26" }).count() === 1, "INDUSTRY-REFRESH", "刷新后行业选择恢复");
     await page.getByRole("button", { name: "下一步" }).click();
     await page.waitForURL((url) => decodeURIComponent(url.pathname) === `/reports/${idA}/step/2`);
-    check(await page.getByText("待评分").count() > 0, "STEP2-UNSCORED", "Step 2 明确显示待评分，未显示样本评分");
+    check(await page.getByText("待评分").count() > 0 && await page.getByText("进行中", { exact: true }).count() > 0, "STEP2-UNSCORED", "Step 2 进行中并显示待评分，未显示样本评分");
 
     for (let step = 1; step <= 8; step += 1) {
       const response = await page.goto(`${baseUrl}/reports/${idA}/step/${step}`, { waitUntil: "networkidle" });

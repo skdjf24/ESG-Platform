@@ -150,7 +150,7 @@ export function StepTwo() {
         eyebrow="Step 2 · Materiality"
         title="ESG 实质性议题评估"
         description="调整议题范围，选择评估方式，并从财务重要性与影响重要性两个维度形成评估结果。所有重要性结论均由用户最终确认。"
-        completed
+        completed={confirmed}
         action={
           <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dbe2de] bg-white px-4 text-xs font-semibold text-[#536159] hover:bg-[#f6f8f7]">
             <ClipboardCheck className="size-4" />查看评估记录
@@ -160,10 +160,10 @@ export function StepTwo() {
 
       <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#e0e6e2] bg-[#e7ece9] sm:grid-cols-5">
         {[
-          ["01", "议题调整", "已完成"],
+          ["01", "议题调整", includedIds.size ? "已选择" : "待选择"],
           ["02", "评估方式", "已选择"],
           ["03", "双重重要性", `${scoredTopics.length} 项已评分`],
-          ["04", "重要性矩阵", "已生成"],
+          ["04", "重要性矩阵", scoredTopics.length ? "已生成" : "待评分"],
           ["05", "结果确认", confirmed ? "已确认" : "待确认"],
         ].map(([number, label, state], index) => (
           <div key={number} className={`bg-white px-4 py-3.5 ${index === 4 && !confirmed ? "sm:bg-amber-50/40" : ""}`}>
