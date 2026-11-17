@@ -9,6 +9,7 @@ import { StepOne } from "@/components/workbench/step-one";
 import { StepThree } from "@/components/workbench/step-three";
 import { StepTwo } from "@/components/workbench/step-two";
 import { WorkbenchShell } from "@/components/workbench/workbench-shell";
+import { projectIdFromRoute } from "@/lib/project/route-id";
 
 export default async function ReportStepPage({
   params,
@@ -17,7 +18,8 @@ export default async function ReportStepPage({
   params: Promise<{ projectId: string; step: string }>;
   searchParams: Promise<{ chapterId?: string; blockId?: string; requirementId?: string; factId?: string }>;
 }) {
-  const { projectId, step: stepParam } = await params;
+  const { projectId: routeProjectId, step: stepParam } = await params;
+  const projectId = projectIdFromRoute(routeProjectId);
   const { chapterId, blockId, requirementId, factId } = await searchParams;
   const step = Number(stepParam);
 

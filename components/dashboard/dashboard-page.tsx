@@ -32,7 +32,7 @@ import { Notice } from "@/components/ui/notice";
 import { projectRepository } from "@/lib/project/repository";
 import { copyProjectToNextYear, downloadProjectBackup, restoreProjectBackup } from "@/lib/project/operations";
 import { requestPersistentStorage, storageEstimate } from "@/lib/project/indexed-db";
-import { createProjectData } from "@/lib/project/seed";
+import { createSampleProjectData } from "@/lib/project/seed";
 import { APP_VERSION, PUBLIC_FEEDBACK_URL, PUBLIC_PREVIEW_SAMPLE_PROJECT_ID } from "@/lib/app-config";
 import type { ProjectSummary } from "@/lib/types/project-data";
 
@@ -138,7 +138,7 @@ export function DashboardPage() {
     setBusy(true);
     try {
       if (!await projectRepository.exists(PUBLIC_PREVIEW_SAMPLE_PROJECT_ID)) {
-        await projectRepository.importProject(createProjectData(PUBLIC_PREVIEW_SAMPLE_PROJECT_ID, { title: "示例 ESG 报告项目", enterpriseName: "华澜新材料（示例）", year: 2025 }));
+        await projectRepository.importProject(createSampleProjectData(PUBLIC_PREVIEW_SAMPLE_PROJECT_ID, { title: "示例 ESG 报告项目", enterpriseName: "华澜新材料（示例）", year: 2025 }));
         await refreshProjects();
       }
       router.push(`/reports/${PUBLIC_PREVIEW_SAMPLE_PROJECT_ID}/step/1`);

@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import type { ProjectStep, ReportProjectData } from "@/lib/types/project-data";
-import { createProjectData } from "@/lib/project/seed";
+import { createBlankProjectData } from "@/lib/project/seed";
 import { projectRepository, ProjectStorageError } from "@/lib/project/repository";
 
 interface ProjectState {
@@ -51,7 +51,7 @@ interface ProjectDataContextValue extends ProjectState {
 const ProjectDataContext = createContext<ProjectDataContextValue | null>(null);
 
 export function ProjectDataProvider({ projectId, children }: { projectId: string; children: React.ReactNode }) {
-  const seed = createProjectData(projectId);
+  const seed = createBlankProjectData(projectId);
   const [state, dispatch] = useReducer(reducer, {
     project: seed,
     savedProject: seed,
@@ -73,7 +73,7 @@ export function ProjectDataProvider({ projectId, children }: { projectId: string
         if (!active) return;
         setBlocked(true);
         setMessage(error instanceof Error ? error.message : "项目数据读取失败，已停止本地写入。");
-        dispatch({ type: "loaded", project: createProjectData(projectId) });
+        dispatch({ type: "loaded", project: createBlankProjectData(projectId) });
       }
     });
     return () => { active = false; };

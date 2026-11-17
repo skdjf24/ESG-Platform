@@ -35,16 +35,18 @@ async function main() {
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
 
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/7`, { waitUntil: "networkidle" });
-  await waitForProjectReady(page);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
   await clearProjectDatabase(page);
   await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "打开示例项目" }).click();
+  await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/7`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
   await page.getByRole("button", { name: "开始全面检查" }).click();
   await page.getByText(/确定性规则检查已完成/).waitFor({ timeout: 15000 });
   const checkedProject = await readProject(page);
   check(Boolean(checkedProject.quality.fullCheck?.valid), "Step 7.1 全面检查建立有效 gate 记录");
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/8`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
   check(await page.getByText("定稿门禁未通过").isVisible() && await page.getByRole("button", { name: "确认并创建新定稿版本" }).isDisabled(), "Step 7 活动问题未关闭时 Step 8 禁止定稿");
 
@@ -88,7 +90,7 @@ async function main() {
     project.quality.stale = false;
   });
 
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/8`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/8`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
   check(await page.getByText(/Step 7.1 定稿门禁已通过/).isVisible(), "Step 8 直接读取朋友版本的 Step 7.1 gate");
   await page.screenshot({ path: path.join(acceptanceDir, "01-finalization-gate.png"), fullPage: true });
@@ -124,7 +126,7 @@ async function main() {
   const finalPage = await context.newPage();
   finalPage.on("console", (message) => { if (message.type() === "error") browserErrors.push(`final console: ${message.text()}`); });
   finalPage.on("pageerror", (error) => browserErrors.push(`final page: ${error.message}`));
-  await finalPage.goto(`${baseUrl}/reports/hualan-2025/final?print=1`, { waitUntil: "networkidle" });
+  await finalPage.goto(`${baseUrl}/reports/public-preview-sample-2025/final?print=1`, { waitUntil: "networkidle" });
   await waitForProjectReady(finalPage);
   await finalPage.getByText("打印 / 保存 PDF").waitFor({ timeout: 15000 });
   check(await finalPage.getByText("打印 / 保存 PDF").isVisible(), "当前有效版本可以打开最终打印页");
@@ -155,7 +157,7 @@ async function main() {
   check(await page.getByText("定稿门禁未通过").isVisible(), "披露输入变化同时关闭 Step 7.1 gate");
 
   for (let step = 1; step <= 8; step += 1) {
-    const response = await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
+    const response = await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/${step}`, { waitUntil: "networkidle" });
     await waitForProjectReady(page);
     check(response?.ok(), `Step ${step} 既有路由可打开`);
   }

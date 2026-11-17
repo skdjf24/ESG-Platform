@@ -134,6 +134,45 @@ export function createWritingDocument(): WritingDocument {
   };
 }
 
+/** Neutral chapter structure for a newly created enterprise. No sample facts,
+ * citations, paragraphs, cases or historical resources are copied. */
+export function createBlankWritingDocument(projectId: string): WritingDocument {
+  const chapters: WritingChapter[] = reportSections.map((section) => ({
+    id: section.id,
+    title: section.title,
+    order: section.order,
+    ...(section.level === 2 ? { parentId: 'section-4' } : {}),
+    status: '未开始',
+    reviewStatus: '未审校',
+    revision: 1,
+    blocks: [],
+  }));
+  return {
+    schemaVersion: 1,
+    projectId,
+    chapters,
+    facts: [],
+    resources: [],
+    versions: [],
+    policy: {
+      id: 'policy-esg-default',
+      tone: '专业客观',
+      terminology: '',
+      vagueTerms: ['高度重视', '显著提升', '全面领先', '成效显著', '持续赋能'],
+      rules: [
+        { id: 'objective', label: '专业、客观、简洁', enabled: true },
+        { id: 'terms', label: '企业术语一致', enabled: true },
+        { id: 'sources', label: '事实必须有来源', enabled: true },
+        { id: 'numbers', label: '数值和统计口径不得随意修改', enabled: true },
+        { id: 'temporal', label: '区分历史事实、当年事实及未来计划', enabled: true },
+        { id: 'vague', label: '控制空泛表述', enabled: true },
+        { id: 'repetition', label: '减少内容重复', enabled: true },
+        { id: 'evidence', label: '禁止新增无依据的绩效、承诺或荣誉', enabled: true },
+      ],
+    },
+  };
+}
+
 function createWritingResources(): WritingResource[] {
   return [
   ...dataRequirements.filter((item) => item.type === '案例' || item.id === 'data-ethics').map((item): WritingResource => ({

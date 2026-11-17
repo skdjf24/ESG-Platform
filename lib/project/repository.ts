@@ -8,7 +8,7 @@ import type {
   ReportProjectData,
   ReportProjectRepository,
 } from "@/lib/types/project-data";
-import { createProjectData } from "@/lib/project/seed";
+import { createBlankProjectData, createSampleProjectData } from "@/lib/project/seed";
 import { applyWritingDocument, composeWritingDocument, synchronizeProjectData } from "@/lib/project/synchronize";
 import { parseStoredDocument, validateWritingDocument } from "@/lib/writing/document";
 import { ensurePresentationState, isCompatiblePresentationState } from "@/lib/presentation/state";
@@ -207,7 +207,7 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
       const document = legacyWriting ? parseStoredDocument(legacyWriting, projectId) : null;
       if (legacyWriting && !document) throw new ProjectStorageError("incompatible", "检测到损坏的旧 Step 5 草稿；原 localStorage 数据已保留，未创建替代项目。");
       if (document) {
-        project = applyWritingDocument(createProjectData(projectId), document);
+        project = applyWritingDocument(createSampleProjectData(projectId), document);
         project.migrations.push({ id: "migration-step5-writing-v1", from: legacyWritingStorageKey(projectId), migratedAt: new Date().toISOString(), note: "已将旧版 Step 5 草稿迁入 IndexedDB；旧 localStorage 键未删除。" });
       }
     }
@@ -244,11 +244,7 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
     const transaction = database.transaction(PROJECT_STORE, "readonly");
     const record = await requestResult(transaction.objectStore(PROJECT_STORE).get(projectId)) as StoredProjectRecord | undefined;
     await transactionDone(transaction);
-    if (!record) {
-      const project = createProjectData(projectId);
-      await this.importProject(project);
-      return reconcileFileStatus(project);
-    }
+    if (!record) throw new ProjectStorageError("not-found", "项目不存在。请从项目列表新建或打开示例项目。");
     if (record.storageSchemaVersion !== STORAGE_SCHEMA_VERSION) throw new ProjectStorageError("incompatible", "本地项目存储版本不兼容，原数据未被覆盖。");
     return reconcileFileStatus(normalizeProjectData(record.project, projectId));
   }
@@ -293,7 +289,7 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
     let projectId = baseId;
     let suffix = 2;
     while (await this.exists(projectId)) projectId = `${baseId}-${suffix++}`;
-    const project = createProjectData(projectId, input);
+    const project = createBlankProjectData(projectId, input);
     return this.importProject(project);
   }
 

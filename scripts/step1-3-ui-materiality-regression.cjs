@@ -66,7 +66,7 @@ async function main() {
     await page.getByRole("button", { name: "创建并开始" }).click();
     await page.waitForURL(/\/reports\/[^/]+\/step\/1/);
     await page.locator('[aria-busy="false"]').first().waitFor();
-    const projectId = new URL(page.url()).pathname.split("/")[2];
+    let projectId = decodeURIComponent(new URL(page.url()).pathname.split("/")[2]);
     let project = await readProject(page, projectId);
     check(projectId !== "hualan-2025" && project.topics.length > 0, "STEP1-SEED", "新项目保留初始议题数据且使用动态 projectId");
     check(!project.report.frameworks.some((item) => item.includes("CASS")) && !project.disclosureRequirements.some((item) => item.framework.includes("CASS")), "STEP1-NO-CASS", "新项目未选择 CASS，矩阵也没有 CASS 条款");
@@ -78,9 +78,9 @@ async function main() {
     check(!await page.getByText("初始 ESG 议题池").count() && !await page.getByRole("button", { name: "新增议题" }).count(), "STEP1-TOPIC-UI", "Step 1 初始议题池及其操作入口已移除");
     const bseOption = frameworkSection.locator("label").filter({ hasText: "北交所指引" });
     await bseOption.click();
-    check((await bseOption.locator("input").isChecked()) && await frameworkSection.getByText("已选择 3 项").isVisible(), "STEP1-BSE-SELECT", "北交所可选中，已选数量更新");
+    check((await bseOption.locator("input").isChecked()) && await frameworkSection.getByText("已选择 1 项").isVisible(), "STEP1-BSE-SELECT", "北交所可选中，已选数量更新");
     await bseOption.click();
-    check(!(await bseOption.locator("input").isChecked()) && await frameworkSection.getByText("已选择 2 项").isVisible(), "STEP1-BSE-DESELECT", "北交所可取消，已选数量更新");
+    check(!(await bseOption.locator("input").isChecked()) && await frameworkSection.getByText("已选择 0 项").isVisible(), "STEP1-BSE-DESELECT", "北交所可取消，已选数量更新");
     await bseOption.click();
     await page.screenshot({ path: path.join(evidenceDir, "step1-desktop.png"), fullPage: true });
     await save(page);
@@ -97,6 +97,10 @@ async function main() {
     await tableLayout(page, "STEP3-DESKTOP", false);
     await page.screenshot({ path: path.join(evidenceDir, "step3-desktop.png"), fullPage: true });
 
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "打开示例项目" }).click();
+    await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
+    projectId = "public-preview-sample-2025";
     await openStep(page, projectId, 7);
     await page.getByRole("button", { name: "开始全面检查" }).click();
     await page.getByText(/确定性规则检查已完成/).waitFor({ timeout: 20_000 });

@@ -26,7 +26,7 @@ async function waitForStored(page, predicate, timeout = 8_000) {
 }
 
 async function openStep(page, step, query = "") {
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}${query}`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/${step}${query}`, { waitUntil: "networkidle" });
   await page.waitForTimeout(250);
 }
 
@@ -45,9 +45,12 @@ async function main() {
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => browserErrors.push(`pageerror: ${error.message}`));
 
-  await openStep(page, 7);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
   await clearProjectDatabase(page);
   await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "打开示例项目" }).click();
+  await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
+  await openStep(page, 7);
   assert(await page.getByRole("heading", { name: "报告质量与披露完整性检查" }).isVisible(), "Step 7 工作台可实际打开");
   await page.getByRole("button", { name: "开始全面检查" }).click();
   let project = await waitForStored(page, (value) => value.quality?.runs?.length === 1);

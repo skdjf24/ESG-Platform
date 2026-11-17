@@ -8,14 +8,75 @@ import {
   reportSections,
 } from "@/lib/data/mock-data";
 import type { ReportProjectData } from "@/lib/types/project-data";
-import { createWritingDocument } from "@/lib/writing/document";
+import { createBlankWritingDocument, createWritingDocument } from "@/lib/writing/document";
 import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
 import { createFinalizationState } from "@/lib/finalization/state";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
 
-export function createProjectData(projectId: string, options?: { title?: string; enterpriseName?: string; year?: number }): ReportProjectData {
+interface SeedOptions { title?: string; enterpriseName?: string; year?: number }
+
+export function createBlankProjectData(projectId: string, options?: SeedOptions): ReportProjectData {
+  const now = new Date().toISOString();
+  const year = options?.year ?? new Date().getFullYear();
+  const enterpriseName = options?.enterpriseName?.trim() ?? "";
+  const writingDocument = createBlankWritingDocument(projectId);
+  return {
+    schemaVersion: 2,
+    projectKind: "blank",
+    projectId,
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
+    enterprise: {
+      id: `enterprise-${projectId}`,
+      name: enterpriseName,
+      shortName: enterpriseName,
+      unifiedSocialCreditCode: "",
+      industryCode: "",
+      industryName: "",
+      otherIndustries: [],
+      listingStatus: "未上市",
+      stockCode: "",
+      headquarters: "",
+      employeeCount: null,
+      reportingContact: { name: "", department: "", email: "" },
+    },
+    report: {
+      id: projectId,
+      enterpriseId: `enterprise-${projectId}`,
+      title: options?.title?.trim() ?? "",
+      year,
+      reportingPeriod: { start: `${year}-01-01`, end: `${year}-12-31` },
+      frameworks: [],
+      state: "draft",
+      progress: 0,
+      currentStep: 1,
+      updatedAt: now,
+      owner: "",
+    },
+    boundary: { items: [], note: "" },
+    topics: esgTopics.map((topic) => ({ id: topic.id, category: topic.category, name: topic.name,
+      origin: "通用候选" as const, financialScore: 0, impactScore: 0, confirmed: false })),
+    materiality: { method: "综合评估", includedTopicIds: esgTopics.map((topic) => topic.id), confirmed: false, revision: 1 },
+    disclosureRequirements: [],
+    reportSections: reportSections.map((section) => ({ ...structuredClone(section), description: "", topics: [],
+      requirementCount: 0, state: "待完善" as const, revision: 1, sourceState: "active" as const })),
+    dataRequirements: [],
+    sources: [],
+    facts: [],
+    resources: [],
+    writing: { schemaVersion: 1, chapters: writingDocument.chapters, policy: writingDocument.policy, versions: [] },
+    presentation: createPresentationState(projectId, [], false),
+    quality: createQualityState(),
+    finalization: createFinalizationState(),
+    impacts: [],
+    migrations: [],
+  };
+}
+
+export function createSampleProjectData(projectId: string, options?: SeedOptions): ReportProjectData {
   const writingDocument = createWritingDocument();
   const boundary = {
     items: [
@@ -38,6 +99,7 @@ export function createProjectData(projectId: string, options?: { title?: string;
   reportData.reportingPeriod = { start: `${year}.01.01`, end: `${year}.12.31` };
   return {
     schemaVersion: 2,
+    projectKind: "sample",
     projectId,
     revision: 1,
     createdAt: seedTimestamp,

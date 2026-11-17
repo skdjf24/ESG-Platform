@@ -6,6 +6,7 @@ export type Applicability = "适用" | "不适用" | "待确认";
 export type CollectionState = "待分工" | "待收集" | "收集中" | "待确认" | "已确认";
 export type SourceKind = "file" | "online" | "historical" | "manual";
 import type { ParserStatus, SourceLocator } from "@/lib/types/parsing";
+import type { IndustryClassification } from "@/lib/industry/classification";
 
 export interface Enterprise {
   id: string;
@@ -14,10 +15,12 @@ export interface Enterprise {
   unifiedSocialCreditCode: string;
   industryCode: string;
   industryName: string;
+  primaryIndustry?: IndustryClassification;
+  otherIndustries?: IndustryClassification[];
   listingStatus: ListingStatus;
   stockCode?: string;
   headquarters: string;
-  employeeCount: number;
+  employeeCount: number | null;
   reportingContact: {
     name: string;
     department: string;
@@ -71,7 +74,7 @@ export interface EsgTopic {
   id: string;
   category: EsgCategory;
   name: string;
-  origin: "披露框架" | "历史报告" | "用户新增";
+  origin: "披露框架" | "历史报告" | "用户新增" | "通用候选";
   financialScore: number;
   impactScore: number;
   confirmed: boolean;

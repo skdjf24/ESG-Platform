@@ -9,7 +9,7 @@ import { ExcelParser } from "../lib/parsing/parsers/excel-parser";
 import { PdfParser } from "../lib/parsing/parsers/pdf-parser";
 import { checksumBlob } from "../lib/parsing/security";
 import { markProjectSourceNeedsReview } from "../lib/parsing/service";
-import { createProjectData } from "../lib/project/seed";
+import { createSampleProjectData } from "../lib/project/seed";
 import { synchronizeProjectData } from "../lib/project/synchronize";
 import type { ProjectFileRecord } from "../lib/types/project-data";
 
@@ -71,7 +71,7 @@ check(pdf.document.blocks[1].locator.page === 2 && pdf.document.blocks[1].text.i
 
 check(Boolean(energyCandidate), "P2-CANDIDATE-PRESENT", "指标候选存在以供确认测试");
 if (!energyCandidate) throw new Error("Fixture candidate missing");
-let project = createProjectData("hualan-2025");
+let project = createSampleProjectData("hualan-2025");
 project = {
   ...project,
   sources: [...project.sources, { id: energyCandidate.sourceId, name: excelFile.name, kind: "file", fileType: "XLSX", fileId: excelFile.fileId, mimeType: excelFile.mimeType, fileStatus: "available", parserStatus: "parsed", uploadedAt: "2026-11-02", uploadedBy: "Phase 2 test", state: "已解析" }],

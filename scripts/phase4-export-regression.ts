@@ -1,7 +1,7 @@
 import { strFromU8, unzipSync } from "fflate";
 import { createFinalReportDocx } from "../lib/export/docx";
 import { finalizationFingerprint } from "../lib/finalization/state";
-import { createProjectData } from "../lib/project/seed";
+import { createSampleProjectData } from "../lib/project/seed";
 import type { FinalReportVersion } from "../lib/types/finalization";
 import type { ContentBlock } from "../lib/types/writing";
 
@@ -36,7 +36,7 @@ function block(overrides: Partial<ContentBlock>): ContentBlock {
   };
 }
 
-const project = createProjectData("phase4-export-regression", {
+const project = createSampleProjectData("phase4-export-regression", {
   enterpriseName: "端到端导出测试有限公司",
   year: 2027,
 });

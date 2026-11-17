@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createAiEvidence } from "../lib/ai/evidence";
 import { finalizeSemanticReview, finalizeWritingResponse, validateSemanticReviewRequest, validateWritingAiRequest, type SemanticModelOutput, type WritingAiApiRequest, type WritingModelOutput } from "../lib/ai/contracts";
 import { resolveAiProviderConfig, runAiSemanticReview, runAiWriting } from "../lib/ai/provider-server";
-import { createProjectData } from "../lib/project/seed";
+import { createSampleProjectData } from "../lib/project/seed";
 import { getStep8QualityGate } from "../lib/quality/validity";
 
 const results: string[] = [];
@@ -17,7 +17,7 @@ function fakeResponse(output: unknown, id = "resp_phase3") {
 }
 
 async function main() {
-  const project = createProjectData("phase3-regression");
+  const project = createSampleProjectData("phase3-regression");
   const evidence = createAiEvidence(project.facts, project.resources);
   check(evidence.every((item) => item.sourceReferences.length > 0), "仅组装带来源的 AI 证据");
   check(evidence.every((item) => item.kind !== "fact" || project.facts.find((fact) => fact.id === item.entityId)?.state === "已确认"), "未确认事实不进入 AI 证据");

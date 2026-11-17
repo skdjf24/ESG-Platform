@@ -32,7 +32,7 @@ async function createProject(page, title, enterprise) {
   await page.getByLabel("报告年度").fill("2026");
   await page.getByRole("button", { name: "创建并开始" }).click();
   await page.waitForURL(/\/reports\/[^/]+\/step\/1$/);
-  return new URL(page.url()).pathname.split("/")[2];
+  return decodeURIComponent(new URL(page.url()).pathname.split("/")[2]);
 }
 
 async function main() {
