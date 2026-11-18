@@ -118,7 +118,14 @@ async function main() {
     await page.screenshot({ path: path.join(evidenceDir, "blank-step1-narrow.png"), fullPage: true });
     await page.getByLabel("行业门类").selectOption("C");
     await page.getByLabel("行业大类").selectOption("26");
-    check(await page.getByLabel("行业大类").inputValue() === "26", "NARROW-SELECT", "窄屏可操作四级行业选择器");
+    await page.getByLabel("行业中类").selectOption("261");
+    await page.getByLabel("行业小类").selectOption("2614");
+    await page.getByRole("button", { name: "确认主营行业" }).click();
+    await page.getByRole("button", { name: "保存基础信息" }).click();
+    await page.reload({ waitUntil: "networkidle" });
+    await ready(page);
+    const narrowIndustry = (await readProject(page, idB)).enterprise.primaryIndustry;
+    check(narrowIndustry?.code === "2614" && narrowIndustry.level === 4 && narrowIndustry.parentCode === "261" && await page.getByLabel("行业小类").count() === 1, "NARROW-SELECT", "窄屏四级选择保存并在刷新后恢复代码、层级和上级关系");
     check(browserErrors.length === 0, "BROWSER-ERRORS", "Chromium console/page errors 为零");
   } catch (error) {
     fatal = error instanceof Error ? error.stack : String(error);
