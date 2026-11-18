@@ -1,0 +1,149 @@
+{
+  "baseUrl": "http://127.0.0.1:4325",
+  "testedGitHead": "0a3b6ae64dd9bf6e4008b8a30a52637653a54236",
+  "branch": "fix/blank-project-industry-gbt4754-20261117",
+  "chromiumVersion": "154.0.8037.57",
+  "generatedAt": "2026-11-18T02:22:00.235Z",
+  "totals": {
+    "pass": 27,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": "BLANK-A",
+      "status": "PASS",
+      "detail": "新建项目写入空白种子与填写的企业名称"
+    },
+    {
+      "id": "BLANK-PROFILE",
+      "status": "PASS",
+      "detail": "企业画像、行业和披露框架未继承样本"
+    },
+    {
+      "id": "BLANK-DATA",
+      "status": "PASS",
+      "detail": "来源、事实、正文和图表观测值为空"
+    },
+    {
+      "id": "BLANK-TOPICS",
+      "status": "PASS",
+      "detail": "通用候选议题未评分、未确认"
+    },
+    {
+      "id": "BLANK-PROGRESS",
+      "status": "PASS",
+      "detail": "质量未检查、未定稿且进度为零"
+    },
+    {
+      "id": "PRIMARY-REQUIRED",
+      "status": "PASS",
+      "detail": "未选主营行业时 Step 1 保持进行中，不能进入下一步"
+    },
+    {
+      "id": "SEARCH-NAME",
+      "status": "PASS",
+      "detail": "按名称搜索后显示完整分类路径"
+    },
+    {
+      "id": "OTHER-DEDUP",
+      "status": "PASS",
+      "detail": "重复行业不能添加第二次"
+    },
+    {
+      "id": "OTHER-MULTI",
+      "status": "PASS",
+      "detail": "多个其他行业可独立添加"
+    },
+    {
+      "id": "INDUSTRY-SAVE",
+      "status": "PASS",
+      "detail": "主营行业层级与其他行业独立持久化，无重复"
+    },
+    {
+      "id": "INDUSTRY-REFRESH",
+      "status": "PASS",
+      "detail": "刷新后行业选择恢复"
+    },
+    {
+      "id": "STEP2-UNSCORED",
+      "status": "PASS",
+      "detail": "Step 2 进行中并显示待评分，未显示样本评分"
+    },
+    {
+      "id": "BLANK-STEP-1",
+      "status": "PASS",
+      "detail": "空白项目 Step 1 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-2",
+      "status": "PASS",
+      "detail": "空白项目 Step 2 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-3",
+      "status": "PASS",
+      "detail": "空白项目 Step 3 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-4",
+      "status": "PASS",
+      "detail": "空白项目 Step 4 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-5",
+      "status": "PASS",
+      "detail": "空白项目 Step 5 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-6",
+      "status": "PASS",
+      "detail": "空白项目 Step 6 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-7",
+      "status": "PASS",
+      "detail": "空白项目 Step 7 可进入且无示例企业内容"
+    },
+    {
+      "id": "BLANK-STEP-8",
+      "status": "PASS",
+      "detail": "空白项目 Step 8 可进入且无示例企业内容"
+    },
+    {
+      "id": "STEP4-NO-MOCK",
+      "status": "PASS",
+      "detail": "空白项目资料页不显示示例指标"
+    },
+    {
+      "id": "SAMPLE-ENTRY",
+      "status": "PASS",
+      "detail": "示例入口保留完整华澜内容"
+    },
+    {
+      "id": "LEGACY-C26",
+      "status": "PASS",
+      "detail": "旧格式 C26 正确识别且原值保留"
+    },
+    {
+      "id": "THREE-PROJECTS",
+      "status": "PASS",
+      "detail": "两个空白项目和一个示例项目使用独立 ID 与数据"
+    },
+    {
+      "id": "PROJECT-ISOLATION",
+      "status": "PASS",
+      "detail": "修改项目 B 不影响项目 A 或示例项目"
+    },
+    {
+      "id": "NARROW-SELECT",
+      "status": "PASS",
+      "detail": "窄屏四级选择保存并在刷新后恢复代码、层级和上级关系"
+    },
+    {
+      "id": "BROWSER-ERRORS",
+      "status": "PASS",
+      "detail": "Chromium console/page errors 为零"
+    }
+  ],
+  "browserErrors": []
+}
