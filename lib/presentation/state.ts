@@ -82,7 +82,7 @@ export function snapshotObservation(observation: MetricObservation): ChartObserv
   };
 }
 
-export function createPresentationState(projectId: string, facts: WritingFact[]): ReportPresentationState {
+export function createPresentationState(projectId: string, facts: WritingFact[], includeSampleObservations = true): ReportPresentationState {
   const theme = getReportTheme("verdant-professional");
   return {
     schemaVersion: 2,
@@ -104,7 +104,7 @@ export function createPresentationState(projectId: string, facts: WritingFact[])
     },
     observations: [
       ...facts.map((fact) => observationFromFact(projectId, fact)),
-      ...createChartSampleObservations(projectId),
+      ...(includeSampleObservations ? createChartSampleObservations(projectId) : []),
     ],
     charts: [],
     preview: { mode: "continuous", readingMode: "editing", zoom: 0.72 },
@@ -187,8 +187,10 @@ function normalizeChart(raw: unknown, observations: MetricObservation[]): Report
 }
 
 export function ensurePresentationState(project: Omit<ReportProjectData, "presentation"> & { presentation?: unknown }): ReportProjectData {
-  const base = createPresentationState(project.projectId, project.facts);
   const raw = project.presentation;
+  const includeSampleObservations = project.projectKind === "sample" || (isCompatiblePresentationState(raw)
+    && raw.observations.some((item) => isRecord(item) && item.sampleKind === "明确模拟样本"));
+  const base = createPresentationState(project.projectId, project.facts, includeSampleObservations);
   if (!isCompatiblePresentationState(raw)) {
     return {
       ...project,
@@ -251,7 +253,7 @@ export function synchronizeObservations(project: ReportProjectData, changedFactI
     const existing = current.get(fact.id);
     return existing && !ids.has(fact.id) ? existing : derived;
   });
-  const nextObservations = [...factObservations, ...createChartSampleObservations(project.projectId)];
+  const nextObservations = [...factObservations, ...project.presentation.observations.filter((item) => item.sampleKind === "明确模拟样本")];
   const changedObservationIds = nextObservations.filter((item) => ids.has(item.metricId)).map((item) => item.observationId);
   const changedSet = new Set(changedObservationIds);
   const charts = project.presentation.charts.map((chart) => {

@@ -33,7 +33,7 @@ async function createProject(page, { title, enterpriseName, year }) {
   await page.getByRole("button", { name: "创建并开始" }).click();
   await page.waitForURL(/\/reports\/[^/]+\/step\/1/);
   await waitForReady(page);
-  return new URL(page.url()).pathname.split("/")[2];
+  return decodeURIComponent(new URL(page.url()).pathname.split("/")[2]);
 }
 
 async function main() {

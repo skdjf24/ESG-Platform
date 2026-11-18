@@ -15,7 +15,7 @@ async function openProjectDatabase(page) {
   }, { databaseName: DATABASE_NAME, databaseVersion: DATABASE_VERSION });
 }
 
-async function readProject(page, projectId = "hualan-2025") {
+async function readProject(page, projectId = "public-preview-sample-2025") {
   return page.evaluate(async ({ databaseName, projectStore, projectId }) => {
     const request = indexedDB.open(databaseName);
     const database = await new Promise((resolve, reject) => {
@@ -64,7 +64,7 @@ async function writeProject(page, project, projectId = project.projectId) {
   }, { databaseName: DATABASE_NAME, projectStore: PROJECT_STORE, projectId, project });
 }
 
-async function mutateProject(page, mutator, argument, projectId = "hualan-2025") {
+async function mutateProject(page, mutator, argument, projectId = "public-preview-sample-2025") {
   const project = await readProject(page, projectId);
   if (!project) throw new Error(`IndexedDB project ${projectId} not found`);
   const draft = structuredClone(project);

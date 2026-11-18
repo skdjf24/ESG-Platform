@@ -91,6 +91,7 @@ export interface MigrationRecord {
 
 export interface ReportProjectData {
   schemaVersion: 2;
+  projectKind?: "blank" | "sample";
   projectId: string;
   revision: number;
   createdAt: string;

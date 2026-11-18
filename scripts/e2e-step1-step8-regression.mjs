@@ -31,7 +31,7 @@ function finding(severity, id, title, evidence, impact, recommendation) {
 function observation(overrides = {}) {
   return {
     observationId: "e2e-observation",
-    projectId: "hualan-2025",
+    projectId: "public-preview-sample-2025",
     metricId: "e2e-metric",
     metricDefinitionId: "e2e-definition",
     metricName: "E2E 模拟指标",
@@ -111,7 +111,7 @@ async function reloadProject(page, timeout = 90_000) {
 }
 
 async function openStep(page, step) {
-  const response = await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
+  const response = await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/${step}`, { waitUntil: "networkidle" });
   record(Boolean(response?.ok()), `ROUTE-${step}`, `Step ${step} 路由可打开`, String(response?.status()));
   await waitForProjectReady(page);
 }
@@ -199,6 +199,7 @@ async function main() {
   page.on("dialog", (dialog) => dialog.accept());
   page.on("console", (message) => { if (message.type() === "error" && !message.text().includes("favicon")) browserErrors.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
+  await page.route("**/api/ai/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ configured: true, provider: "openai", model: "e2e-test-double" }) }));
   await page.route("**/api/ai/writing", async (route) => {
     const request = route.request().postDataJSON();
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
@@ -218,9 +219,13 @@ async function main() {
     }) });
   });
 
-  await openStep(page, 1);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
   await clearProjectDatabase(page);
-  await reloadProject(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "打开示例项目" }).click();
+  await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
+  await waitForProjectReady(page);
+  record(true, "ROUTE-1", "Step 1 路由可打开");
   await page.getByLabel("企业全称").fill(projectLabel);
   await page.getByLabel("报告年度").fill("2026");
   await page.getByLabel("报告期开始").fill("2026.01.01");
@@ -238,9 +243,11 @@ async function main() {
   record(await page.getByLabel("企业全称").inputValue() === projectLabel, "STEP1-DYNAMIC", "Step 1 使用最新企业信息作为当前项目状态");
 
   const industryBefore = `${project.enterprise.industryCode}:${project.enterprise.industryName}`;
-  await page.getByLabel("行业分类").selectOption("I65");
+  await page.getByLabel("行业门类").selectOption("I");
+  await page.getByLabel("行业大类").selectOption("65");
+  await page.getByRole("button", { name: "确认主营行业" }).click();
   await page.getByRole("button", { name: "保存基础信息" }).click();
-  const industryAfter = await waitForStored(page, (value) => value.enterprise.industryCode === "I65");
+  const industryAfter = await waitForStored(page, (value) => value.enterprise.industryCode === "65");
   const industryEditable = `${industryAfter.enterprise.industryCode}:${industryAfter.enterprise.industryName}` !== industryBefore;
   record(industryEditable, "STEP1-INDUSTRY-EDIT", "行业分类可编辑并可进入保存流程");
   await page.getByLabel("选择历史报告文件").setInputFiles({ name: "E2E-历史报告-明确模拟.pdf", mimeType: "application/pdf", buffer: Buffer.from("E2E mock PDF metadata only") });
@@ -326,9 +333,13 @@ async function main() {
   const sourceCountBefore = project.sources.length;
   await page.getByRole("button", { name: /上传资料/ }).click();
   record(await page.getByText(/文件字节保存到本地 IndexedDB；保存后可进入“解析结果 \/ 候选确认”执行本地解析/).isVisible(), "STEP4-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和待解析边界");
+  record(await page.locator("#requirement-select").inputValue() === project.dataRequirements[0]?.id, "STEP4-TASK-DEFAULT", "资料项加载后默认关联有效任务");
   await page.getByLabel("选择资料文件").setInputFiles({ name: "E2E-能源资料-明确模拟.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("E2E mock spreadsheet metadata only") });
   await page.getByRole("button", { name: "保存来源记录" }).click();
-  await saveFooter(page);
+  await page.getByRole("dialog", { name: "上传资料文件" }).waitFor({ state: "hidden", timeout: 15_000 }).catch(async (error) => {
+    console.error("Step 4 upload diagnostic", { alerts: await page.locator('[role="alert"]').allTextContents(), statuses: await page.locator('[role="status"]').allTextContents() });
+    throw error;
+  });
   project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-能源资料-明确模拟.xlsx"));
   const uploadedSource = project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx");
   const uploadedFiles = await readProjectFiles(page, project.projectId);
@@ -451,7 +462,7 @@ async function main() {
   // 乐观并发冲突：第二页持有旧 revision，第一页先保存。
   const stalePage = await context.newPage();
   await openStep(stalePage, 1);
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/1`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/1`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
   await page.getByLabel("报告联系人姓名").fill("E2E Page A");
   await page.getByRole("button", { name: "保存基础信息" }).click();
@@ -492,7 +503,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     baseUrl,
     testProject: projectLabel,
-    dataPolicy: "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。",
+    dataPolicy: "独立浏览器 context + 清空 IndexedDB/localStorage；图表数据明确标记为模拟，不作为正式披露。AI status 与写作/审校接口在浏览器边界使用测试替身，未调用外部模型。",
     totals: { pass: results.filter((item) => item.status === "PASS").length, fail: results.filter((item) => item.status === "FAIL").length, findings: findings.length },
     results,
     findings,

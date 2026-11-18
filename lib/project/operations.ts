@@ -217,7 +217,7 @@ export async function copyProjectToNextYear(projectId: string, targetYear?: numb
       versions: [],
       savedAt: undefined,
     },
-    presentation: createPresentationState(newProjectId, facts),
+    presentation: createPresentationState(newProjectId, facts, source.presentation.observations.some((item) => item.sampleKind === "明确模拟样本")),
     quality: createQualityState(),
     finalization: createFinalizationState(),
     impacts: [],

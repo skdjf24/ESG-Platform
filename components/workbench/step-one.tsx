@@ -5,7 +5,6 @@ import {
   Building2,
   CalendarDays,
   Check,
-  ChevronDown,
   CircleDot,
   Download,
   FileCheck2,
@@ -28,16 +27,10 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
 import { DocumentParsingError, markProjectSourceNeedsReview, parseProjectFile } from "@/lib/parsing/service";
+import { IndustrySelector } from "@/components/workbench/industry-selector";
 
 const fieldClass = "h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-[13px] text-[#29362f] outline-none transition placeholder:text-[#a0aaa4] focus:border-[#69a28b] focus:ring-2 focus:ring-[#176b52]/10";
 const listingOptions: ListingStatus[] = ["A股", "H股", "A+H", "未上市"];
-const industryOptions = [
-  { code: "C26", name: "化学原料和化学制品制造业" },
-  { code: "C27", name: "医药制造业" },
-  { code: "C29", name: "橡胶和塑料制品业" },
-  { code: "D44", name: "电力、热力生产和供应业" },
-  { code: "I65", name: "软件和信息技术服务业" },
-] as const;
 export function StepOne() {
   const { project, editProject, saveProject, dirty, saving, setMessage } = useProjectData();
   const historyInputRef = useRef<HTMLInputElement>(null);
@@ -172,7 +165,7 @@ export function StepOne() {
         eyebrow="Step 1 · 基础设置"
         title="创建报告与企业基础画像"
         description="确认本年度报告的企业信息、编制边界与参考框架。议题范围与评分请在 Step 2 调整。"
-        completed
+        completed={Boolean(enterprise.industryCode)}
         action={<button disabled={saving} onClick={() => void saveProject(1, "Step 1 基础信息保存")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#506057] hover:bg-[#f7f9f8] disabled:opacity-50"><FileCheck2 className="size-4 text-[#176b52]" />{saving ? "保存中…" : dirty ? "保存基础信息" : "基础信息已保存"}</button>}
       />
 
@@ -187,32 +180,15 @@ export function StepOne() {
               <Field label="企业全称" icon={<Building2 className="size-3.5" />}><input aria-label="企业全称" className={fieldClass} value={enterprise.name} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, name: event.target.value } }))} /></Field>
               <Field label="统一社会信用代码"><input aria-label="统一社会信用代码" className={fieldClass} value={enterprise.unifiedSocialCreditCode} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, unifiedSocialCreditCode: event.target.value } }))} /></Field>
               <Field label="总部所在地" icon={<MapPin className="size-3.5" />}><input aria-label="总部所在地" className={fieldClass} value={enterprise.headquarters} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, headquarters: event.target.value } }))} /></Field>
-              <Field label="员工人数" icon={<Users className="size-3.5" />}><div className="relative"><input aria-label="员工人数" className={`${fieldClass} pr-12`} type="number" value={enterprise.employeeCount} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, employeeCount: Number(event.target.value) || 0 } }))} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8b9590]">人</span></div></Field>
-              <Field label="报告年度与报告期" icon={<CalendarDays className="size-3.5" />}><div className="grid grid-cols-[90px_1fr_12px_1fr] items-center gap-2"><input aria-label="报告年度" className={fieldClass} type="number" value={report.year} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, year: Number(event.target.value) || current.report.year } }))} /><input aria-label="报告期开始" className={fieldClass} value={report.reportingPeriod.start} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, start: event.target.value } } }))} /><span className="text-[#a0aaa4]">—</span><input aria-label="报告期结束" className={fieldClass} value={report.reportingPeriod.end} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, end: event.target.value } } }))} /></div></Field>
+              <Field label="员工人数" icon={<Users className="size-3.5" />}><div className="relative"><input aria-label="员工人数" className={`${fieldClass} pr-12`} type="number" min="0" value={enterprise.employeeCount ?? ""} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, employeeCount: event.target.value === "" ? null : Number(event.target.value) } }))} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8b9590]">人</span></div></Field>
+              <Field label="报告年度与报告期" icon={<CalendarDays className="size-3.5" />}><div className="flex flex-col gap-2 sm:flex-row sm:items-center"><input aria-label="报告年度" className={`${fieldClass} sm:w-[90px] sm:shrink-0`} type="number" value={report.year} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, year: Number(event.target.value) || current.report.year } }))} /><input aria-label="报告期开始" className={`${fieldClass} sm:min-w-0`} value={report.reportingPeriod.start} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, start: event.target.value } } }))} /><span className="hidden text-[#a0aaa4] sm:inline">—</span><input aria-label="报告期结束" className={`${fieldClass} sm:min-w-0`} value={report.reportingPeriod.end} onChange={(event) => editProject((current) => ({ ...current, report: { ...current.report, reportingPeriod: { ...current.report.reportingPeriod, end: event.target.value } } }))} /></div></Field>
               <Field label="报告联系人"><div className="grid grid-cols-[.8fr_1.2fr] gap-2"><input aria-label="报告联系人姓名" className={fieldClass} value={enterprise.reportingContact.name} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, reportingContact: { ...current.enterprise.reportingContact, name: event.target.value } } }))} /><input aria-label="报告联系人部门" className={fieldClass} value={enterprise.reportingContact.department} onChange={(event) => editProject((current) => ({ ...current, enterprise: { ...current.enterprise, reportingContact: { ...current.enterprise.reportingContact, department: event.target.value } } }))} /></div></Field>
             </div>
           </SectionCard>
 
           <SectionCard title="行业与上市身份" description="行业依据 GB/T 4754 选择；上市身份仅记录，不触发披露义务判断。">
-            <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-              <Field label="GB/T 4754 国民经济行业分类">
-                <div className="relative">
-                  <select
-                    aria-label="行业分类"
-                    value={enterprise.industryCode}
-                    onChange={(event) => {
-                      const selected = industryOptions.find((item) => item.code === event.target.value);
-                      if (!selected) return;
-                      editProject((current) => ({ ...current, enterprise: { ...current.enterprise, industryCode: selected.code, industryName: selected.name } }));
-                    }}
-                    className={`${fieldClass} appearance-none pr-9`}
-                  >
-                    {industryOptions.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#85908a]" />
-                </div>
-                <p className="mt-2 text-[11px] text-[#87918c]">当前分类：{enterprise.industryCode} · {enterprise.industryName}</p>
-              </Field>
+            <div className="grid gap-6">
+              <Field label="GB/T 4754 国民经济行业分类"><IndustrySelector enterprise={enterprise} onChange={(next) => editProject((current) => ({ ...current, enterprise: next }))} /></Field>
               <Field label="资本市场身份">
                 <div className="grid grid-cols-4 gap-2">
                   {listingOptions.map((item) => (
@@ -252,7 +228,7 @@ export function StepOne() {
           <SectionCard title="画像摘要" description="基于当前已填写信息实时汇总。">
             <div className="space-y-3">
               {[
-                { icon: Globe2, label: "行业", value: `${enterprise.industryCode} ${enterprise.industryName}` },
+                { icon: Globe2, label: "行业", value: enterprise.industryCode ? `${enterprise.industryCode} ${enterprise.industryName}` : "尚未选择" },
                 { icon: CircleDot, label: "上市身份", value: listingStatus },
                 { icon: Paperclip, label: "披露框架", value: `${selectedFrameworkCount} 项` },
                 { icon: FileText, label: "议题记录", value: `${topics.length} 项（Step 2 调整）` },

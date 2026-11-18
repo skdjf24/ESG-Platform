@@ -65,7 +65,7 @@ async function createProject(page) {
   await page.getByRole("button", { name: "创建并开始" }).click();
   await page.waitForURL(/\/reports\/[^/]+\/step\/1/);
   await waitForReady(page);
-  return new URL(page.url()).pathname.split("/")[2];
+  return decodeURIComponent(new URL(page.url()).pathname.split("/")[2]);
 }
 
 async function uploadStep4File(page, projectId, fixtureName) {
@@ -98,9 +98,11 @@ async function readParsingArtifacts(page, projectId) {
 }
 
 async function runMigrationAcceptance(page) {
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/1`, { waitUntil: "networkidle" });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "打开示例项目" }).click();
+  await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
   await waitForReady(page);
-  const sample = await readProject(page, "hualan-2025");
+  const sample = await readProject(page, "public-preview-sample-2025");
   const qualitySnapshot = JSON.stringify(sample.quality);
   const finalizationSnapshot = JSON.stringify(sample.finalization);
   await page.evaluate(async ({ sample }) => {
@@ -148,7 +150,7 @@ async function runMigrationAcceptance(page) {
     database.close();
     return result;
   });
-  const migratedProject = await readProject(page, "hualan-2025");
+  const migratedProject = await readProject(page, "public-preview-sample-2025");
   check(migration.version === 2 && migration.stores.includes("parsedDocuments") && migration.stores.includes("extractionCandidates"), "P2-BROWSER-MIGRATION-STORES", "IndexedDB v1 原地升级为 v2 并创建两个独立解析仓");
   check(migration.text === "PHASE1-PRESERVED-BYTES" && migration.checksum && migration.revision === 1, "P2-BROWSER-MIGRATION-FILE", "Phase 1 文件字节保留并惰性补充 checksum/revision");
   check(JSON.stringify(migratedProject.quality) === qualitySnapshot && JSON.stringify(migratedProject.finalization) === finalizationSnapshot, "P2-BROWSER-MIGRATION-PROJECT", "Step 1–8、quality 与 finalization 数据迁移无损");

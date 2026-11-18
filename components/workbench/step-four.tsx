@@ -56,8 +56,9 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
   const [activeTab, setActiveTab] = useState<Tab>(initialFactId ? "facts" : "tasks");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
   const [selectedRequirementId, setSelectedRequirementId] = useState(dataRequirements[0]?.id ?? "");
+  const effectiveRequirementId = dataRequirements.some((item) => item.id === selectedRequirementId) ? selectedRequirementId : dataRequirements[0]?.id ?? "";
   const [selectedFile, setSelectedFile] = useState<{ file: File; name: string; size: string; fileType: "PDF" | "XLSX" | "DOCX" } | null>(null);
-  const [supplementTitle, setSupplementTitle] = useState("节能改造项目说明");
+  const [supplementTitle, setSupplementTitle] = useState(project.projectKind === "sample" ? "节能改造项目说明" : "");
   const [supplementContent, setSupplementContent] = useState("");
   const [intakeError, setIntakeError] = useState("");
   const [query, setQuery] = useState("");
@@ -134,8 +135,8 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
   }
 
   async function submitIntake() {
-    const requirement = dataRequirements.find((item) => item.id === selectedRequirementId);
-    if (!requirement) {
+    const requirement = dataRequirements.find((item) => item.id === effectiveRequirementId);
+    if (!requirement && dataRequirements.length > 0) {
       setIntakeError("请选择关联资料项。");
       return;
     }
@@ -177,11 +178,11 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
         uploadedBy: project.enterprise.reportingContact.name || "当前用户",
         state: "已上传" as const,
       };
-      const relatedSection = project.reportSections.find((section) => requirement.section === `${section.order} ${section.title}`);
+      const relatedSection = project.reportSections.find((section) => requirement?.section === `${section.order} ${section.title}`);
       const onlineResource = intakeMode === "online" ? [{
         id: `resource-user-${Date.now()}`,
         chapterIds: relatedSection ? [relatedSection.id] : [],
-        kind: requirement.type === "案例" ? "案例" as const : "制度" as const,
+        kind: requirement?.type === "案例" ? "案例" as const : "制度" as const,
         title: supplementTitle.trim(),
         description: supplementContent.trim(),
         confirmed: false,
@@ -192,7 +193,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
         ...project,
         sources: [...project.sources, source],
         resources: [...project.resources, ...onlineResource],
-        dataRequirements: project.dataRequirements.map((item) => item.id === requirement.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" as const : "文件上传" as const, state: "待确认" as const, reviewStatus: "待复核" as const } : item),
+        dataRequirements: project.dataRequirements.map((item) => item.id === requirement?.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" as const : "文件上传" as const, state: "待确认" as const, reviewStatus: "待复核" as const } : item),
       };
       editProject(next);
       if (!await saveProject(4, intakeMode === "upload" ? "保存资料文件" : "保存在线补充", next)) {
@@ -361,7 +362,8 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
 
       {activeTab === "parse" ? <DocumentParsingWorkbench /> : null}
 
-      {activeTab === "normalize" ? (
+      {activeTab === "normalize" && project.projectKind === "blank" ? <SectionCard title="资料规整结果预览" description="上传并解析真实资料后，人工核对提取结果。"><p className="text-xs text-[#7b8880]">尚无已核验的资料规整结果。</p></SectionCard> : null}
+      {activeTab === "normalize" && project.projectKind !== "blank" ? (
         <div className="space-y-4 animate-fade-up">
           <Notice tone="ai" title="示例 AI 规整结果">
             以下内容为模拟结果，仅用于展示未来交互。任何提取内容均需用户对照原始资料后人工确认，系统不会自动写入事实库。
@@ -522,7 +524,8 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
             <div className="space-y-5 p-6">
               <div>
                 <label htmlFor="requirement-select" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">关联资料项</label>
-                <select id="requirement-select" value={selectedRequirementId} onChange={(event) => setSelectedRequirementId(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none focus:border-[#78a28f]">
+                <select id="requirement-select" value={effectiveRequirementId} onChange={(event) => setSelectedRequirementId(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none focus:border-[#78a28f]">
+                  {!dataRequirements.length ? <option value="">暂不关联资料项</option> : null}
                   {dataRequirements.map((item) => <option key={item.id} value={item.id}>{item.itemName}</option>)}
                 </select>
               </div>

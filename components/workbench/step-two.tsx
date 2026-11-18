@@ -66,7 +66,9 @@ export function StepTwo() {
     [filter, query, topics],
   );
   const assessedTopics = topics.filter((topic) => includedIds.has(topic.id));
-  const priorityTopics = assessedTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3);
+  const scoredTopics = assessedTopics.filter((topic) => topic.financialScore >= 1 && topic.impactScore >= 1);
+  const priorityTopics = scoredTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3);
+  const canConfirm = assessedTopics.length > 0 && scoredTopics.length === assessedTopics.length;
 
   function toggleTopic(id: string) {
     const topic = topics.find((item) => item.id === id);
@@ -87,7 +89,7 @@ export function StepTwo() {
   function openTopicEditor(id?: string) {
     const topic = id ? topics.find((item) => item.id === id) : undefined;
     setTopicError("");
-    setTopicEditor(topic ? { id: topic.id, name: topic.name, category: topic.category, financialScore: String(topic.financialScore), impactScore: String(topic.impactScore) } : { name: "", category: "E", financialScore: "3", impactScore: "3" });
+    setTopicEditor(topic ? { id: topic.id, name: topic.name, category: topic.category, financialScore: topic.financialScore ? String(topic.financialScore) : "", impactScore: topic.impactScore ? String(topic.impactScore) : "" } : { name: "", category: "E", financialScore: "", impactScore: "" });
   }
 
   function saveTopicEditor() {
@@ -103,11 +105,12 @@ export function StepTwo() {
     }
     const financialScore = parseScore(topicEditor.financialScore);
     const impactScore = parseScore(topicEditor.impactScore);
-    if (financialScore === null || impactScore === null) {
-      setTopicError("评分须为 1–5 分，且最多保留一位小数。");
+    const unscored = topicEditor.financialScore === "" && topicEditor.impactScore === "";
+    if (!unscored && (financialScore === null || impactScore === null)) {
+      setTopicError("请同时填写两个评分（1–5 分，最多一位小数），或暂时留空待评分。");
       return;
     }
-    const scores = { financialScore, impactScore };
+    const scores = { financialScore: financialScore ?? 0, impactScore: impactScore ?? 0 };
     editProject((current) => {
       const existing = topicEditor.id ? current.topics.find((item) => item.id === topicEditor.id) : undefined;
       const id = existing?.id ?? `topic-user-${Date.now()}`;
@@ -147,7 +150,7 @@ export function StepTwo() {
         eyebrow="Step 2 · Materiality"
         title="ESG 实质性议题评估"
         description="调整议题范围，选择评估方式，并从财务重要性与影响重要性两个维度形成评估结果。所有重要性结论均由用户最终确认。"
-        completed
+        completed={confirmed}
         action={
           <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dbe2de] bg-white px-4 text-xs font-semibold text-[#536159] hover:bg-[#f6f8f7]">
             <ClipboardCheck className="size-4" />查看评估记录
@@ -157,10 +160,10 @@ export function StepTwo() {
 
       <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#e0e6e2] bg-[#e7ece9] sm:grid-cols-5">
         {[
-          ["01", "议题调整", "已完成"],
+          ["01", "议题调整", includedIds.size ? "已选择" : "待选择"],
           ["02", "评估方式", "已选择"],
-          ["03", "双重重要性", `${assessedTopics.length} 项已评分`],
-          ["04", "重要性矩阵", "已生成"],
+          ["03", "双重重要性", `${scoredTopics.length} 项已评分`],
+          ["04", "重要性矩阵", scoredTopics.length ? "已生成" : "待评分"],
           ["05", "结果确认", confirmed ? "已确认" : "待确认"],
         ].map(([number, label, state], index) => (
           <div key={number} className={`bg-white px-4 py-3.5 ${index === 4 && !confirmed ? "sm:bg-amber-50/40" : ""}`}>
@@ -257,13 +260,13 @@ export function StepTwo() {
               );
             })}
           </div>
-          <div className="mt-4 rounded-xl border border-[#e5e9e7] bg-[#fafbfa] p-3.5">
+          {project.projectKind !== "blank" ? <div className="mt-4 rounded-xl border border-[#e5e9e7] bg-[#fafbfa] p-3.5">
             <div className="flex items-center gap-2 text-[11px] font-semibold text-[#3d4a43]"><Users className="size-3.5 text-[#176b52]" />参与范围</div>
             <div className="mt-2 flex -space-x-1.5">
               {["董", "环", "人", "法", "+12"].map((label, index) => <span key={label} className={`grid size-7 place-items-center rounded-full border-2 border-white text-[9px] font-semibold ${index === 4 ? "bg-[#e8ecea] text-[#67736d]" : "bg-[#264b3c] text-white"}`}>{label}</span>)}
             </div>
             <p className="mt-2 text-[10px] leading-4 text-[#858f8a]">董事会办公室等 5 个内部部门及 12 位外部利益相关方</p>
-          </div>
+          </div> : null}
         </SectionCard>
       </div>
 
@@ -271,7 +274,7 @@ export function StepTwo() {
         className="mt-5"
         title="双重重要性评估"
         description="1–5 分制；分值及评估依据可继续调整"
-        action={<StatusBadge tone="blue">{assessedTopics.length} 项已评分</StatusBadge>}
+        action={<StatusBadge tone="blue">{scoredTopics.length} 项已评分</StatusBadge>}
         flush
       >
         <div className="scrollbar-subtle overflow-x-auto">
@@ -296,7 +299,7 @@ export function StepTwo() {
                     <td className="px-4 py-3.5"><ScoreMeter value={topic.financialScore} label={`${topic.name}财务重要性`} onChange={(value) => updateScore(topic.id, "financialScore", value)} /></td>
                     <td className="px-4 py-3.5"><ScoreMeter value={topic.impactScore} label={`${topic.name}影响重要性`} onChange={(value) => updateScore(topic.id, "impactScore", value)} /></td>
                     <td className="px-4 py-3.5"><button className="inline-flex items-center gap-1 text-[#287258] hover:underline">查看依据<ArrowUpRight className="size-3" /></button></td>
-                    <td className="px-5 py-3.5">{topic.confirmed ? <StatusBadge tone="green">已评分</StatusBadge> : <StatusBadge tone="amber">待复核</StatusBadge>}</td>
+                    <td className="px-5 py-3.5">{topic.financialScore === 0 || topic.impactScore === 0 ? <StatusBadge tone="amber">待评分</StatusBadge> : topic.confirmed ? <StatusBadge tone="green">已评分</StatusBadge> : <StatusBadge tone="amber">待复核</StatusBadge>}</td>
                   </tr>
                 );
               })}
@@ -313,7 +316,7 @@ export function StepTwo() {
               <div className="absolute inset-x-0 top-[25%] border-t border-dashed border-[#b7c8c0]" />
               <div className="absolute bottom-0 left-[75%] top-0 border-l border-dashed border-[#b7c8c0]" />
               <span className="absolute right-3 top-3 rounded-md bg-white/80 px-2 py-1 text-[9px] font-semibold text-[#176b52] shadow-sm">重点关注区</span>
-              {assessedTopics.map((topic) => {
+              {scoredTopics.map((topic) => {
                 const style = categoryStyles[topic.category];
                 const left = 6 + ((topic.impactScore - 1) / 4) * 84;
                 const bottom = 6 + ((topic.financialScore - 1) / 4) * 84;
@@ -351,12 +354,13 @@ export function StepTwo() {
             <p className="mt-1">排序基于已录入评分，仅供整理参考，不代表系统自动作出重要性判断。</p>
           </div>
           <label className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#e2e7e4] p-3 text-[10px] leading-5 text-[#59675f]">
-            <input type="checkbox" checked={confirmed} onChange={(event) => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: event.target.checked, confirmedAt: event.target.checked ? new Date().toISOString() : undefined } }))} className="mt-1 size-3.5 accent-[#176b52]" />
+            <input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(event) => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: event.target.checked, confirmedAt: event.target.checked ? new Date().toISOString() : undefined } }))} className="mt-1 size-3.5 accent-[#176b52]" />
             <span>我已复核评估依据与评分，并确认上述重要性评估结果。</span>
           </label>
           <button
+            disabled={!canConfirm}
             onClick={() => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: true, confirmedAt: new Date().toISOString() } }))}
-            className={`mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${confirmed ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-[#176b52] text-white hover:bg-[#105c46]"}`}
+            className={`mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${confirmed ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-[#176b52] text-white hover:bg-[#105c46]"}`}
           >
             {confirmed ? <><CheckCircle2 className="size-4" />已由用户确认</> : <><ClipboardCheck className="size-4" />确认评估结果</>}
           </button>
@@ -393,10 +397,10 @@ function ScoreMeter({ value, label, onChange }: { value: number; label: string; 
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <div className="flex items-center gap-2.5">
-      <div className="flex gap-0.5" aria-label={`${value} 分`}>
+      <div className="flex gap-0.5" aria-label={value ? `${value} 分` : "待评分"}>
         {[1, 2, 3, 4, 5].map((score) => <span key={score} className={`h-1.5 w-4 rounded-full ${score <= Math.round(value) ? "bg-[#4b9b7b]" : "bg-[#e3e8e5]"}`} />)}
       </div>
-      <input aria-label={label} type="number" min="1" max="5" step="0.1" value={draft ?? String(value)} onChange={(event) => { const next = event.target.value; setDraft(next); if (parseScore(next) !== null) onChange(next); }} onBlur={() => setDraft(null)} className="h-8 w-16 rounded-md border border-[#dce3df] bg-white px-2 text-xs font-semibold tabular-nums text-[#33423a] outline-none focus:border-[#6f9f8c]" />
+      <input aria-label={label} type="number" min="1" max="5" step="0.1" placeholder="待评分" value={draft ?? (value ? String(value) : "")} onChange={(event) => { const next = event.target.value; setDraft(next); if (parseScore(next) !== null) onChange(next); }} onBlur={() => setDraft(null)} className="h-8 w-16 rounded-md border border-[#dce3df] bg-white px-2 text-xs font-semibold tabular-nums text-[#33423a] outline-none focus:border-[#6f9f8c]" />
     </div>
   );
 }

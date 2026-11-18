@@ -34,14 +34,17 @@ async function reloadProject(page) {
 }
 
 async function openStep(page, step) {
-  await page.goto(`${baseUrl}/reports/hualan-2025/step/${step}`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/public-preview-sample-2025/step/${step}`, { waitUntil: "networkidle" });
   await waitForProjectReady(page);
 }
 
 async function fresh(page) {
-  await openStep(page, 7);
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
   await clearProjectDatabase(page);
-  await reloadProject(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "打开示例项目" }).click();
+  await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
+  await openStep(page, 7);
   return null;
 }
 
