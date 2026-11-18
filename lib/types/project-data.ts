@@ -155,6 +155,7 @@ export interface ReportProjectRepository {
   create(input: CreateProjectInput): Promise<ReportProjectData>;
   importProject(project: ReportProjectData): Promise<ReportProjectData>;
   exists(projectId: string): Promise<boolean>;
+  delete(projectId: string): Promise<void>;
   subscribe(projectId: string, onChange: () => void): () => void;
 }
 

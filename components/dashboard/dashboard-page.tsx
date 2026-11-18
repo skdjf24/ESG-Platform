@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArchiveRestore,
   ArrowRight,
   Building2,
@@ -19,17 +20,19 @@ import {
   HardDrive,
   Info,
   LayoutDashboard,
+  MoreHorizontal,
   PlayCircle,
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Notice } from "@/components/ui/notice";
-import { projectRepository } from "@/lib/project/repository";
+import { projectRepository, ProjectStorageError } from "@/lib/project/repository";
 import { copyProjectToNextYear, downloadProjectBackup, restoreProjectBackup } from "@/lib/project/operations";
 import { requestPersistentStorage, storageEstimate } from "@/lib/project/indexed-db";
 import { createSampleProjectData } from "@/lib/project/seed";
@@ -46,22 +49,79 @@ function formatBytes(value?: number) {
 export function DashboardPage() {
   const router = useRouter();
   const restoreInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const [storage, setStorage] = useState<{ usage?: number; quota?: number; persisted: boolean; supported: boolean }>({ persisted: false, supported: false });
   const [draft, setDraft] = useState({ title: "", enterpriseName: "", year: new Date().getFullYear() });
 
   async function refreshProjects() {
     try {
       setProjects(await projectRepository.list());
+      const estimate = await storageEstimate();
+      setStorage((current) => ({ ...current, usage: estimate.usage, quota: estimate.quota }));
+      return true;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "项目列表读取失败。");
+      setMessage(error instanceof Error ? error.message : "项目列表或本地空间统计读取失败。");
+      return false;
     } finally {
       setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!activeMenuProjectId) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setActiveMenuProjectId(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActiveMenuProjectId(null);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeMenuProjectId]);
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+    deleteCancelRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setDeleteTarget(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [deleteTarget, busy]);
+
+  async function deleteProject() {
+    if (!deleteTarget || busy) return;
+    const target = deleteTarget;
+    setBusy(true);
+    setDeleteError("");
+    try {
+      await projectRepository.delete(target.projectId);
+      setProjects((current) => current.filter((project) => project.projectId !== target.projectId));
+      const refreshed = await refreshProjects();
+      setDeleteTarget(null);
+      setMessage(refreshed ? `已删除“${target.title}”及其关联的本地数据和文件。` : "项目已删除，但列表或空间统计刷新失败，请刷新页面核对。");
+    } catch (error) {
+      if (error instanceof ProjectStorageError && error.code === "partial-delete") {
+        setProjects((current) => current.filter((project) => project.projectId !== target.projectId));
+      }
+      await refreshProjects();
+      setDeleteError(error instanceof Error ? error.message : "项目删除失败，未确认本地数据状态。请重试。");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -182,17 +242,24 @@ export function DashboardPage() {
             { label: "报告项目", value: projects.length, note: `${projects.filter((item) => item.state !== "finalized").length} 个正在编制`, icon: FolderOpen },
             { label: "真实文件", value: projects.reduce((sum, item) => sum + item.fileCount, 0), note: "项目间完全隔离", icon: Database },
             { label: "本地空间", value: formatBytes(storage.usage), note: `配额 ${formatBytes(storage.quota)}`, icon: ShieldCheck },
-          ].map((item) => <div key={item.label} className="flex items-center justify-between rounded-2xl border border-[#e2e7e4] bg-white p-5"><div><p className="text-xs font-medium text-[#7b8580]">{item.label}</p><p className="mt-2 text-2xl font-semibold text-[#1a2721]">{item.value}</p><p className="mt-1 text-[11px] text-[#84908a]">{item.note}</p></div><div className="grid size-11 place-items-center rounded-xl bg-[#edf5f1] text-[#176b52]"><item.icon className="size-5" /></div></div>)}
+          ].map((item) => <div key={item.label} aria-label={`${item.label}统计`} className="flex items-center justify-between rounded-2xl border border-[#e2e7e4] bg-white p-5"><div><p className="text-xs font-medium text-[#7b8580]">{item.label}</p><p className="mt-2 text-2xl font-semibold text-[#1a2721]">{item.value}</p><p className="mt-1 text-[11px] text-[#84908a]">{item.note}</p></div><div className="grid size-11 place-items-center rounded-xl bg-[#edf5f1] text-[#176b52]"><item.icon className="size-5" /></div></div>)}
         </section>
 
         <section className="mt-9">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-[#202c26]">本地项目</h2><p className="mt-1 text-xs text-[#7b8580]">打开、备份或复制现有项目</p></div><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#929b96]" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索报告项目" placeholder="搜索项目" className="h-9 w-56 rounded-lg border border-[#dfe5e1] bg-white pl-9 pr-3 text-xs outline-none" /></div></div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-[#202c26]">本地项目</h2><p className="mt-1 text-xs text-[#7b8580]">打开、备份、复制或删除现有项目</p></div><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#929b96]" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索报告项目" placeholder="搜索项目" className="h-9 w-56 rounded-lg border border-[#dfe5e1] bg-white pl-9 pr-3 text-xs outline-none" /></div></div>
           {loading ? <div className="rounded-2xl border border-[#e0e6e2] bg-white p-10 text-center text-sm text-[#75817a]">正在读取本地项目数据库…</div> : null}
-          {!loading && !visibleProjects.length ? <div className="rounded-2xl border border-dashed border-[#bfd0c7] bg-white p-12 text-center"><FolderOpen className="mx-auto size-8 text-[#7ba08f]" /><h3 className="mt-3 text-sm font-semibold text-[#2f4037]">尚无本地项目</h3><p className="mt-2 text-xs text-[#7d8982]">创建新项目，或恢复包含真实文件字节的项目备份。</p></div> : null}
+          {!loading && !visibleProjects.length ? <div className="rounded-2xl border border-dashed border-[#bfd0c7] bg-white p-12 text-center"><FolderOpen className="mx-auto size-8 text-[#7ba08f]" /><h3 className="mt-3 text-sm font-semibold text-[#2f4037]">{projects.length ? "没有匹配的项目" : "尚无本地项目"}</h3><p className="mt-2 text-xs text-[#7d8982]">{projects.length ? "请调整搜索条件。" : "创建新项目，或恢复包含真实文件字节的项目备份。"}</p></div> : null}
           <div className="grid gap-4 xl:grid-cols-2">
             {visibleProjects.map((project) => (
-              <article key={project.projectId} className="rounded-2xl border border-[#dfe5e1] bg-white p-6 shadow-[0_10px_30px_rgba(26,47,38,0.04)]">
-                <div className="flex items-start justify-between gap-4"><div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#163f32] text-xs font-semibold text-white">{project.enterpriseName.slice(0, 2)}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#17231d]">{project.title}</h3>{project.projectId === PUBLIC_PREVIEW_SAMPLE_PROJECT_ID ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-semibold text-violet-700">示例项目</span> : null}<StatusBadge tone={project.state === "finalized" ? "green" : "blue"}>{project.state === "finalized" ? "已定稿" : "编制中"}</StatusBadge></div><div className="mt-2 flex flex-wrap gap-3 text-[10px] text-[#748079]"><span className="inline-flex items-center gap-1"><Building2 className="size-3" />{project.enterpriseName}</span><span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{project.year}</span><span className="inline-flex items-center gap-1"><FileText className="size-3" />{project.fileCount} 个文件</span></div></div></div><span className="rounded bg-[#f1f4f2] px-2 py-1 font-mono text-[9px] text-[#69766f]">{project.projectId}</span></div>
+              <article key={project.projectId} data-project-id={project.projectId} className="relative rounded-2xl border border-[#dfe5e1] bg-white p-6 shadow-[0_10px_30px_rgba(26,47,38,0.04)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#163f32] text-xs font-semibold text-white">{project.enterpriseName.slice(0, 2)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#17231d]">{project.title}</h3>{project.projectId === PUBLIC_PREVIEW_SAMPLE_PROJECT_ID ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-semibold text-violet-700">示例项目</span> : null}<StatusBadge tone={project.state === "finalized" ? "green" : "blue"}>{project.state === "finalized" ? "已定稿" : "编制中"}</StatusBadge></div><div className="mt-2 flex flex-wrap gap-3 text-[10px] text-[#748079]"><span className="inline-flex items-center gap-1"><Building2 className="size-3" />{project.enterpriseName}</span><span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{project.year}</span><span className="inline-flex items-center gap-1"><FileText className="size-3" />{project.fileCount} 个文件</span></div></div></div>
+                  <div ref={activeMenuProjectId === project.projectId ? menuRef : undefined} className="relative flex shrink-0 items-start gap-2">
+                    <span title={project.projectId} className="hidden max-w-28 truncate rounded bg-[#f1f4f2] px-2 py-1 font-mono text-[9px] text-[#69766f] sm:block">{project.projectId}</span>
+                    <button type="button" disabled={busy} aria-label={`项目操作：${project.title}`} aria-haspopup="menu" aria-expanded={activeMenuProjectId === project.projectId} onClick={() => setActiveMenuProjectId((current) => current === project.projectId ? null : project.projectId)} className="grid size-8 place-items-center rounded-lg border border-[#dce4de] text-[#536159] hover:bg-[#f3f7f4] disabled:opacity-40"><MoreHorizontal className="size-4" /></button>
+                    {activeMenuProjectId === project.projectId ? <div role="menu" aria-label={`${project.title}的操作`} className="absolute right-0 top-10 z-20 w-36 rounded-xl border border-[#dfe5e1] bg-white p-1 shadow-xl"><button type="button" role="menuitem" onClick={() => { setActiveMenuProjectId(null); setDeleteError(""); setDeleteTarget(project); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50"><Trash2 className="size-3.5" />删除项目</button></div> : null}
+                  </div>
+                </div>
                 <div className="mt-5"><div className="mb-2 flex justify-between text-[10px]"><span>Step {project.currentStep} · revision {project.revision}</span><span>{project.progress}%</span></div><ProgressBar value={project.progress} /></div>
                 <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-[#edf0ee] pt-4"><div className="flex gap-2"><button disabled={busy} onClick={() => void downloadProjectBackup(project.projectId).catch((error) => setMessage(error instanceof Error ? error.message : "备份失败"))} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d8e0dc] px-3 text-[10px] font-semibold text-[#536159] disabled:opacity-40"><Download className="size-3.5" />导出备份</button><button disabled={busy} onClick={() => void copyNextYear(project.projectId)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#d8e0dc] px-3 text-[10px] font-semibold text-[#536159] disabled:opacity-40"><CopyPlus className="size-3.5" />复制下一年度</button></div><Link href={`/reports/${project.projectId}/step/${project.currentStep}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#176b52] px-4 text-[10px] font-semibold text-white">打开项目<ArrowRight className="size-3.5" /></Link></div>
               </article>
@@ -202,6 +269,15 @@ export function DashboardPage() {
       </main>
 
       {message ? <div role="status" className="fixed bottom-4 right-4 z-[80] flex max-w-md items-start gap-2 rounded-xl border border-[#d4e1da] bg-white px-4 py-3 text-xs leading-5 text-[#405b4b] shadow-xl"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#27805f]" /><span className="flex-1">{message}</span><button aria-label="关闭提示" onClick={() => setMessage("")}><X className="size-3.5" /></button></div> : null}
+
+      {deleteTarget ? <div role="dialog" aria-modal="true" aria-labelledby="delete-project-title" aria-describedby="delete-project-description" className="fixed inset-0 z-50 grid place-items-center bg-[#10241c]/50 p-4">
+        <div className="w-full max-w-[480px] rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-rose-50 text-rose-700"><AlertTriangle className="size-5" /></span><div className="min-w-0"><h2 id="delete-project-title" className="text-lg font-semibold text-[#17231d]">删除项目</h2><p className="mt-1 break-words text-sm font-semibold text-[#34463b]">“{deleteTarget.title}”</p><p className="mt-1 break-all font-mono text-[10px] text-[#7a8580]">projectId：{deleteTarget.projectId}</p></div></div>
+          <div id="delete-project-description" className="mt-5 space-y-2 rounded-xl border border-rose-100 bg-rose-50 p-4 text-xs leading-5 text-rose-900"><p>删除后无法恢复。</p><p>与该项目关联的本地数据和上传文件也会删除。</p><p>建议先导出项目备份。</p></div>
+          {deleteError ? <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800">{deleteError}</p> : null}
+          <div className="mt-6 flex justify-end gap-3"><button ref={deleteCancelRef} type="button" disabled={busy} onClick={() => { setDeleteTarget(null); setDeleteError(""); }} className="h-10 rounded-lg border border-[#dbe2de] px-4 text-xs font-semibold text-[#536159] disabled:opacity-50">取消</button><button type="button" disabled={busy} onClick={() => void deleteProject()} className="h-10 rounded-lg bg-rose-700 px-4 text-xs font-semibold text-white hover:bg-rose-800 disabled:opacity-50">{busy ? "正在删除…" : "确认删除"}</button></div>
+        </div>
+      </div> : null}
 
       {isCreateOpen ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#10241c]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="create-report-title" onMouseDown={(event) => event.target === event.currentTarget && setIsCreateOpen(false)}><div className="w-full max-w-[590px] rounded-2xl bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-[#e8ecea] px-6 py-5"><div><div className="mb-2 grid size-10 place-items-center rounded-xl bg-[#eaf4ef] text-[#176b52]"><Plus className="size-5" /></div><h2 id="create-report-title" className="text-lg font-semibold">新建 ESG 报告</h2><p className="mt-1 text-xs text-[#7a8580]">每个项目获得独立 projectId 和存储空间。</p></div><button aria-label="关闭" onClick={() => setIsCreateOpen(false)}><X className="size-4" /></button></div><div className="space-y-4 p-6"><div><label htmlFor="report-name" className="mb-2 block text-xs font-semibold">报告名称</label><input id="report-name" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-sm" /></div><div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="enterprise" className="mb-2 block text-xs font-semibold">企业名称</label><input id="enterprise" value={draft.enterpriseName} onChange={(event) => setDraft({ ...draft, enterpriseName: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-sm" /></div><div><label htmlFor="report-year" className="mb-2 block text-xs font-semibold">报告年度</label><input id="report-year" type="number" min="2000" max="2100" value={draft.year} onChange={(event) => setDraft({ ...draft, year: Number(event.target.value) })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-sm" /></div></div><Notice tone="warning" title="本地项目">数据仅保存在当前浏览器。请定期导出包含文件字节的项目备份。</Notice></div><div className="flex justify-end gap-3 border-t border-[#e8ecea] bg-[#fafbf9] px-6 py-4"><button onClick={() => setIsCreateOpen(false)} className="h-10 rounded-lg border border-[#dbe2de] px-4 text-xs font-semibold">取消</button><button disabled={busy} onClick={() => void createProject()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white disabled:opacity-50">创建并开始<ArrowRight className="size-3.5" /></button></div></div></div> : null}
     </div>
