@@ -1,0 +1,144 @@
+{
+  "baseUrl": "http://127.0.0.1:4331",
+  "testedGitHead": "a0773931aa1ca3e395aed23a4937b9226cb8c205",
+  "browserVersion": "154.0.8037.57",
+  "generatedAt": "2026-11-18T07:34:31.894Z",
+  "isolation": "Fresh Chromium Browser Context on local server; no Production user storage accessed.",
+  "totals": {
+    "pass": 26,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": "ISOLATED-START",
+      "status": "PASS",
+      "detail": "独立浏览器 Context 中没有真实用户项目"
+    },
+    {
+      "id": "TWO-SAME-NAME",
+      "status": "PASS",
+      "detail": "同名项目按不同 projectId 存在，文件数量为 2"
+    },
+    {
+      "id": "DERIVED-SETUP",
+      "status": "PASS",
+      "detail": "两个项目各有文件、解析快照与候选记录"
+    },
+    {
+      "id": "CONFIRM-CONTENT",
+      "status": "PASS",
+      "detail": "二次确认显示项目名称、ID 和三项风险提示"
+    },
+    {
+      "id": "CANCEL",
+      "status": "PASS",
+      "detail": "取消删除不改变项目、文件及数量"
+    },
+    {
+      "id": "BACKUP-BEFORE",
+      "status": "PASS",
+      "detail": "删除前可导出包含真实文件字节的项目备份"
+    },
+    {
+      "id": "DELETE-ALL-STORES",
+      "status": "PASS",
+      "detail": "A 的项目、文件字节、解析快照及候选记录均删除并阻止旧存档回流"
+    },
+    {
+      "id": "KEEP-OTHER",
+      "status": "PASS",
+      "detail": "B 的项目、文件字节及解析数据未受影响"
+    },
+    {
+      "id": "STATS-COUNTS",
+      "status": "PASS",
+      "detail": "项目数及真实文件数立即更新"
+    },
+    {
+      "id": "STATS-SPACE",
+      "status": "PASS",
+      "detail": "本地空间统计已刷新：1.3 MB → 196 KB"
+    },
+    {
+      "id": "DELETE-REFRESH",
+      "status": "PASS",
+      "detail": "刷新后 A 不重新出现，B 仍在"
+    },
+    {
+      "id": "RECREATE-SAME-NAME",
+      "status": "PASS",
+      "detail": "删除后可以用相同企业名称与年度重新创建原 projectId"
+    },
+    {
+      "id": "RESTORE-AFTER",
+      "status": "PASS",
+      "detail": "删除后恢复备份可还原 A 的原始文件字节且不影响 B"
+    },
+    {
+      "id": "COPY-DELETE",
+      "status": "PASS",
+      "detail": "下一年度复制项目可独立删除，原项目和文件保留"
+    },
+    {
+      "id": "LEGACY-MIGRATE",
+      "status": "PASS",
+      "detail": "仅存于旧 localStorage 的中文项目重新迁入并可见"
+    },
+    {
+      "id": "LEGACY-DELETE",
+      "status": "PASS",
+      "detail": "旧中文项目及旧 localStorage 存档、文件字节均删除"
+    },
+    {
+      "id": "LEGACY-NO-RESURRECT",
+      "status": "PASS",
+      "detail": "旧项目刷新后不会由迁移路径重新出现"
+    },
+    {
+      "id": "SAMPLE-SETUP",
+      "status": "PASS",
+      "detail": "系统示例项目有完整示例数据"
+    },
+    {
+      "id": "SAMPLE-DELETE",
+      "status": "PASS",
+      "detail": "旧版示例数据项目可删除，独立示例入口仍保留"
+    },
+    {
+      "id": "SAMPLE-REOPEN",
+      "status": "PASS",
+      "detail": "删除后示例入口可重新创建完整示例"
+    },
+    {
+      "id": "PARTIAL-NOTICE",
+      "status": "PASS",
+      "detail": "旧键清理失败时明确提示，主项目已删除且旧键仍在"
+    },
+    {
+      "id": "PARTIAL-TOMBSTONE",
+      "status": "PASS",
+      "detail": "旧键仍在时，另一页面刷新列表也不会重新迁入项目"
+    },
+    {
+      "id": "PARTIAL-RETRY",
+      "status": "PASS",
+      "detail": "重试可清理残留旧键并完成删除"
+    },
+    {
+      "id": "ATOMIC-ROLLBACK",
+      "status": "PASS",
+      "detail": "IndexedDB 失败时整笔删除回滚，B 的项目、文件和解析数据均保留"
+    },
+    {
+      "id": "NARROW-MENU",
+      "status": "PASS",
+      "detail": "窄屏项目操作菜单及确认框可访问"
+    },
+    {
+      "id": "BROWSER-ERRORS",
+      "status": "PASS",
+      "detail": "Chromium console/page errors 为零"
+    }
+  ],
+  "browserErrors": []
+}

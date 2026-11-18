@@ -20,6 +20,8 @@ import {
   FILE_STORE,
   META_STORE,
   openProjectDatabase,
+  PARSED_DOCUMENT_STORE,
+  EXTRACTION_CANDIDATE_STORE,
   PROJECT_STORE,
   requestPersistentStorage,
   requestResult,
@@ -38,7 +40,7 @@ interface StoredProjectRecord {
   project: ReportProjectData;
 }
 
-export type ProjectStorageErrorCode = "unavailable" | "incompatible" | "conflict" | "too-large" | "binary-payload" | "not-found" | "referenced";
+export type ProjectStorageErrorCode = "unavailable" | "incompatible" | "conflict" | "too-large" | "binary-payload" | "not-found" | "referenced" | "partial-delete";
 
 export class ProjectStorageError extends Error {
   constructor(public readonly code: ProjectStorageErrorCode, message: string) {
@@ -53,6 +55,10 @@ export function projectStorageKey(projectId: string) {
 
 export function legacyWritingStorageKey(projectId: string) {
   return `esg:${projectId}:writing:v1`;
+}
+
+function projectDeletionKey(projectId: string) {
+  return `deleted-project:${encodeURIComponent(projectId)}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -195,10 +201,13 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
   private async migrateLegacyProject(projectId: string) {
     if (typeof window === "undefined") return null;
     const database = await openProjectDatabase();
-    const read = database.transaction(PROJECT_STORE, "readonly");
+    const read = database.transaction([PROJECT_STORE, META_STORE], "readonly");
+    const readDone = transactionDone(read);
     const existing = await requestResult(read.objectStore(PROJECT_STORE).get(projectId)) as StoredProjectRecord | undefined;
-    await transactionDone(read);
+    const deleted = await requestResult(read.objectStore(META_STORE).get(projectDeletionKey(projectId)));
+    await readDone;
     if (existing) return existing.project;
+    if (deleted) return null;
     const raw = window.localStorage.getItem(projectStorageKey(projectId));
     let project = raw ? parseLegacyProject(raw, projectId) : null;
     if (raw && !project) throw new ProjectStorageError("incompatible", "检测到损坏或不兼容的旧项目存档；原 localStorage 数据已保留，未创建替代项目。");
@@ -282,6 +291,46 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
     const key = await requestResult(transaction.objectStore(PROJECT_STORE).getKey(projectId));
     await transactionDone(transaction);
     return key !== undefined;
+  }
+
+  async delete(projectId: string): Promise<void> {
+    if (!projectId) throw new ProjectStorageError("not-found", "缺少项目 ID，未删除任何数据。");
+    const database = await openProjectDatabase();
+    const transaction = database.transaction(
+      [PROJECT_STORE, FILE_STORE, PARSED_DOCUMENT_STORE, EXTRACTION_CANDIDATE_STORE, META_STORE],
+      "readwrite",
+    );
+    const done = transactionDone(transaction);
+    try {
+      const projects = transaction.objectStore(PROJECT_STORE);
+      const meta = transaction.objectStore(META_STORE);
+      const relatedStores = [FILE_STORE, PARSED_DOCUMENT_STORE, EXTRACTION_CANDIDATE_STORE]
+        .map((name) => transaction.objectStore(name));
+      const [record, deleted, ...relatedKeys] = await Promise.all([
+        requestResult(projects.get(projectId)) as Promise<StoredProjectRecord | undefined>,
+        requestResult(meta.get(projectDeletionKey(projectId))),
+        ...relatedStores.map((store) => requestResult(store.index("projectId").getAllKeys(projectId))),
+      ]);
+      if (!record && !deleted) throw new ProjectStorageError("not-found", "项目不存在，未删除任何数据。");
+      projects.delete(projectId);
+      relatedStores.forEach((store, index) => {
+        for (const key of relatedKeys[index]) store.delete(key);
+      });
+      meta.put({ key: projectDeletionKey(projectId), deletedAt: new Date().toISOString() });
+      await done;
+    } catch (error) {
+      try { transaction.abort(); } catch { /* A completed transaction cannot be aborted. */ }
+      await done.catch(() => undefined);
+      if (error instanceof ProjectStorageError) throw error;
+      throw new ProjectStorageError("unavailable", "删除失败；本地数据库事务已回滚，项目及关联数据未删除。请重试。");
+    }
+    announceProjectChange(projectId, 0);
+    try {
+      window.localStorage.removeItem(projectStorageKey(projectId));
+      window.localStorage.removeItem(legacyWritingStorageKey(projectId));
+    } catch {
+      throw new ProjectStorageError("partial-delete", "项目及关联数据已从 IndexedDB 删除，但旧版浏览器存档未清理完毕。刷新不会恢复项目；请重试删除以清理残留。");
+    }
   }
 
   async create(input: CreateProjectInput) {

@@ -24,7 +24,8 @@
     "test:phase4": "node --import tsx scripts/phase4-export-regression.ts",
     "test:public-preview": "node scripts/public-preview-smoke.cjs",
     "test:p0:init-industry": "node --import tsx scripts/p0-init-industry-regression.ts",
-    "test:p0:browser": "node scripts/p0-browser-regression.cjs"
+    "test:p0:browser": "node scripts/p0-browser-regression.cjs",
+    "test:project-deletion": "node scripts/project-deletion-regression.cjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.8",

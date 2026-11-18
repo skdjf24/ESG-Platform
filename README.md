@@ -156,7 +156,7 @@ lib/
 
 示例种子数据统一位于 `lib/data/mock-data.ts`，由 `lib/project/seed.ts` 组合为项目快照；Step 1–8 页面读取同一项目状态，不再各自维护相互隔离的业务副本。
 
-项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `IndexedDbReportProjectRepository` 保存结构化项目，以 `projectId` 隔离并通过 `revision` 防止旧页面覆盖新数据；`IndexedDbProjectFileRepository` 在独立 object store 保存真实 `Blob` 字节。项目快照只保存 `fileId`、状态和来源定位，拒绝混入 `File`、`Blob`、`ArrayBuffer`。旧 `localStorage` 完整项目和 Step 5 草稿可加法迁移，旧键不会自动删除。
+项目聚合类型和 Repository 契约位于 `lib/types/project-data.ts`。原型使用 `IndexedDbReportProjectRepository` 保存结构化项目，以 `projectId` 隔离并通过 `revision` 防止旧页面覆盖新数据；`IndexedDbProjectFileRepository` 在独立 object store 保存真实 `Blob` 字节。项目快照只保存 `fileId`、状态和来源定位，拒绝混入 `File`、`Blob`、`ArrayBuffer`。旧 `localStorage` 完整项目和 Step 5 草稿可加法迁移；迁移时保留旧键，用户确认删除项目时会清理对应旧键及 IndexedDB 中的项目、文件和解析记录。
 
 Step 5 类型位于 `lib/types/writing.ts`，核心关联为：
 
