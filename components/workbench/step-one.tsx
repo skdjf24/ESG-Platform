@@ -46,11 +46,17 @@ export function StepOne() {
     editProject((current) => {
       const selected = current.report.frameworks.includes(framework);
       const existingRequirementIds = new Set(current.disclosureRequirements.map((item) => item.id));
+      const topicNames = new Set(current.topics.map((topic) => topic.name));
       return {
         ...current,
         report: { ...current.report, frameworks: selected ? current.report.frameworks.filter((item) => item !== framework) : [...current.report.frameworks, framework] },
         disclosureRequirements: !selected && framework === "北交所指引"
-          ? [...current.disclosureRequirements, ...bseDisclosureRequirements.filter((item) => !existingRequirementIds.has(item.id)).map((item) => ({ ...item, revision: 1, reviewStatus: "待复核" as const }))]
+          ? [...current.disclosureRequirements, ...bseDisclosureRequirements.filter((item) => !existingRequirementIds.has(item.id)).map((item) => ({
+            ...item,
+            revision: 1,
+            reviewStatus: "待复核" as const,
+            ...(topicNames.has(item.topic) ? {} : { originalTopic: item.topic, topic: "" }),
+          }))]
           : current.disclosureRequirements,
       };
     });

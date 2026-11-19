@@ -42,17 +42,21 @@ export interface MaterialityAssessment {
   includedTopicIds: string[];
   confirmed: boolean;
   confirmedAt?: string;
+  reviewStatus?: "待复核";
   revision: number;
 }
 
 export interface ProjectDisclosureRequirement extends DisclosureRequirement {
   revision: number;
   reviewStatus: EntityReviewStatus;
+  /** Historical label after the live project topic link is cleared or reassigned. */
+  originalTopic?: string;
 }
 
 export interface ProjectReportSection extends ReportSection {
   revision: number;
   sourceState: SourceState;
+  topicReviewStatus?: "待复核";
 }
 
 export interface ProjectDataRequirement extends DataRequirement {
@@ -70,6 +74,14 @@ export interface ProjectWritingState {
 
 export type ImpactEntityType = "enterprise" | "framework" | "topic" | "requirement" | "section" | "data-requirement" | "fact" | "chart" | "presentation" | "quality";
 
+export interface TopicRemovalSnapshot {
+  topic: EsgTopic;
+  assessment: MaterialityAssessment;
+  lastSavedConfirmation?: { topic: EsgTopic; assessment: MaterialityAssessment };
+  requirements: Pick<ProjectDisclosureRequirement, "id" | "topic" | "applicability" | "userConfirmed" | "reviewStatus" | "mappedSection">[];
+  sectionIds: string[];
+}
+
 export interface ChangeImpact {
   id: string;
   sourceStep: ProjectStep;
@@ -80,6 +92,7 @@ export interface ChangeImpact {
   affectedIds: string[];
   createdAt: string;
   status: "待复核" | "已知悉";
+  topicRemoval?: TopicRemovalSnapshot;
 }
 
 export interface MigrationRecord {
@@ -121,6 +134,7 @@ export interface ProjectSaveContext {
   label: string;
   expectedRevision: number;
   previous: ReportProjectData;
+  removeTopicId?: string;
 }
 
 export interface ProjectSaveResult {

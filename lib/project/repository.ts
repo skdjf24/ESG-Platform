@@ -357,7 +357,8 @@ export class IndexedDbReportProjectRepository implements ReportProjectRepository
   async save(projectId: string, candidate: ReportProjectData, context: ProjectSaveContext): Promise<ProjectSaveResult> {
     if (candidate.projectId !== projectId || candidate.report.id !== projectId) throw new ProjectStorageError("incompatible", "项目 ID 不一致，已阻止跨项目写入。");
     if (containsBinaryPayload(candidate)) throw new ProjectStorageError("binary-payload", "结构化项目数据包含文件二进制内容；文件必须写入独立文件仓库。");
-    const synchronized = synchronizeProjectData(context.previous, candidate, context.step);
+    if (context.removeTopicId !== undefined && context.step !== 2) throw new ProjectStorageError("incompatible", "只能在 Step 2 删除议题。");
+    const synchronized = synchronizeProjectData(context.previous, candidate, context.step, context.removeTopicId);
     const serializedBytes = new TextEncoder().encode(JSON.stringify(synchronized.project)).byteLength;
     await ensureStorageCapacity(serializedBytes);
     const database = await openProjectDatabase();

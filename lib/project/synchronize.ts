@@ -4,6 +4,7 @@ import { createBlock, reconcileCitations } from "@/lib/writing/document";
 import { synchronizeObservations } from "@/lib/presentation/state";
 import { markQualityChecksStale } from "@/lib/quality/engine";
 import { qualityInputFingerprint } from "@/lib/quality/validity";
+import { describeTopicRemoval } from "@/lib/project/topics";
 
 const unique = <T,>(items: T[]) => [...new Set(items)];
 const comparable = <T extends object>(value: T, ignored: string[]) => Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.includes(key)));
@@ -119,7 +120,7 @@ function factCore(fact: WritingFact) {
   return comparable(fact, ["revision", "confirmedBy", "sourceState"]);
 }
 
-export function synchronizeProjectData(previous: ReportProjectData, candidate: ReportProjectData, sourceStep: ProjectStep) {
+export function synchronizeProjectData(previous: ReportProjectData, candidate: ReportProjectData, sourceStep: ProjectStep, removeTopicId?: string) {
   let next = structuredClone(candidate);
   const impacts: ChangeImpact[] = [];
 
@@ -156,8 +157,55 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
   }
 
   if (sourceStep === 2) {
+    if (removeTopicId !== undefined) {
+      const removal = describeTopicRemoval(next, removeTopicId, previous);
+      if (!removal) throw new Error("议题已不在当前项目中，请刷新后重试。");
+      const { topic, requirements, sections, assessmentNeedsReview, lastSavedConfirmation } = removal;
+      const assessment = next.materiality;
+      const requirementIds = new Set(requirements.map((item) => item.id));
+      const sectionIds = new Set(sections.map((item) => item.id));
+      const hasDownstreamLinks = requirementIds.size + sectionIds.size > 0;
+
+      next.topics = next.topics.filter((item) => item.id !== topic.id);
+      next.materiality = {
+        ...assessment,
+        includedTopicIds: assessment.includedTopicIds.filter((id) => id !== topic.id),
+        ...(assessmentNeedsReview ? { confirmed: false, confirmedAt: undefined, reviewStatus: "待复核" as const } : {}),
+      };
+      next.disclosureRequirements = next.disclosureRequirements.map((item) => requirementIds.has(item.id) ? {
+        ...item, originalTopic: item.originalTopic ?? item.topic, topic: "", userConfirmed: false, reviewStatus: "待复核",
+      } : item);
+      next.reportSections = next.reportSections.map((item) => sectionIds.has(item.id) ? {
+        ...item,
+        topics: item.topics.filter((name) => name !== topic.name),
+        topicReviewStatus: "待复核",
+        revision: item.revision + 1,
+      } : item);
+      next = markRequirementMappings(next, [...requirementIds]);
+      next.writing.chapters = next.writing.chapters.map((chapter) => sectionIds.has(chapter.id) ? {
+        ...chapter, status: "待完善", reviewStatus: "待复核",
+      } : chapter);
+
+      const targetSteps: ProjectStep[] = hasDownstreamLinks ? [3, 5, 7, 8] : [7, 8];
+      const impact = createImpact(2, "topic", topic.id,
+        `已从当前项目移除议题“${topic.name}”。${hasDownstreamLinks ? "相关披露与大纲关联已解除，原条款、章节与正文保留，等待复核。" : "原评分及确认信息保留在评估记录。"}`,
+        [...requirementIds, ...sectionIds], targetSteps);
+      impacts.push({
+        ...impact,
+        status: assessmentNeedsReview || previous.quality.runs.length || previous.quality.fullCheck ? "待复核" : "已知悉",
+        topicRemoval: {
+          topic,
+          assessment,
+          lastSavedConfirmation,
+          requirements: requirements.map(({ id, topic, applicability, userConfirmed, reviewStatus, mappedSection }) => ({ id, topic, applicability, userConfirmed, reviewStatus, mappedSection })),
+          sectionIds: [...sectionIds],
+        },
+      });
+      if (assessmentNeedsReview) next.materiality.revision = Math.max(previous.materiality.revision + 1, assessment.revision);
+    }
+
     const topicIds = unique([...previous.materiality.includedTopicIds, ...next.materiality.includedTopicIds])
-      .filter((id) => previous.materiality.includedTopicIds.includes(id) !== next.materiality.includedTopicIds.includes(id));
+      .filter((id) => id !== removeTopicId && (previous.materiality.includedTopicIds.includes(id) !== next.materiality.includedTopicIds.includes(id)));
     const changedScoresOrTopics = next.topics.filter((topic) => {
       const before = previous.topics.find((item) => item.id === topic.id);
       return next.materiality.includedTopicIds.includes(topic.id) && Boolean(before && (
@@ -209,8 +257,8 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       }
       if (!current) continue;
       const existing = next.writing.chapters.find((chapter) => chapter.id === id);
-      const sectionChanged = Boolean(before && changed(before, current, ["revision", "sourceState", "state", "requirementCount"]));
-      if (before && sectionChanged) current.revision = Math.max(before.revision + 1, current.revision);
+      const sectionChanged = Boolean(before && changed(before, current, ["revision", "sourceState", "state", "requirementCount", "topicReviewStatus"]));
+      if (before && (sectionChanged || before.topicReviewStatus !== current.topicReviewStatus)) current.revision = Math.max(before.revision + 1, current.revision);
       if (existing) {
         next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? {
           ...chapter,
