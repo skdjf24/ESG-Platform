@@ -52,6 +52,7 @@ export interface ReportProject {
 
 export interface UploadedSource {
   id: string;
+  materialId?: string;
   name: string;
   kind: SourceKind;
   fileType: "PDF" | "XLSX" | "DOCX" | "表单";

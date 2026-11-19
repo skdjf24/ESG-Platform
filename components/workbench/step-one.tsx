@@ -118,8 +118,8 @@ export function StepOne() {
         } : item),
       };
       editProject(base);
-      await saveProject(4, "解析历史报告", base);
-      setHistoryMessage(`历史报告已在浏览器本地解析（${result.document.parserVersion}）。内容明确标记为 historical，请前往 Step 4 人工创建并确认候选。`);
+      await saveProject(3, "解析历史报告", base);
+      setHistoryMessage(`历史报告已在浏览器本地解析（${result.document.parserVersion}）。内容明确标记为 historical，请前往 Step 3 人工创建并确认候选。`);
     } catch (error) {
       const failed = error instanceof DocumentParsingError ? error.document : undefined;
       const next = failed ? {
@@ -128,7 +128,7 @@ export function StepOne() {
       } : project;
       if (failed) {
         editProject(next);
-        await saveProject(4, "记录历史报告解析失败", next);
+        await saveProject(3, "记录历史报告解析失败", next);
       }
       setHistoryMessage(`解析失败：${error instanceof Error ? error.message : "未知错误"}。原始文件和项目数据仍保留。`);
     } finally {

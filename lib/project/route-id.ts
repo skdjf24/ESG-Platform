@@ -7,3 +7,9 @@ export function projectIdFromRoute(param: string): string {
     return param;
   }
 }
+
+import type { ProjectStep } from "@/lib/types/project-data";
+
+export function formatProjectStep(projectId: string, step: ProjectStep) {
+  return `/reports/${encodeURIComponent(projectId)}/step/${step}`;
+}

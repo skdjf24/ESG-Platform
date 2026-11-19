@@ -92,7 +92,7 @@ async function main() {
       const body = await page.locator("body").innerText();
       check(Boolean(response?.ok()) && !/华澜新材料|林悦|12,680 MWh|独立模拟测试边界/.test(body), `BLANK-STEP-${step}`, `空白项目 Step ${step} 可进入且无示例企业内容`);
     }
-    await page.goto(`${baseUrl}/reports/${idA}/step/4`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/reports/${idA}/step/3`, { waitUntil: "networkidle" });
     await ready(page);
     check(await page.getByText("示例 AI 规整结果").count() === 0 && await page.getByText("12,680 MWh").count() === 0, "STEP4-NO-MOCK", "空白项目资料页不显示示例指标");
 

@@ -58,6 +58,7 @@ async function main() {
 
   await pageA.getByRole("button", { name: "打开示例项目" }).click();
   await pageA.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1$/);
+  await pageA.locator('[aria-busy="false"]').first().waitFor();
   check(await pageA.getByLabel("企业全称").inputValue() === "华澜新材料（示例）", "示例项目可直接打开且明确标识为示例");
   for (let step = 1; step <= 8; step += 1) {
     const response = await pageA.goto(`${baseUrl}/reports/public-preview-sample-2025/step/${step}`, { waitUntil: "networkidle" });

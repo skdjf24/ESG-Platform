@@ -94,7 +94,7 @@ export function createWritingDocument(): WritingDocument {
     }),
     seedBlock(chapter.id, 'case', 'case', {
       title: '节能改造项目说明',
-      html: '<p>【待补充】请引用已确认的项目背景、实施范围和证据。当前仅保留 Step 4 的资料任务，不预设项目成效或节能量。</p>',
+      html: '<p>【待补充】请引用已确认的项目背景、实施范围和证据。当前仅保留 Step 3 的资料任务，不预设项目成效或节能量。</p>',
       mappings: structuredClone(mapping), pendingKind: '待补充',
     }),
     seedBlock(chapter.id, 'chart', 'chart', {
@@ -270,7 +270,7 @@ export function validateWritingDocument(value: unknown, expectedProjectId = repo
   if (new Set(value.facts.map((fact) => fact.id)).size !== value.facts.length) return false;
   if (!Array.isArray(value.resources) || !value.resources.every((resource) => isRecord(resource)
     && ['id', 'title', 'description'].every((key) => isString(resource[key]))
-    && strings(resource.chapterIds) && ['案例', '制度', '历史资料'].includes(String(resource.kind))
+    && strings(resource.chapterIds) && ['案例', '制度', '历史资料', '定性资料'].includes(String(resource.kind))
     && typeof resource.confirmed === 'boolean' && isRevision(resource.revision)
     && (resource.confirmedBy === undefined || isString(resource.confirmedBy))
     && (resource.confirmedAt === undefined || isString(resource.confirmedAt))

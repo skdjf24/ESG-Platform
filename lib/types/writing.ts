@@ -27,7 +27,7 @@ export interface WritingFact extends EnterpriseFact {
   sourceState?: 'active' | 'upstream-removed';
 }
 export interface WritingResource {
-  id: string; chapterIds: string[]; kind: '案例' | '制度' | '历史资料';
+  id: string; chapterIds: string[]; kind: '案例' | '制度' | '历史资料' | '定性资料';
   title: string; description: string; confirmed: boolean; sourceReferences: SourceReference[];
   revision: number; confirmedBy?: string; confirmedAt?: string;
 }

@@ -68,8 +68,8 @@ async function createProject(page) {
   return decodeURIComponent(new URL(page.url()).pathname.split("/")[2]);
 }
 
-async function uploadStep4File(page, projectId, fixtureName) {
-  await page.goto(`${baseUrl}/reports/${projectId}/step/4`, { waitUntil: "networkidle" });
+async function uploadCollectionFile(page, projectId, fixtureName) {
+  await page.goto(`${baseUrl}/reports/${projectId}/step/3`, { waitUntil: "networkidle" });
   await waitForReady(page);
   await page.getByRole("button", { name: /上传资料/ }).click();
   await page.getByLabel("选择资料文件").setInputFiles(path.join(fixtureDir, fixtureName));
@@ -186,7 +186,7 @@ async function main() {
     await page.getByText(/确定性规则检查已完成/).waitFor({ timeout: 20_000 });
     check(Boolean((await readProject(page, projectId)).quality.fullCheck), "P2-BROWSER-QUALITY-BASELINE", "先建立 Step 7 全面检查基线以验证后续失效传播");
 
-    await uploadStep4File(page, projectId, "phase2-metrics.xlsx");
+    await uploadCollectionFile(page, projectId, "phase2-metrics.xlsx");
     await openParsing(page);
     await page.getByRole("button", { name: /phase2-metrics\.xlsx/ }).click();
     await page.getByRole("button", { name: "开始解析" }).click();
@@ -216,7 +216,7 @@ async function main() {
     await page.getByRole("button", { name: /phase2-metrics\.xlsx/ }).click();
     check(await page.getByRole("button", { name: /综合能源消耗.*confirmed/ }).first().isVisible(), "P2-BROWSER-PERSISTENCE", "刷新后 ParsedDocument 与已确认 candidate 仍可恢复");
 
-    await uploadStep4File(page, projectId, "phase2-structured.docx");
+    await uploadCollectionFile(page, projectId, "phase2-structured.docx");
     await openParsing(page);
     await page.getByRole("button", { name: /phase2-structured\.docx/ }).click();
     await page.getByRole("button", { name: "开始解析" }).click();
@@ -235,7 +235,7 @@ async function main() {
     check(project.resources.some((resource) => resource.confirmed && resource.sourceReferences.some((reference) => reference.fileName === "phase2-structured.docx")), "P2-BROWSER-STEP5", "确认制度实际进入 Step 5 Resource 数据源");
     await page.screenshot({ path: path.join(evidenceDir, "02-docx-source-trace.png"), fullPage: true });
 
-    await uploadStep4File(page, projectId, "phase2-text.pdf");
+    await uploadCollectionFile(page, projectId, "phase2-text.pdf");
     await openParsing(page);
     await page.getByRole("button", { name: /phase2-text\.pdf/ }).click();
     await page.getByRole("button", { name: "开始解析" }).click();
@@ -244,12 +244,12 @@ async function main() {
     check(await page.getByText(/Training coverage.*2026.*94.*percent/).isVisible(), "P2-BROWSER-PDF", "文本型 PDF 第 2 页内容与页码定位真实呈现");
     await page.screenshot({ path: path.join(evidenceDir, "03-pdf-page-preview.png"), fullPage: true });
 
-    await uploadStep4File(page, projectId, "phase2-corrupt.xlsx");
+    await uploadCollectionFile(page, projectId, "phase2-corrupt.xlsx");
     await openParsing(page);
     await page.getByRole("button", { name: /phase2-corrupt\.xlsx/ }).click();
     await page.getByRole("button", { name: "开始解析" }).click();
     await page.getByText("可恢复的解析错误", { exact: true }).waitFor({ timeout: 20_000 });
-    check(await page.getByRole("heading", { name: "ESG 资料收集、汇总与规整" }).isVisible(), "P2-BROWSER-CORRUPT", "损坏文件显示明确错误且 Step 4 不白屏");
+    check(await page.getByRole("heading", { name: "ESG资料收集与整理" }).isVisible(), "P2-BROWSER-CORRUPT", "损坏文件显示明确错误且 Step 3 不白屏");
 
     await page.getByRole("button", { name: /phase2-metrics\.xlsx/ }).click();
     await page.getByLabel("替换来源文件").setInputFiles(path.join(fixtureDir, "phase2-metrics-updated.xlsx"));

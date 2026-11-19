@@ -1,291 +1,356 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { BookOpen, ChevronRight, ClipboardList, PencilLine, Plus, X } from "lucide-react";
-import type { DataRequirement } from "@/lib/types/esg";
-import type { ProjectDataRequirement } from "@/lib/types/project-data";
-import { departments } from "@/lib/data/mock-data";
+import { useState } from "react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Database,
+  FileSpreadsheet,
+  FileText,
+  Link2,
+  MessageSquareText,
+  UploadCloud,
+  X,
+} from "lucide-react";
+import { projectFileRepository } from "@/lib/project/repository";
 import { useProjectData } from "@/components/project/project-data-provider";
+import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
+import { MaterialsWorkspace } from "@/components/workbench/materials-workspace";
+import { DocumentParsingWorkbench } from "@/components/parsing/document-parsing-workbench";
 
-type Tab = "outline" | "materials";
+type Tab = "tasks" | "parse" | "facts";
+type IntakeMode = "upload" | "online" | null;
 
-const tabs = [
-  { id: "outline", label: "报告目录", icon: BookOpen },
-  { id: "materials", label: "年度资料清单", icon: ClipboardList },
-] as const;
+export function StepThree({ initialFactId, initialSourceId }: { initialFactId?: string; initialSourceId?: string }) {
+  const { project, editProject, saveProject, setMessage, ready, saving } = useProjectData();
+  const dataRequirements = project.dataRequirements;
+  const enterpriseFacts = project.facts;
+  const [activeTab, setActiveTab] = useState<Tab>(initialFactId ? "facts" : initialSourceId ? "parse" : "tasks");
+  const [intakeMode, setIntakeMode] = useState<IntakeMode>(null);
+  const [selectedRequirementId, setSelectedRequirementId] = useState(dataRequirements[0]?.id ?? "");
+  const effectiveRequirementId = selectedRequirementId;
+  const [selectedFile, setSelectedFile] = useState<{ file: File; name: string; size: string; fileType: "PDF" | "XLSX" | "DOCX" } | null>(null);
+  const [supplementTitle, setSupplementTitle] = useState(project.projectKind === "sample" ? "节能改造项目说明" : "");
+  const [supplementContent, setSupplementContent] = useState("");
+  const [intakeError, setIntakeError] = useState("");
+  const [parseSourceId, setParseSourceId] = useState(initialSourceId);
+  const [intakeBusy, setIntakeBusy] = useState(false);
+  const [openFact, setOpenFact] = useState<string | null>(initialFactId ?? "fact-energy-2025");
+  const [factDrafts, setFactDrafts] = useState<Record<string, { value: string; unit: string; period: string; reportingBoundary: string }>>({});
+  const tabs: Array<{ id: Tab; label: string; count: number }> = [
+    { id: "tasks", label: "资料清单", count: dataRequirements.length },
+    { id: "parse", label: "解析结果 / 候选确认", count: project.sources.filter((source) => source.fileId).length },
+    { id: "facts", label: "企业事实库", count: enterpriseFacts.length },
+  ];
 
-function ReportOutline({ initialChapterId }: { initialChapterId?: string }) {
-  const { project, savedProject, editProject, saveProject, saving } = useProjectData();
-  const sections = project.reportSections.filter((section) => section.sourceState !== "upstream-removed");
-  const [selectedId, setSelectedId] = useState(initialChapterId ?? "section-4-2");
-  const [addingSection, setAddingSection] = useState(false);
-  const [newSection, setNewSection] = useState({ order: "", title: "", level: 1 as 1 | 2, description: "" });
-  const [sectionError, setSectionError] = useState("");
-  const [editingTopics, setEditingTopics] = useState(false);
-  const selectedSection = sections.find((item) => item.id === selectedId) ?? sections[0];
-  const updateSection = (patch: Partial<typeof selectedSection>) => {
-    if (!selectedSection) return;
-    editProject((current) => ({ ...current, reportSections: current.reportSections.map((item) => item.id === selectedSection.id ? { ...item, ...patch } : item) }));
-  };
+  function updateFactDraft(id: string, fact: { value: string; unit?: string; period: string; reportingBoundary?: string }, patch: Partial<{ value: string; unit: string; period: string; reportingBoundary: string }>) {
+    setFactDrafts((current) => {
+      const base = current[id] ?? { value: fact.value, unit: fact.unit ?? "", period: fact.period, reportingBoundary: fact.reportingBoundary ?? "" };
+      return { ...current, [id]: { ...base, ...patch } };
+    });
+  }
 
-  function addSection() {
-    const order = newSection.order.trim();
-    const title = newSection.title.trim();
-    if (!order || !title) {
-      setSectionError("请填写章节编号和章节名称。");
+  function applyFactDraft(id: string) {
+    const fact = enterpriseFacts.find((item) => item.id === id);
+    const draft = factDrafts[id];
+    if (!fact || !draft) return;
+    const affected = project.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.citations.some((citation) => citation.factId === id))).length;
+    if (affected && !window.confirm(`该指标已被 ${affected} 个正文块引用。更新后正文不会自动改写，但会标记为待更新。是否继续？`)) return;
+    editProject((current) => ({ ...current, facts: current.facts.map((item) => item.id === id ? {
+      ...item,
+      ...draft,
+      state: "待人工确认",
+      confirmedBy: undefined,
+      sourceConfirmationStatus: "待确认",
+      boundaryStatus: draft.reportingBoundary !== (item.reportingBoundary ?? "") ? "待核验" : item.boundaryStatus,
+    } : item) }));
+    setFactDrafts((current) => { const next = { ...current }; delete next[id]; return next; });
+  }
+
+  function showSource(sourceId?: string) {
+    setParseSourceId(sourceId);
+    setActiveTab("parse");
+  }
+
+  function openIntake(mode: Exclude<IntakeMode, null>, materialId?: string) {
+    setSelectedRequirementId(materialId ?? dataRequirements[0]?.id ?? "");
+    setIntakeMode(mode);
+  }
+
+  function resetIntake() {
+    setIntakeMode(null);
+    setSelectedFile(null);
+    setSupplementContent("");
+    setIntakeError("");
+  }
+
+  function handleIntakeFile(file: File) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const fileType = extension === "pdf" ? "PDF" : extension === "docx" ? "DOCX" : extension === "xlsx" || extension === "xls" ? "XLSX" : null;
+    if (!fileType) {
+      setSelectedFile(null);
+      setIntakeError("仅支持 XLSX、XLS、PDF 或 DOCX 文件。");
       return;
     }
-    if (sections.some((item) => item.order === order || item.title === title)) {
-      setSectionError("章节编号或名称已存在。");
+    const size = file.size >= 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+    setSelectedFile({ file, name: file.name, size, fileType });
+    setIntakeError("");
+  }
+
+  async function submitIntake() {
+    const requirement = dataRequirements.find((item) => item.id === effectiveRequirementId);
+    if (intakeBusy || saving || !ready) return;
+    if (!requirement && effectiveRequirementId) {
+      setIntakeError("请选择关联资料项。");
       return;
     }
-    const id = `section-user-${globalThis.crypto.randomUUID()}`;
-    editProject((current) => ({ ...current, reportSections: [...current.reportSections, { id, order, title, level: newSection.level, description: newSection.description.trim(), topics: [], requirementCount: 0, state: "待完善", revision: 1, sourceState: "active" }] }));
-    setSelectedId(id);
-    setAddingSection(false);
-    setNewSection({ order: "", title: "", level: 1, description: "" });
-    setSectionError("");
+    if (intakeMode === "upload" && !selectedFile) {
+      setIntakeError("请先选择文件。文件将保存到当前浏览器的本地文件仓库。");
+      return;
+    }
+    if (intakeMode === "online" && (!supplementTitle.trim() || !supplementContent.trim())) {
+      setIntakeError("请填写补充标题和资料内容。");
+      return;
+    }
+    const sourceId = `source-user-${crypto.randomUUID()}`;
+    const now = new Date();
+    let storedFileId: string | undefined;
+    setIntakeBusy(true);
+    try {
+      const storedFile = intakeMode === "upload" && selectedFile ? await projectFileRepository.save(project.projectId, selectedFile.file) : null;
+      storedFileId = storedFile?.fileId;
+      const source = intakeMode === "upload" && selectedFile && storedFile ? {
+        id: sourceId,
+        materialId: requirement?.id,
+        name: selectedFile.name,
+        kind: "file" as const,
+        fileType: selectedFile.fileType,
+        fileId: storedFile.fileId,
+        mimeType: storedFile.mimeType,
+        fileStatus: "available" as const,
+        parserStatus: "not-started" as const,
+        size: selectedFile.size,
+        uploadedAt: now.toISOString().slice(0, 10),
+        uploadedBy: project.enterprise.reportingContact.name || "当前用户",
+        state: "已上传" as const,
+      } : {
+        id: sourceId,
+        materialId: requirement?.id,
+        name: supplementTitle.trim(),
+        kind: "online" as const,
+        fileType: "表单" as const,
+        fileStatus: "metadata-only" as const,
+        size: `${supplementContent.trim().length} 字`,
+        uploadedAt: now.toISOString().slice(0, 10),
+        uploadedBy: project.enterprise.reportingContact.name || "当前用户",
+        state: "已上传" as const,
+      };
+      const onlineResource = intakeMode === "online" ? [{
+        id: `resource-${sourceId}`,
+        chapterIds: [],
+        kind: requirement?.type === "案例" ? "案例" as const : requirement?.type === "制度文件" ? "制度" as const : "定性资料" as const,
+        title: supplementTitle.trim(),
+        description: supplementContent.trim(),
+        confirmed: false,
+        sourceReferences: [{ id: `ref-${sourceId}`, sourceId, fileName: `${supplementTitle.trim()}.表单`, locator: "在线补充表单", excerpt: supplementContent.trim().slice(0, 160) }],
+        revision: 1,
+      }] : [];
+      const next = {
+        ...project,
+        sources: [...project.sources, source],
+        resources: [...project.resources, ...onlineResource],
+        dataRequirements: project.dataRequirements.map((item) => item.id === requirement?.id ? { ...item, collectionMethod: intakeMode === "online" ? "在线补充" as const : "文件上传" as const, state: "待确认" as const, reviewStatus: "待复核" as const } : item),
+      };
+      if (!await saveProject(3, intakeMode === "upload" ? "保存资料文件" : "保存在线补充", next)) {
+        if (storedFileId) await projectFileRepository.delete(project.projectId, storedFileId).catch(() => undefined);
+        return;
+      }
+      resetIntake();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "来源记录保存失败。";
+      setIntakeError(message);
+      setMessage(message);
+      if (storedFileId) await projectFileRepository.delete(project.projectId, storedFileId).catch(() => undefined);
+    } finally {
+      setIntakeBusy(false);
+    }
   }
-
-  function toggleSectionTopic(topicName: string) {
-    if (!selectedSection) return;
-    updateSection({ topics: selectedSection.topics.includes(topicName) ? selectedSection.topics.filter((item) => item !== topicName) : [...selectedSection.topics, topicName] });
-  }
-
-  function confirmSectionTopics() {
-    if (!selectedSection) return;
-    const reportSections = project.reportSections.map((item) => item.id === selectedSection.id ? { ...item, topicReviewStatus: undefined } : item);
-    return saveProject(3, "确认章节议题关联", { ...project, reportSections });
-  }
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(480px,1.35fr)] animate-fade-up">
-      <SectionCard
-        title="报告目录"
-        description="选择章节后编辑内容规划，可通过章节编号调整顺序。"
-        flush
-        action={<button onClick={() => setAddingSection(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52]"><Plus className="size-3.5" />新增章节</button>}
-      >
-        <div className="border-b border-[#edf0ee] px-5 py-3 text-[10px] text-[#84908a]">共 {sections.filter((item) => item.level === 1).length} 个一级章节 · {sections.filter((item) => item.level === 2).length} 个二级章节</div>
-        <div className="scrollbar-subtle max-h-[555px] overflow-y-auto p-3">
-          {sections.length === 0 ? <p className="p-3 text-xs text-[#7c8981]">暂无章节，请先新增章节。</p> : null}
-          {sections.map((section) => {
-            const active = section.id === selectedSection?.id;
-            return (
-              <button
-                key={section.id}
-                onClick={() => setSelectedId(section.id)}
-                className={`mb-1 flex w-full items-center gap-2 rounded-xl border px-3 py-3 text-left transition ${section.level === 2 ? "pl-8" : ""} ${active ? "border-[#bbd7cc] bg-[#edf5f1]" : "border-transparent hover:border-[#e4e9e6] hover:bg-[#fafcfb]"}`}
-              >
-                <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-[10px] font-semibold ${active ? "bg-[#176b52] text-white" : "bg-[#f0f3f1] text-[#6c7872]"}`}>{section.order}</span>
-                <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-xs font-semibold ${active ? "text-[#174e3d]" : "text-[#344239]"}`}>{section.title}</span>
-                </span>
-                <ChevronRight className={`size-3.5 shrink-0 ${active ? "text-[#176b52]" : "text-[#b3bbb7]"}`} />
-              </button>
-            );
-          })}
-        </div>
-      </SectionCard>
-
-      {selectedSection ? <SectionCard
-        title="章节编辑"
-        description={`正在编辑 ${selectedSection.order} ${selectedSection.title}`}
-        action={selectedSection.topicReviewStatus ? <StatusBadge tone="amber">待复核</StatusBadge> : <StatusBadge tone={selectedSection.state === "已就绪" ? "green" : "amber"}>{selectedSection.state}</StatusBadge>}
-      >
-        <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
-            <div>
-              <label htmlFor="section-order" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节编号</label>
-              <input id="section-order" value={selectedSection.order} onChange={(event) => updateSection({ order: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
-            </div>
-            <div>
-              <label htmlFor="section-title" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节名称</label>
-              <input id="section-title" value={selectedSection.title} onChange={(event) => updateSection({ title: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="section-description" className="mb-2 block text-[11px] font-semibold text-[#536159]">章节编制说明</label>
-            <textarea id="section-description" value={selectedSection.description} onChange={(event) => updateSection({ description: event.target.value })} rows={4} className="w-full resize-none rounded-lg border border-[#dce3df] px-3 py-2.5 text-xs leading-5 outline-none focus:border-[#6f9f8c]" />
-          </div>
-
-          <div className="rounded-xl border border-[#e5e9e7] bg-[#fafcfb] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] font-semibold text-[#425148]">关联实质性议题</div>
-              <button onClick={() => setEditingTopics((value) => !value)} className="text-[10px] font-semibold text-[#176b52]">{editingTopics ? "完成关联" : "编辑关联"}</button>
-            </div>
-            {editingTopics ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{project.topics.map((topic) => <label key={topic.id} className="flex items-center gap-2 rounded-lg border border-[#e1e6e3] bg-white px-3 py-2 text-[10px] text-[#4f5e56]"><input type="checkbox" checked={selectedSection.topics.includes(topic.name)} onChange={() => toggleSectionTopic(topic.name)} className="accent-[#176b52]" />{topic.category} · {topic.name}</label>)}</div> : null}
-            <div className="mt-3 flex min-h-7 flex-wrap gap-2">
-              {selectedSection.topics.length ? selectedSection.topics.map((topic) => <StatusBadge key={topic} tone="teal">{topic}</StatusBadge>) : <span className="text-[11px] text-[#949e99]">暂未关联议题</span>}
-            </div>
-            {selectedSection.topicReviewStatus ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                <p>评估的议题范围、名称或评分有变化，请复核此章节的议题关联。</p>
-                <button type="button" disabled={saving} onClick={() => void confirmSectionTopics()} className="font-semibold hover:underline disabled:opacity-50">确认议题关联</button>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-[#edf0ee] pt-5">
-            <button onClick={() => { const saved = savedProject.reportSections.find((item) => item.id === selectedSection.id); if (saved) updateSection(saved); }} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f7f9f8]">取消修改</button>
-            <button disabled={saving} onClick={() => void saveProject(3, `保存章节 ${selectedSection.order}`)} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46] disabled:opacity-50">保存章节</button>
-          </div>
-        </div>
-      </SectionCard> : null}
-
-      {addingSection ? (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-[#10241c]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-section-title" onMouseDown={(event) => event.target === event.currentTarget && setAddingSection(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#e5e9e7] px-5 py-4"><div><h2 id="add-section-title" className="text-sm font-semibold text-[#26352d]">新增报告章节</h2><p className="mt-1 text-[10px] text-[#87918c]">保存项目后将同步创建 Step 5 章节，不会删除既有正文。</p></div><button aria-label="关闭新增章节" onClick={() => setAddingSection(false)} className="grid size-8 place-items-center rounded-lg text-[#7d8882] hover:bg-[#f2f5f3]"><X className="size-4" /></button></div>
-            <div className="space-y-4 p-5"><div className="grid grid-cols-[110px_1fr] gap-3"><div><label htmlFor="new-section-order" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">章节编号</label><input id="new-section-order" value={newSection.order} onChange={(event) => setNewSection({ ...newSection, order: event.target.value })} placeholder="如 8" className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none" /></div><div><label htmlFor="new-section-title-input" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">章节名称</label><input id="new-section-title-input" value={newSection.title} onChange={(event) => setNewSection({ ...newSection, title: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none" /></div></div><div><label htmlFor="new-section-level" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">章节层级</label><select id="new-section-level" value={newSection.level} onChange={(event) => setNewSection({ ...newSection, level: Number(event.target.value) as 1 | 2 })} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs"><option value={1}>一级章节</option><option value={2}>二级章节</option></select></div><div><label htmlFor="new-section-description" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">编制说明</label><textarea id="new-section-description" rows={3} value={newSection.description} onChange={(event) => setNewSection({ ...newSection, description: event.target.value })} className="w-full rounded-lg border border-[#dce3df] px-3 py-2 text-xs outline-none" /></div>{sectionError ? <p role="alert" className="text-[10px] text-rose-600">{sectionError}</p> : null}</div>
-            <div className="flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-5 py-4"><button onClick={() => setAddingSection(false)} className="h-9 rounded-lg border border-[#dce3df] px-4 text-[11px] font-semibold text-[#5b6861]">取消</button><button onClick={addSection} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">创建章节</button></div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-type MaterialDraft = Pick<DataRequirement, "itemName" | "section" | "type" | "responsibleDepartment" | "collectionMethod" | "dueDate"> & { id?: string };
-
-const materialTypes: DataRequirement["type"][] = ["定量数据", "定性说明", "制度文件", "案例"];
-const collectionMethods: DataRequirement["collectionMethod"][] = ["文件上传", "在线补充", "现有Excel"];
-const materialField = "h-9 w-full min-w-0 rounded-lg border border-[#dce3df] bg-white px-3 text-xs text-[#36453c] outline-none focus:border-[#6f9f8c]";
-
-function MaterialsList() {
-  const { project, ready, saving, saveProject } = useProjectData();
-  const [draft, setDraft] = useState<MaterialDraft | null>(null);
-  const [error, setError] = useState("");
-  const items = project.dataRequirements;
-  const sectionLabels = [...new Set(project.reportSections.filter((item) => item.sourceState !== "upstream-removed").map((item) => `${item.order} ${item.title}`))];
-
-  function openEditor(item?: ProjectDataRequirement) {
-    setError("");
-    setDraft(item ? {
-      id: item.id, itemName: item.itemName, section: item.section, type: item.type,
-      responsibleDepartment: item.responsibleDepartment, collectionMethod: item.collectionMethod, dueDate: item.dueDate,
-    } : { itemName: "", section: "", type: "定性说明", responsibleDepartment: "", collectionMethod: "文件上传", dueDate: "" });
-  }
-
-  async function saveMaterial(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!draft || saving || !ready) return;
-    const { id, ...fields } = draft;
-    const itemName = fields.itemName.trim();
-    if (!itemName) { setError("请填写资料名称。"); return; }
-    const existing = items.find((item) => item.id === id);
-    const suggestedDepartment = existing?.suggestedDepartment ?? "";
-    const state = existing?.state ?? "待分工";
-    const next: ProjectDataRequirement = {
-      ...existing, ...fields, itemName, id: existing?.id ?? `data-user-${globalThis.crypto.randomUUID()}`,
-      suggestedDepartment, adjustedByUser: Boolean(fields.responsibleDepartment && fields.responsibleDepartment !== suggestedDepartment),
-      state: state === "待分工" && fields.responsibleDepartment ? "待收集" : state,
-      revision: existing?.revision ?? 1, reviewStatus: existing?.reviewStatus ?? "待复核",
-    };
-    const dataRequirements = existing ? items.map((item) => item.id === existing.id ? next : item) : [...items, next];
-    setError("");
-    if (await saveProject(3, "保存年度资料清单", { ...project, dataRequirements })) setDraft(null);
-    else setError("资料项未保存，请查看项目提示后重试。");
-  }
-
-  return (
-    <SectionCard
-      title="年度资料清单"
-      description="按报告目录整理本年度所需资料。保存后，Step 4 会读取这些资料任务。"
-      action={<button type="button" disabled={!ready || saving || Boolean(draft)} onClick={() => openEditor()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-xs font-semibold text-[#176b52] disabled:opacity-50"><Plus className="size-4" />新增资料项</button>}
-      flush
-    >
-      {draft ? (
-        <form onSubmit={(event) => void saveMaterial(event)} aria-label={draft.id ? "编辑资料项" : "新增资料项"} className="border-b border-[#e5e9e7] bg-[#f8fbf9] p-5 sm:p-6">
-          <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1">
-              <label htmlFor="material-name" className="block text-xs font-semibold">资料名称</label>
-              <input id="material-name" required value={draft.itemName} onChange={(event) => setDraft({ ...draft, itemName: event.target.value })} className={materialField} />
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="material-section" className="block text-xs font-semibold">对应章节</label>
-              <select id="material-section" value={draft.section} onChange={(event) => setDraft({ ...draft, section: event.target.value })} className={materialField}>
-                <option value="">未关联章节</option>
-                {draft.section && !sectionLabels.includes(draft.section) ? <option value={draft.section}>{draft.section}（历史记录）</option> : null}
-                {sectionLabels.map((label) => <option key={label}>{label}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="material-type" className="block text-xs font-semibold">资料类型</label>
-              <select id="material-type" value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as DataRequirement["type"] })} className={materialField}>
-                {materialTypes.map((type) => <option key={type}>{type}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="material-department" className="block text-xs font-semibold">责任部门</label>
-              <select id="material-department" value={draft.responsibleDepartment} onChange={(event) => setDraft({ ...draft, responsibleDepartment: event.target.value })} className={materialField}>
-                <option value="">待分工</option>
-                {draft.responsibleDepartment && !departments.includes(draft.responsibleDepartment) ? <option>{draft.responsibleDepartment}</option> : null}
-                {departments.map((department) => <option key={department}>{department}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="material-method" className="block text-xs font-semibold">收集方式</label>
-              <select id="material-method" value={draft.collectionMethod} onChange={(event) => setDraft({ ...draft, collectionMethod: event.target.value as DataRequirement["collectionMethod"] })} className={materialField}>
-                {collectionMethods.map((method) => <option key={method}>{method}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="material-due" className="block text-xs font-semibold">截止日期</label>
-              <input id="material-due" type="date" value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} className={materialField} />
-            </div>
-          </fieldset>
-          {error ? <p role="alert" className="mt-3 text-xs text-rose-700">{error}</p> : null}
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" disabled={saving} onClick={() => setDraft(null)} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#5a6860] disabled:opacity-50">取消</button>
-            <button type="submit" disabled={saving} className="h-9 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white disabled:opacity-50">{saving ? "保存中…" : "保存资料项"}</button>
-          </div>
-        </form>
-      ) : null}
-      <div className="scrollbar-subtle overflow-x-auto">
-        <table className="workbench-data-table">
-          <thead className="bg-[#fafbf9] text-[#536159]"><tr>
-            {['资料名称', '对应章节', '资料类型', '责任部门', '收集方式', '截止日期', '状态', '操作'].map((label) => <th key={label} scope="col" className="border-b border-[#e7ebe9] px-4 py-3.5">{label}</th>)}
-          </tr></thead>
-          <tbody className="divide-y divide-[#edf0ee] text-[#4d5b54]">
-            {items.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center">暂无资料项，可按报告需要新增。</td></tr> : null}
-            {items.map((item) => <tr key={item.id}>
-              <td className="px-4 py-4 font-semibold">{item.itemName}</td>
-              <td className="px-4 py-4">{item.section || "未关联章节"}</td>
-              <td className="px-4 py-4">{item.type}</td>
-              <td className="px-4 py-4">{item.responsibleDepartment || "待分工"}</td>
-              <td className="px-4 py-4">{item.collectionMethod}</td>
-              <td className="px-4 py-4 tabular-nums">{item.dueDate || "—"}</td>
-              <td className="px-4 py-4"><StatusBadge tone="gray">{item.state}</StatusBadge></td>
-              <td className="px-4 py-4"><button type="button" disabled={saving || Boolean(draft)} aria-label={`编辑${item.itemName}`} onClick={() => openEditor(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dce3df] px-3 py-1.5 text-xs font-semibold text-[#176b52] disabled:opacity-50"><PencilLine className="size-3.5" />编辑</button></td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
-  );
-}
-
-export function StepThree({ initialChapterId }: { initialChapterId?: string }) {
-  const { saving } = useProjectData();
-  const [activeTab, setActiveTab] = useState<Tab>("outline");
 
   return (
     <>
       <StepPageHeader
-        eyebrow="Step 3 · 大纲与资料"
-        title="构建报告大纲与年度资料清单"
-        description="组织报告章节、关联重要性议题，并维护本年度需要收集的资料。"
+        eyebrow="Step 03 · Data collection"
+        title="ESG资料收集与整理"
+        description="按议题和部门收集定性与定量资料，核对来源后人工确认。报告章节可在下一步关联。"
+        action={
+          <div className="flex gap-2">
+            <button
+              disabled={!ready || saving} onClick={() => openIntake("online")}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8e0dc] bg-white px-3.5 text-xs font-semibold text-[#4c5b53] transition hover:border-[#9bb6a9] hover:bg-[#f8faf9]"
+            >
+              <MessageSquareText className="size-3.5" />在线补充
+            </button>
+            <button
+              disabled={!ready || saving} onClick={() => openIntake("upload")}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#176b52] px-3.5 text-xs font-semibold text-white transition hover:bg-[#105c46]"
+            >
+              <UploadCloud className="size-3.5" />上传资料
+            </button>
+          </div>
+        }
       />
-      <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl border border-[#e0e6e2] bg-white p-1.5" aria-label="Step 3 模块" role="group">
-        {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={id === activeTab} disabled={saving} onClick={() => setActiveTab(id)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold ${id === activeTab ? "bg-[#edf5f1] text-[#176b52]" : "text-[#67736d] hover:bg-[#f6f8f7]"}`}><Icon className="size-4" />{label}</button>)}
+
+      <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#e0e6e2] bg-white p-1.5">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition ${activeTab === tab.id ? "bg-[#173e31] text-white shadow-sm" : "text-[#68756e] hover:bg-[#f3f6f4]"}`}
+          >
+            {tab.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === tab.id ? "bg-white/15 text-white/80" : "bg-[#edf1ef] text-[#7d8882]"}`}>{tab.count}</span>
+          </button>
+        ))}
       </div>
-      {activeTab === "outline" ? <ReportOutline initialChapterId={initialChapterId} /> : <MaterialsList />}
+
+      {activeTab === "tasks" ? <MaterialsWorkspace onIntake={openIntake} onReviewSource={showSource} /> : null}
+      {activeTab === "parse" ? <DocumentParsingWorkbench key={parseSourceId ?? "sources"} initialSourceId={parseSourceId} /> : null}
+
+      {activeTab === "facts" ? (
+        <div className="space-y-4 animate-fade-up">
+          <Notice tone="info" title="事实与原始资料保持关联">
+            每条事实均保留来源文件、工作表/单元格或页码定位。报告撰写阶段引用事实时，可回溯至原始证据。
+          </Notice>
+          <SectionCard
+            title="企业事实库"
+            description="查看本项目的事实记录与来源链路。"
+            flush
+          >
+            <div className="divide-y divide-[#edf0ee]">
+              {enterpriseFacts.map((fact) => {
+                const expanded = openFact === fact.id;
+                return (
+                  <div id={`fact-${fact.id}`} key={fact.id} className={`scroll-mt-24 bg-white ${initialFactId === fact.id ? "ring-1 ring-inset ring-amber-300" : ""}`}>
+                    <button onClick={() => setOpenFact(expanded ? null : fact.id)} className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-[#fbfcfb] sm:grid-cols-[1fr_150px_130px_150px_24px] sm:items-center">
+                      <div className="flex items-start gap-3">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#edf5f1] text-[#176b52]"><Database className="size-4" /></span>
+                        <div>
+                          <p className="text-xs font-semibold text-[#2a372f]">{fact.name}</p>
+                          <p className="mt-1 text-[10px] text-[#88928d]">{fact.topic} · {fact.period}</p>
+                        </div>
+                      </div>
+                      <div><span className="text-base font-semibold text-[#1f2e26]">{fact.value}</span>{fact.unit ? <span className="ml-1 text-[10px] text-[#7b8680]">{fact.unit}</span> : null}</div>
+                      <div><StatusBadge tone={fact.state === "已确认" ? "green" : "amber"} dot>{fact.state}</StatusBadge></div>
+                      <div className="inline-flex items-center gap-1.5 text-[10px] text-[#607068]"><Link2 className="size-3.5 text-[#176b52]" />{fact.sourceReferences.length} 个原始来源</div>
+                      {expanded ? <ChevronUp className="size-4 text-[#85908a]" /> : <ChevronDown className="size-4 text-[#85908a]" />}
+                    </button>
+                    {expanded ? (
+                      <div className="border-t border-[#edf0ee] bg-[#f8faf9] px-5 py-4 sm:pl-[68px]">
+                        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[#76817b]">来源链路</p>
+                        <div className="grid gap-2 lg:grid-cols-2">
+                          {fact.sourceReferences.map((source) => (
+                            <div key={source.id} className="flex items-start gap-3 rounded-xl border border-[#dfe5e2] bg-white p-3.5">
+                              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                                {source.fileName.endsWith(".xlsx") ? <FileSpreadsheet className="size-4" /> : <FileText className="size-4" />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="break-all text-[11px] font-semibold text-[#344139]">{source.fileName}</p>
+                                  {project.sources.some((item) => item.id === source.sourceId && item.fileId) ? <button onClick={() => showSource(source.sourceId)} className="shrink-0 text-[11px] font-semibold text-[#176b52] hover:underline">查看原文件</button> : null}
+                                </div>
+                                <p className="mt-1 text-[10px] font-medium text-[#758079]">定位：{source.locator}</p>
+                                <p className="mt-1.5 break-words text-[10px] leading-4 text-[#8b9490]">“{source.excerpt}”</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 rounded-xl border border-[#dfe5e2] bg-white p-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-semibold text-[#4c5d53]">更新事实值</p><p className="mt-1 text-[9px] text-[#8a958f]">保存项目后自动增加事实修订号；已引用正文仅标记待更新，不自动改写。</p></div><StatusBadge tone="gray">当前 v{fact.revision}</StatusBadge></div>
+                          <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_110px_150px_auto]">
+                            <input aria-label={`${fact.name}数值`} value={factDrafts[fact.id]?.value ?? fact.value} onChange={(event) => updateFactDraft(fact.id, fact, { value: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <input aria-label={`${fact.name}单位`} value={factDrafts[fact.id]?.unit ?? fact.unit ?? ""} onChange={(event) => updateFactDraft(fact.id, fact, { unit: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <input aria-label={`${fact.name}报告期`} value={factDrafts[fact.id]?.period ?? fact.period} onChange={(event) => updateFactDraft(fact.id, fact, { period: event.target.value })} className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <button disabled={!factDrafts[fact.id]} onClick={() => applyFactDraft(fact.id)} className="h-9 rounded-lg bg-[#176b52] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">应用更新</button>
+                          </div>
+                          <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_170px]">
+                            <input aria-label={`${fact.name}统计边界`} value={factDrafts[fact.id]?.reportingBoundary ?? fact.reportingBoundary ?? ""} onChange={(event) => updateFactDraft(fact.id, fact, { reportingBoundary: event.target.value })} placeholder="请填写该指标经核验的统计边界" className="h-9 rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                            <div className="flex h-9 items-center justify-center rounded-lg border border-[#dce3df] bg-[#f8faf9] text-[10px] text-[#65746b]">边界：{fact.boundaryStatus ?? "待核验"} · 来源：{fact.sourceConfirmationStatus ?? "待确认"}</div>
+                          </div>
+                        </div>
+                        {fact.confirmedBy ? <p className="mt-3 inline-flex items-center gap-1.5 text-[9px] text-[#87918c]"><CheckCircle2 className="size-3 text-[#27805f]" />由 {fact.confirmedBy} 人工确认</p> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        </div>
+      ) : null}
+
       <StepFooter currentStep={3} />
+
+      {intakeMode ? (
+        <div className="fixed inset-0 z-[60] flex justify-end bg-[#10241c]/40 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="intake-title" onMouseDown={(event) => !intakeBusy && event.target === event.currentTarget && resetIntake()}>
+          <div className="h-full w-full max-w-[480px] overflow-y-auto bg-white shadow-2xl animate-fade-up">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-[#e5e9e7] bg-white px-6 py-5">
+              <div>
+                <span className="mb-3 grid size-10 place-items-center rounded-xl bg-[#eaf4ef] text-[#176b52]">{intakeMode === "upload" ? <UploadCloud className="size-5" /> : <MessageSquareText className="size-5" />}</span>
+                <h2 id="intake-title" className="text-base font-semibold text-[#1d2a23]">{intakeMode === "upload" ? "上传资料文件" : "在线补充资料"}</h2>
+                <p className="mt-1 text-[11px] text-[#7f8a84]">{intakeMode === "upload" ? "文件保存到本地，可在解析工作台查阅原文。" : "保存后可在资料详情核对并人工确认。"}</p>
+              </div>
+              <button disabled={intakeBusy} onClick={resetIntake} className="grid size-8 place-items-center rounded-lg text-[#7c8781] hover:bg-[#f1f4f2]" aria-label="关闭"><X className="size-4" /></button>
+            </div>
+            <div className="space-y-5 p-6">
+              <div>
+                <label htmlFor="requirement-select" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">关联资料项</label>
+                <select id="requirement-select" value={effectiveRequirementId} onChange={(event) => setSelectedRequirementId(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none focus:border-[#78a28f]">
+                  <option value="">暂不关联资料项</option>
+                  {dataRequirements.map((item) => <option key={item.id} value={item.id}>{item.itemName}</option>)}
+                </select>
+              </div>
+              {intakeMode === "upload" ? (
+                <>
+                  <div className="rounded-xl border border-dashed border-[#9db8ab] bg-[#f5faf7] px-6 py-10 text-center">
+                    <span className="mx-auto grid size-11 place-items-center rounded-xl bg-white text-[#176b52] shadow-sm"><UploadCloud className="size-5" /></span>
+                    <p className="mt-4 text-xs font-semibold text-[#34423a]">拖拽文件至此，或点击选择</p>
+                    <p className="mt-1.5 text-[10px] leading-4 text-[#849089]">支持 XLSX、XLS、PDF、DOCX；可直接沿用企业现有 Excel 模板</p>
+                    <label className="mt-4 inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#d4ded9] bg-white px-3 text-[10px] font-semibold text-[#526159]">选择文件<input type="file" aria-label="选择资料文件" accept=".xlsx,.xls,.pdf,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleIntakeFile(file); event.target.value = ""; }} /></label>
+                    {selectedFile ? <p className="mt-3 text-[10px] font-semibold text-[#176b52]">已选择：{selectedFile.name} · {selectedFile.size}</p> : null}
+                  </div>
+                  <Notice tone="info">提交后文件保持“待解析”；只有真实 Parser 成功运行后才生成单元格、页码及候选，且候选不会自动入库。</Notice>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="supplement-title" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">补充标题</label>
+                    <input id="supplement-title" value={supplementTitle} onChange={(event) => setSupplementTitle(event.target.value)} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#78a28f]" />
+                  </div>
+                  <div>
+                    <label htmlFor="supplement-content" className="mb-2 block text-[11px] font-semibold text-[#3a4740]">资料内容</label>
+                    <textarea id="supplement-content" rows={8} value={supplementContent} onChange={(event) => setSupplementContent(event.target.value)} placeholder="请按企业实际情况补充项目背景、实施范围、年度进展与成效……" className="w-full resize-none rounded-lg border border-[#dce3df] p-3 text-xs leading-6 outline-none placeholder:text-[#a0aaa4] focus:border-[#78a28f]" />
+                  </div>
+                  <div className="rounded-xl border border-[#e1e6e3] bg-[#f8faf9] p-4">
+                    <p className="text-[10px] font-semibold text-[#4a5750]">来源记录</p>
+                    <p className="mt-1.5 text-[10px] leading-5 text-[#849089]">提交后将记录填写人、填写时间与对应表单字段，作为事实来源链路的一部分。</p>
+                  </div>
+                </>
+              )}
+              {intakeError ? <p role="alert" className="text-[10px] text-rose-600">{intakeError}</p> : null}
+            </div>
+            <div className="sticky bottom-0 mt-auto flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-6 py-4">
+              <button disabled={intakeBusy} onClick={resetIntake} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5b6861]">取消</button>
+              <button disabled={intakeBusy || saving || !ready} onClick={() => void submitIntake()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存来源记录<ArrowRight className="size-3.5" /></button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

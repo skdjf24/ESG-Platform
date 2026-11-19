@@ -200,20 +200,19 @@ async function main() {
     check(isDeepStrictEqual(await readProject(page, otherId), otherBefore)
       && otherBefore.topics.some(({ id }) => id === energy.id), "PROJECT-ISOLATION", "另一企业项目的完整存档与预设议题未受影响");
 
-    await openStep(page, sampleId, 3);
+    await openStep(page, sampleId, 4);
     check(!await page.getByText("披露要求矩阵", { exact: true }).count()
       && isDeepStrictEqual(removed.disclosureRequirements, beforePreset.disclosureRequirements), "ARCHIVED-DISCLOSURE", "矩阵已移除，历史条款、适用性和原章节映射完整保留");
-    await page.getByRole("button", { name: /报告目录/ }).click();
     const chapter = section(page, "章节编辑");
     await chapter.getByRole("button", { name: "编辑关联", exact: true }).click();
     check(await chapter.getByText("待复核", { exact: true }).isVisible()
       && !await chapter.getByRole("checkbox", { name: /能源管理/ }).count()
-      && await chapter.getByText("暂未关联议题", { exact: true }).isVisible(), "STEP3-OUTLINE", "大纲章节保留并待复核，编辑关联时不存在已删除议题");
+      && await chapter.getByText("暂未关联议题", { exact: true }).isVisible(), "STEP4-OUTLINE", "大纲章节保留并待复核，编辑关联时不存在已删除议题");
     await page.screenshot({ path: path.join(outputDir, "outline-review.png"), fullPage: true });
 
     await openStep(page, sampleId, 2);
     check(!await pool.getByRole("button", { name: `编辑${energy.name}`, exact: true }).count()
-      && await result.getByText("待复核", { exact: true }).isVisible(), "PRESET-REFRESH", "切到 Step 3 再回 Step 2 后移除和待复核状态保持");
+      && await result.getByText("待复核", { exact: true }).isVisible(), "PRESET-REFRESH", "切到 Step 4 再回 Step 2 后移除和待复核状态保持");
     await page.getByRole("button", { name: "新增议题", exact: true }).click();
     await page.getByLabel("从预设添加", { exact: true }).selectOption(energy.id);
     await page.getByRole("button", { name: "添加预设议题", exact: true }).click();
@@ -229,15 +228,14 @@ async function main() {
     await page.getByRole("button", { name: "确认评估结果", exact: true }).click();
     const reviewed = await saveDraft(page, sampleId);
     check(reviewed.materiality.confirmed && !reviewed.materiality.reviewStatus, "RECONFIRM-ASSESSMENT", "重新确认当前已评分范围后清除评估待复核");
-    await openStep(page, sampleId, 3);
-    await page.getByRole("button", { name: /报告目录/ }).click();
+    await openStep(page, sampleId, 4);
     await chapter.getByRole("button", { name: "编辑关联", exact: true }).click();
     await chapter.getByRole("checkbox", { name: /能源管理/ }).check();
     await chapter.getByRole("button", { name: "确认议题关联", exact: true }).click();
     await chapter.getByRole("button", { name: "确认议题关联", exact: true }).waitFor({ state: "hidden" });
     const relinked = await readProject(page, sampleId);
     check(relinked.reportSections.find(({ id }) => id === "section-4-2").topics.includes(energy.name)
-      && !relinked.reportSections.find(({ id }) => id === "section-4-2").topicReviewStatus, "STEP3-MANUAL-RELINK", "允许显式重建并确认章节议题关联");
+      && !relinked.reportSections.find(({ id }) => id === "section-4-2").topicReviewStatus, "STEP4-MANUAL-RELINK", "允许显式重建并确认章节议题关联");
 
     await openStep(page, otherId, 2);
     await page.setViewportSize({ width: 390, height: 844 });

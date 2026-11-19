@@ -199,7 +199,7 @@ export async function copyProjectToNextYear(projectId: string, targetYear?: numb
     },
     materiality: { ...source.materiality, confirmed: false, confirmedAt: undefined, revision: source.materiality.revision + 1 },
     disclosureRequirements: source.disclosureRequirements.map((item) => ({ ...item, userConfirmed: false, reviewStatus: "待复核", revision: item.revision + 1 })),
-    dataRequirements: source.dataRequirements.map((item) => ({ ...item, state: "待收集", reviewStatus: "待复核", revision: item.revision + 1 })),
+    dataRequirements: source.dataRequirements.map((item) => ({ ...item, state: "待收集", reviewStatus: "待复核", confirmedAt: undefined, revision: item.revision + 1 })),
     sources: source.sources.map((item) => {
       const copiedFileId = item.fileId ? fileIdMap.get(item.fileId) : undefined;
       return {

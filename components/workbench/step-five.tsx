@@ -8,7 +8,9 @@ import { ResourcePanel } from '@/components/writing/resource-panel';
 import { AiDialog } from '@/components/writing/ai-dialog';
 import { PolicyDialog } from '@/components/writing/policy-dialog';
 import { useWritingDocument } from '@/components/writing/use-writing-document';
-import { createBlock, getChapterResources, plainText, sanitizeHtml, scanWriting } from '@/lib/writing/document';
+import { chapterEvidence } from '@/lib/project/materials';
+import { formatProjectStep } from '@/lib/project/route-id';
+import { createBlock, plainText, sanitizeHtml, scanWriting } from '@/lib/writing/document';
 import { operationLabels } from '@/lib/writing/mock-ai';
 import { liveAiProvider } from '@/lib/writing/live-ai';
 import { createAiEvidence } from '@/lib/ai/evidence';
@@ -65,6 +67,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
   const [aiRequest, setAiRequest] = useState<AiTaskRequest | null>(null);
   const aiStatus = useAiStatus();
   const chapter = doc.chapters.find(c => c.id === chapterId) ?? doc.chapters[0];
+  const evidence = chapterEvidence(store.project, chapter.id);
   const selectedBlock = chapter.blocks.find(b => b.id === blockId);
   const issues = scanWriting(chapter, doc.policy);
   const pending = chapter.blocks.filter(b => (b.pendingKind && !b.resolved) || b.reviewStatus === '待复核');
@@ -105,9 +108,8 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     if (operation !== 'draft' && (!selectedBlock || selectedBlock.kind === 'table' || selectedBlock.kind === 'heading')) { store.setMessage('请先选择正文段落、案例或说明内容块。'); return; }
     const text = selection?.blockId === blockId ? selection.text : '';
     if (operation === 'rewrite' && !text) { store.setMessage('请在当前正文块中选中文字，再执行局部改写。'); return; }
-    const topics = store.project.reportSections.find(s => s.id === chapter.id)?.topics ?? [];
-    const facts = doc.facts.filter(f => topics.includes(f.topic) || chapter.blocks.some(b => b.citations.some(c => c.factId === f.id)));
-    const resources = getChapterResources(doc.resources, chapter.id);
+    const facts = doc.facts.filter(f => evidence.facts.includes(f) || chapter.blocks.some(b => b.citations.some(c => c.factId === f.id)));
+    const resources = evidence.resources;
     setAiRequest({ taskId: crypto.randomUUID(), operation, chapter: structuredClone(chapter), blockId: operation === 'draft' ? undefined : selectedBlock?.id,
       selectedText: operation === 'rewrite' ? text : undefined, sourceText: operation === 'draft' ? chapter.blocks.map(b => plainText(b.html)).join('\n') : plainText(selectedBlock?.html ?? ''),
       facts: structuredClone(facts), evidence: createAiEvidence(facts, resources), requirementIds: [], policy: structuredClone(doc.policy) });
@@ -156,12 +158,12 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     router.push(`/reports/${store.project.projectId}/step/6?blockId=${encodeURIComponent(block.id)}`);
   }
 
-  async function navigateToStep(step: 4 | 6) {
+  async function navigateToStep(step: 3 | 4 | 6, sourceId?: string) {
     if (store.dirty) {
       const saved = await store.save('步骤切换自动保存');
       if (!saved) return;
     }
-    router.push(`/reports/${store.project.projectId}/step/${step}`);
+    router.push(formatProjectStep(store.project.projectId, step) + (sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ""));
   }
 
   if (!store.ready) return <div className="p-12 text-center text-sm text-[#63776a]">正在读取本地编制草稿…</div>;
@@ -176,7 +178,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     {store.message && <div role="status" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{store.message}<button aria-label="关闭提示" onClick={() => store.setMessage('')}><X className="size-4" /></button></div>}
     <div className={`writing-grid ${panelOpen ? '' : 'writing-grid-closed'}`}>
       <aside className="writing-tree self-start rounded-xl border border-[#e1e7e3] bg-white">
-        <div className="flex items-center gap-2 border-b border-[#edf0ee] p-4 text-sm font-semibold"><BookOpen className="size-4 text-[#176b52]" />报告目录<span className="ml-auto text-[10px] font-normal text-[#89978e]">Step 3</span></div>
+        <div className="flex items-center gap-2 border-b border-[#edf0ee] p-4 text-sm font-semibold"><BookOpen className="size-4 text-[#176b52]" />报告目录<span className="ml-auto text-[10px] font-normal text-[#89978e]">Step 4</span></div>
         <div className="relative m-3"><Search className="absolute left-2.5 top-2.5 size-3.5 text-[#8f9c94]" /><input className="h-9 w-full rounded-lg border border-[#dfe7e1] pl-8 pr-2 text-xs" placeholder="搜索章节" aria-label="搜索章节" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="space-y-1 px-2 pb-4">{doc.chapters.filter(c => (!search || c.title.includes(search)) && (search || !c.parentId || !collapsed.includes(c.parentId))).map(c => <div key={c.id} className={`flex rounded-lg ${c.id === chapter.id ? 'bg-[#eaf4ee]' : 'hover:bg-[#f7f9f8]'} ${c.parentId ? 'ml-3' : ''}`}>
           {doc.chapters.some(item => item.parentId === c.id) && <button aria-label={`${collapsed.includes(c.id) ? '展开' : '折叠'}${c.title}`} aria-expanded={!collapsed.includes(c.id)} onClick={() => setCollapsed(collapsed.includes(c.id) ? collapsed.filter(id => id !== c.id) : [...collapsed, c.id])} className="pl-1 text-[#84978a]">{collapsed.includes(c.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</button>}
@@ -205,9 +207,9 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
         </div>)}</div>
         <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-dashed border-[#bed2c5] bg-white/60 p-3">{Object.entries(blockLabels).map(([kind, label]) => <button key={kind} className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-[11px] text-[#4f775e] hover:bg-[#eaf4ee]" onClick={() => addBlock(kind as BlockKind)}><Plus className="size-3" />{label}</button>)}</div>
       </section>
-      {panelOpen && <div className="writing-resources min-w-0 self-start"><ResourcePanel chapter={chapter} block={selectedBlock} facts={doc.facts} resources={getChapterResources(doc.resources, chapter.id)} onBlockChange={changeBlock} onFactChange={fact => store.edit({ ...doc, facts: doc.facts.map(f => f.id === fact.id ? fact : f) })} onResourceChange={resource => store.edit({ ...doc, resources: doc.resources.map(item => item.id === resource.id ? resource : item) })} onFocusBlock={focusBlock} onClose={() => setPanelOpen(false)} /></div>}
+      {panelOpen && <div className="writing-resources min-w-0 self-start"><ResourcePanel chapter={chapter} block={selectedBlock} facts={doc.facts} resources={evidence.resources} onReviewSource={sourceId => void navigateToStep(3, sourceId)} onBlockChange={changeBlock} onFactChange={fact => store.edit({ ...doc, facts: doc.facts.map(f => f.id === fact.id ? fact : f) })} onResourceChange={resource => store.edit({ ...doc, resources: doc.resources.map(item => item.id === resource.id ? resource : item) })} onFocusBlock={focusBlock} onClose={() => setPanelOpen(false)} /></div>}
     </div>
-    <div className="mt-6 flex justify-between border-t border-[#dfe7e1] pt-4 text-xs text-[#587764]"><button onClick={() => void navigateToStep(4)}>← 返回资料收集</button><button onClick={() => void navigateToStep(6)}>Step 6 可视化、版式与预览 →</button></div>
+    <div className="mt-6 flex flex-wrap justify-between gap-3 border-t border-[#dfe7e1] pt-4 text-xs text-[#587764]"><div className="flex flex-wrap gap-3"><button onClick={() => void navigateToStep(4)}>← 返回报告大纲</button><button onClick={() => void navigateToStep(3)}>返回资料收集</button></div><button onClick={() => void navigateToStep(6)}>Step 6 可视化、版式与预览 →</button></div>
     {policyOpen && <PolicyDialog policy={doc.policy} onSave={policy => { store.edit({ ...doc, policy }); setPolicyOpen(false); store.setMessage('写作规范已应用，请保存报告草稿。'); }} onClose={() => setPolicyOpen(false)} />}
     {aiRequest && <AiDialog request={aiRequest} provider={liveAiProvider} onAccept={acceptAi} onClose={() => setAiRequest(null)} />}
     {versionsOpen && <div className="fixed inset-0 z-[65] grid place-items-center bg-[#12271d]/40 p-4" onKeyDown={e => e.key === 'Escape' && setVersionsOpen(false)}><section role="dialog" aria-modal="true" aria-label="章节版本记录" className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"><div className="flex items-center justify-between"><h2 className="text-base font-semibold">章节版本记录</h2><button autoFocus onClick={() => setVersionsOpen(false)} aria-label="关闭版本记录"><X className="size-4" /></button></div><p className="my-3 text-xs leading-5 text-[#7b8d80]">{chapter.title} · 恢复版本后可撤销，保存时产生新记录。历史版本保留。</p>{versions.length ? versions.map(v => <div key={v.id} className="mb-2 rounded-xl border border-[#e1e7e3] p-3"><div className="flex items-center justify-between text-xs"><span className="font-semibold">v{v.number} · {v.label}</span><button className="text-[#176b52]" onClick={() => { const restored = structuredClone(v.snapshot); changeChapter({ ...restored, revision: chapter.revision, status: '待完善', reviewStatus: '待复核', blocks: restored.blocks.map(b => ({ ...b, reviewStatus: '待复核' })) }); setBlockId(restored.blocks[0]?.id ?? ''); setSelection(null); setVersionsOpen(false); store.setMessage(`已恢复 v${v.number}，请复核来源并保存为新版本。`); }}>恢复此版本</button></div><p className="mt-2 text-[10px] text-[#87978d]">{new Date(v.savedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} · {v.snapshot.blocks.length} 个内容块</p></div>) : <p className="py-8 text-center text-sm text-[#89998e]">保存草稿后建立版本记录</p>}</section></div>}

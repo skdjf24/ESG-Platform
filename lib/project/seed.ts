@@ -12,6 +12,7 @@ import { createBlankWritingDocument, createWritingDocument } from "@/lib/writing
 import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
 import { createFinalizationState } from "@/lib/finalization/state";
+import { defaultDepartments } from "@/lib/project/materials";
 import { unscoredPresetTopic } from "@/lib/project/topics";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
@@ -25,6 +26,8 @@ export function createBlankProjectData(projectId: string, options?: SeedOptions)
   const writingDocument = createBlankWritingDocument(projectId);
   return {
     schemaVersion: 2,
+    workflowOrder: "collection-first",
+    departments: structuredClone(defaultDepartments),
     projectKind: "blank",
     projectId,
     revision: 1,
@@ -99,6 +102,8 @@ export function createSampleProjectData(projectId: string, options?: SeedOptions
   reportData.reportingPeriod = { start: `${year}.01.01`, end: `${year}.12.31` };
   return {
     schemaVersion: 2,
+    workflowOrder: "collection-first",
+    departments: structuredClone(defaultDepartments),
     projectKind: "sample",
     projectId,
     revision: 1,
