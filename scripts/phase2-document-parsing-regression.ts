@@ -77,7 +77,7 @@ project = {
   sources: [...project.sources, { id: energyCandidate.sourceId, name: excelFile.name, kind: "file", fileType: "XLSX", fileId: excelFile.fileId, mimeType: excelFile.mimeType, fileStatus: "available", parserStatus: "parsed", uploadedAt: "2026-11-02", uploadedBy: "Phase 2 test", state: "已解析" }],
 };
 const confirmed = applyCandidateConfirmation(project, energyCandidate, { type: "metric", label: energyCandidate.label, value: energyCandidate.value, unit: energyCandidate.unit, period: energyCandidate.period, boundary: "测试样本边界" });
-const synchronized = synchronizeProjectData(project, confirmed.project, 4).project;
+const synchronized = synchronizeProjectData(project, confirmed.project, 3).project;
 const confirmedFact = synchronized.facts.find((fact) => fact.id === confirmed.confirmedEntityId);
 check(confirmedFact?.state === "已确认" && confirmedFact.sourceReferences[0].fileId === excelFile.fileId && confirmedFact.sourceReferences[0].sourceLocator?.cell === "B4", "P2-METRIC-TRACE", "人工确认 Metric 保留 File → ParsedBlock → SourceReference 链路");
 check(synchronized.presentation.observations.some((observation) => observation.metricId === confirmed.confirmedEntityId && observation.confirmationStatus === "已确认"), "P2-METRIC-DOWNSTREAM", "确认 Metric 通过既有同步机制进入 Step 6 MetricObservation");

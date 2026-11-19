@@ -136,7 +136,7 @@ export function ChartConfigPanel({
               {sourceId === item.observationId ? <div className="mt-2 space-y-2 rounded-lg bg-white p-2 text-[9px] leading-4 text-[#66776c]">{item.sourceReferences.map((source) => <div key={source.id}><div className="font-semibold text-[#3d5848]">{source.fileName}</div><div>{source.locator} · {source.excerpt}</div></div>)}{!item.sourceReferences.length ? <div className="text-amber-700">未关联来源</div> : null}<div>统计边界：{item.reportingBoundary || "待核验"}</div><div>来源确认：{item.sourceConfirmationStatus} · 修订 v{item.revision}</div></div> : null}
             </label>;
           })}
-          {!available.length ? <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-3 text-[10px] leading-5 text-amber-800">暂无可用于配置的数值观测。请先在 Step 4 核对来源并人工确认指标。</div> : null}
+          {!available.length ? <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-3 text-[10px] leading-5 text-amber-800">暂无可用于配置的数值观测。请先在 Step 3 核对来源并人工确认指标。</div> : null}
         </div>
       </div>
 

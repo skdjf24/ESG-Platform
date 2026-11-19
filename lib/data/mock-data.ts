@@ -38,7 +38,7 @@ export const reportProject: ReportProject = {
   frameworks: ["上交所指引", "GRI Standards"],
   state: "draft",
   progress: 46,
-  currentStep: 4,
+  currentStep: 3,
   updatedAt: "2026-10-26 14:32",
   owner: "林悦",
 };
@@ -46,8 +46,8 @@ export const reportProject: ReportProject = {
 export const reportSteps: ReportStep[] = [
   { number: 1, shortTitle: "创建与画像", title: "创建报告与企业基础画像", description: "确认企业信息、报告范围与参考框架", state: "completed" },
   { number: 2, shortTitle: "议题评估", title: "ESG 实质性议题评估", description: "开展双重重要性评估并由用户确认", state: "completed" },
-  { number: 3, shortTitle: "大纲与资料", title: "构建报告大纲与年度资料清单", description: "组织章节、关联议题并维护资料清单", state: "completed" },
-  { number: 4, shortTitle: "资料收集", title: "ESG 资料收集、汇总与规整", description: "分工、收集并建立可追溯事实库", state: "in-progress" },
+  { number: 3, shortTitle: "资料收集", title: "ESG资料收集与整理", description: "按议题和部门收集资料，核验来源与事实", state: "in-progress" },
+  { number: 4, shortTitle: "报告大纲", title: "报告大纲生成与调整", description: "结合重要性议题与资料规划章节", state: "not-started" },
   { number: 5, shortTitle: "内容生成与编辑", title: "报告内容生成与编辑", description: "关联资料、编辑正文与人工审校", state: "not-started" },
   { number: 6, shortTitle: "可视化排版", title: "可视化与报告排版", description: "图表、版式与品牌样式编辑", state: "not-started" },
   { number: 7, shortTitle: "质量检查", title: "报告质量检查", description: "检查正文、事实来源、数据一致性与版式", state: "not-started" },

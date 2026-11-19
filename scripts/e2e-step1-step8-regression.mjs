@@ -272,7 +272,7 @@ async function main() {
   await page.getByRole("button", { name: "确认评估结果" }).click();
   await saveFooter(page);
   project = await waitForStored(page, (value) => value.quality.stale === true);
-  record(project.reportSections.some((item) => item.topics.includes(includedTopic.name) && item.topicReviewStatus === "待复核"), "CHAIN-B-STEP2-3", "Step 2 议题变化使相关目录关联待复核");
+  record(project.reportSections.some((item) => item.topics.includes(includedTopic.name) && item.topicReviewStatus === "待复核"), "CHAIN-B-STEP2-4", "Step 2 议题变化使相关目录关联待复核");
   record(project.writing.chapters.flatMap((item) => item.blocks).length === blockCountBeforeTopicChange, "STEP2-NO-DELETE", "议题变化不删除既有正文");
   record(project.quality.fullCheck?.valid === false && project.quality.fullCheck?.runId === fullCheckRunId, "STEP2-INVALIDATE-QA", "议题变化保留历史并使原全面检查失效");
 
@@ -290,16 +290,17 @@ async function main() {
 
   await openStep(page, 3);
   const archivedDisclosure = structuredClone(project.disclosureRequirements);
-  const modules = page.getByRole("group", { name: "Step 3 模块" }).getByRole("button");
-  record(await modules.count() === 2 && await modules.first().getAttribute("aria-pressed") === "true", "STEP3-MODULES", "Step 3 仅有目录与年度资料模块，默认打开目录");
+  const categories = page.getByRole("group", { name: "资料分类" }).getByRole("button");
+  record(await categories.count() === 2 && await categories.first().getAttribute("aria-pressed") === "true", "STEP3-MATERIAL-CATEGORIES", "Step 3 先收集资料，定性和定量资料单独管理");
+  await openStep(page, 4);
   const originalSectionCount = project.reportSections.length;
   const originalTitle = await page.locator("#section-title").inputValue();
   const renamedTitle = `${originalTitle} E2E`;
   await page.locator("#section-title").fill(renamedTitle);
   await page.getByRole("button", { name: "保存章节" }).click();
   project = await waitForStored(page, (value) => value.reportSections.some((item) => item.title === renamedTitle));
-  record(project.writing.chapters.some((item) => item.title === renamedTitle), "CHAIN-D-STEP3-5", "Step 3 章节改名同步 Step 5 目录");
-  record(project.dataRequirements.some((item) => item.section.endsWith(renamedTitle)) && JSON.stringify(project.disclosureRequirements) === JSON.stringify(archivedDisclosure), "CHAIN-B-STEP3-MATERIALS", "章节改名同步年度资料且保留历史披露记录");
+  record(project.writing.chapters.some((item) => item.title === renamedTitle), "CHAIN-D-STEP4-5", "Step 4 章节改名同步 Step 5 目录");
+  record(project.dataRequirements.some((item) => item.section.endsWith(renamedTitle)) && JSON.stringify(project.disclosureRequirements) === JSON.stringify(archivedDisclosure), "CHAIN-B-STEP4-MATERIALS", "章节改名同步年度资料且保留历史披露记录");
   await page.getByRole("button", { name: "新增章节" }).click();
   await page.locator("#new-section-order").fill("8");
   await page.locator("#new-section-title-input").fill("E2E 新增章节");
@@ -307,9 +308,9 @@ async function main() {
   await page.getByRole("button", { name: "创建章节" }).click();
   await page.getByRole("button", { name: "保存章节" }).click();
   project = await waitForStored(page, (value) => value.reportSections.some((item) => item.title === "E2E 新增章节") && value.writing.chapters.some((item) => item.title === "E2E 新增章节"));
-  record(project.reportSections.length === originalSectionCount + 1, "STEP3-ADD-SECTION", "Step 3 可新增章节并同步创建 Step 5 章节");
+  record(project.reportSections.length === originalSectionCount + 1, "STEP4-ADD-SECTION", "Step 4 可新增章节并同步创建 Step 5 章节");
 
-  await openStep(page, 4);
+  await openStep(page, 3);
   await page.getByRole("button", { name: /企业事实库/ }).click();
   project = await stored(page);
   const numericFact = project.facts.find((item) => item.value && !Number.isNaN(Number(String(item.value).replaceAll(",", ""))));
@@ -321,29 +322,29 @@ async function main() {
   await saveFooter(page);
   project = await waitForStored(page, (value) => value.facts.find((item) => item.id === numericFact.id)?.revision > numericFact.revision);
   const changedFact = project.facts.find((item) => item.id === numericFact.id);
-  record(changedFact.value === nextValue, "STEP4-FACT-REVISION", "Step 4 事实修订保存并增加版本");
+  record(changedFact.value === nextValue, "STEP3-FACT-REVISION", "Step 3 事实修订保存并增加版本");
   const citations = project.writing.chapters.flatMap((chapter) => chapter.blocks.flatMap((block) => block.citations.filter((item) => item.factId === numericFact.id).map((item) => ({ chapter, block, citation: item }))));
-  record(!citations.length || citations.every((item) => item.citation.factRevision < changedFact.revision && item.block.reviewStatus === "待复核"), "CHAIN-A-STEP4-5", "事实版本变化保留旧引用快照并使正文待复核");
+  record(!citations.length || citations.every((item) => item.citation.factRevision < changedFact.revision && item.block.reviewStatus === "待复核"), "CHAIN-A-STEP3-5", "事实版本变化保留旧引用快照并使正文待复核");
   const affectedCharts = project.presentation.charts.filter((chart) => chart.metricObservationIds.some((id) => project.presentation.observations.some((item) => item.observationId === id && item.metricId === numericFact.id)));
-  record(!affectedCharts.length || affectedCharts.every((item) => item.status === "需更新"), "CHAIN-A-STEP4-6", "图表引用数据变化后进入需更新");
+  record(!affectedCharts.length || affectedCharts.every((item) => item.status === "需更新"), "CHAIN-A-STEP3-6", "图表引用数据变化后进入需更新");
 
   const sourceCountBefore = project.sources.length;
   await page.getByRole("button", { name: /上传资料/ }).click();
-  record(await page.getByText(/文件字节保存到本地 IndexedDB；保存后可进入“解析结果 \/ 候选确认”执行本地解析/).isVisible(), "STEP4-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和待解析边界");
-  record(await page.locator("#requirement-select").inputValue() === project.dataRequirements[0]?.id, "STEP4-TASK-DEFAULT", "资料项加载后默认关联有效任务");
+  record(await page.getByText(/文件保存到本地，可在解析工作台查阅原文/).isVisible(), "STEP3-UPLOAD-STORAGE-LABEL", "文件收集明确标记真实本地存储和待解析边界");
+  record(await page.locator("#requirement-select").inputValue() === project.dataRequirements[0]?.id, "STEP3-TASK-DEFAULT", "资料项加载后默认关联有效任务");
   await page.getByLabel("选择资料文件").setInputFiles({ name: "E2E-能源资料-明确模拟.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("E2E mock spreadsheet metadata only") });
   await page.getByRole("button", { name: "保存来源记录" }).click();
   await page.getByRole("dialog", { name: "上传资料文件" }).waitFor({ state: "hidden", timeout: 15_000 }).catch(async (error) => {
-    console.error("Step 4 upload diagnostic", { alerts: await page.locator('[role="alert"]').allTextContents(), statuses: await page.locator('[role="status"]').allTextContents() });
+    console.error("Step 3 upload diagnostic", { alerts: await page.locator('[role="alert"]').allTextContents(), statuses: await page.locator('[role="status"]').allTextContents() });
     throw error;
   });
   project = await waitForStored(page, (value) => value.sources.some((item) => item.name === "E2E-能源资料-明确模拟.xlsx"));
   const uploadedSource = project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx");
   const uploadedFiles = await readProjectFiles(page, project.projectId);
-  record(project.sources.length === sourceCountBefore + 1 && uploadedSource?.fileId && uploadedFiles.some((file) => file.fileId === uploadedSource.fileId), "STEP4-UPLOAD-BYTES", "Step 4 文件入口保存来源元数据和真实文件字节");
-  record(!project.facts.some((item) => item.sourceReferences.some((reference) => reference.sourceId === project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx")?.id)), "STEP4-UPLOAD-NO-FALSE-DATA", "未解析文件不伪造事实或抽取结果");
+  record(project.sources.length === sourceCountBefore + 1 && uploadedSource?.fileId && uploadedFiles.some((file) => file.fileId === uploadedSource.fileId), "STEP3-UPLOAD-BYTES", "Step 3 文件入口保存来源元数据和真实文件字节");
+  record(!project.facts.some((item) => item.sourceReferences.some((reference) => reference.sourceId === project.sources.find((source) => source.name === "E2E-能源资料-明确模拟.xlsx")?.id)), "STEP3-UPLOAD-NO-FALSE-DATA", "未解析文件不伪造事实或抽取结果");
   await page.getByRole("button", { name: /解析结果 \/ 候选确认/ }).click();
-  record(await page.getByRole("button", { name: "开始解析" }).isVisible(), "STEP4-PARSER-WORKBENCH", "Step 4 提供真实解析入口且未解析文件仍不自动生成事实");
+  record(await page.getByRole("button", { name: "开始解析" }).isVisible(), "STEP3-PARSER-WORKBENCH", "Step 3 提供真实解析入口且未解析文件仍不自动生成事实");
 
   await openStep(page, 5);
   record((await page.locator("body").innerText()).includes(`当前企业：${projectLabel}`), "STEP5-UPSTREAM-ENTERPRISE", "Step 5 读取 Step 1 最新企业信息");
@@ -370,7 +371,7 @@ async function main() {
   await page.waitForTimeout(300);
   record(await page.getByText(projectLabel, { exact: false }).first().isVisible(), "STEP6-DYNAMIC-COVER", "Step 6 动态显示 Step 1 企业名称");
   record(await page.getByText("2026", { exact: false }).first().isVisible(), "STEP6-DYNAMIC-YEAR", "Step 6 动态显示 Step 1 报告年度");
-  record(await page.getByText(renamedTitle, { exact: false }).first().isVisible(), "CHAIN-D-STEP6", "Step 3 目录顺序和标题进入 Step 6");
+  record(await page.getByText(renamedTitle, { exact: false }).first().isVisible(), "CHAIN-D-STEP6", "Step 4 目录顺序和标题进入 Step 6");
   record(await page.getByText(e2eSentence, { exact: false }).first().isVisible(), "STEP5-6-SYNC", "Step 5 正文同步 Step 6 预览");
   const pageCountBeforeLayout = await page.locator("[data-report-page]").count();
   await page.getByLabel("正文行距").fill("2.2");
@@ -391,7 +392,7 @@ async function main() {
   record(integrityResult.orphanRequirements.length === 0, "DATA-REQ-ORPHANS", "正文无失效披露映射", integrityResult.orphanRequirements.join("；"));
   record(integrityResult.orphanFacts.length === 0, "DATA-FACT-ORPHANS", "正文无失效事实引用", integrityResult.orphanFacts.join("；"));
   record(integrityResult.orphanCharts.length === 0, "DATA-CHART-ORPHANS", "图表无失效引用", integrityResult.orphanCharts.join("；"));
-  record(integrityResult.sectionGaps.length === 0 && integrityResult.inactiveChapters.length === 0, "DATA-SECTIONS", "Step 3/5 章节引用完整", JSON.stringify({ sectionGaps: integrityResult.sectionGaps, inactiveChapters: integrityResult.inactiveChapters }));
+  record(integrityResult.sectionGaps.length === 0 && integrityResult.inactiveChapters.length === 0, "DATA-SECTIONS", "Step 4/5 章节引用完整", JSON.stringify({ sectionGaps: integrityResult.sectionGaps, inactiveChapters: integrityResult.inactiveChapters }));
   record(integrityResult.badRevisions.length === 0, "DATA-REVISIONS", "事实、正文块和指标修订号有效", integrityResult.badRevisions.join("；"));
   record(integrityResult.orphanSources.length === 0, "DATA-SOURCE-ORPHANS", "来源引用均指向统一 sources 集合", integrityResult.orphanSources.join("；"));
   if (integrityResult.orphanSources.length) finding("Medium", "DATA-ORPHAN-SOURCES", "种子事实/资源引用了 sources 中不存在的 sourceId", integrityResult.orphanSources.join("；"), "来源卡片可展示嵌入快照，但无法从统一来源集合管理或撤销这些来源。", "统一 Source 实体，迁移现有引用并在保存校验中覆盖 facts/resources/blocks。");

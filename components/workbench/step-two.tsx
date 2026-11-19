@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { EsgCategory } from "@/lib/types/esg";
+import { isPriorityTopic } from "@/lib/project/outline";
 import { useProjectData } from "@/components/project/project-data-provider";
 import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
@@ -76,7 +77,7 @@ export function StepTwo() {
   );
   const assessedTopics = topics.filter((topic) => includedIds.has(topic.id));
   const scoredTopics = assessedTopics.filter((topic) => topic.financialScore >= 1 && topic.impactScore >= 1);
-  const priorityTopics = scoredTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3)
+  const priorityTopics = scoredTopics.filter(isPriorityTopic)
     .sort((left, right) => (right.financialScore + right.impactScore) - (left.financialScore + left.impactScore));
   const canConfirm = assessedTopics.length > 0 && scoredTopics.length === assessedTopics.length;
 

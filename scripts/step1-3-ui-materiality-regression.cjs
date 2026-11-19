@@ -36,7 +36,7 @@ async function tableLayout(page, id, narrow) {
       whiteSpaces: cells.map((cell) => getComputedStyle(cell).whiteSpace),
       overlaps: cells.slice(1).some((cell, index) => cell.getBoundingClientRect().left < cells[index].getBoundingClientRect().right - 1),
       horizontalScroll: wrapper.scrollWidth > wrapper.clientWidth,
-      bodyWhiteSpace: getComputedStyle(table.querySelector("tbody td")).whiteSpace,
+      bodyWhiteSpace: getComputedStyle(table.querySelector("tbody td") ?? cells[0]).whiteSpace,
       clippedCells: [...table.querySelectorAll("th, td")].some((cell) => cell.scrollWidth > cell.clientWidth + 1),
       controlLayout: [...table.querySelectorAll("td button, td select, td input")].every((control) => getComputedStyle(control).fontSize === "12px" && getComputedStyle(control).whiteSpace === "nowrap"),
     };
@@ -87,9 +87,8 @@ async function main() {
     project = await readProject(page, projectId);
     check(project.report.frameworks.includes("北交所指引") && project.disclosureRequirements.length === 0, "STEP1-BSE-REFERENCE", "北交所作为编制参考保存，不生成披露条款");
     await openStep(page, projectId, 3);
-    const tabs = page.getByRole("group", { name: "Step 3 模块" }).getByRole("button");
-    check(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(["报告目录", "年度资料清单"])
-      && await tabs.first().getAttribute("aria-pressed") === "true" && await page.locator("#section-title").isVisible(), "STEP3-OUTLINE", "Step 3 仅保留两个模块并默认显示目录");
+    const tabs = page.getByRole("group", { name: "资料分类" }).getByRole("button");
+    check(await tabs.count() === 2 && await tabs.first().getAttribute("aria-pressed") === "true", "STEP3-COLLECTION", "Step 3 默认打开定性资料，支持定量资料");
     check(!await page.getByText(/披露要求矩阵|披露要求覆盖|条款确认度/).count(), "STEP3-NO-MATRIX", "无披露矩阵和确认进度");
     await tabs.last().click();
     await tableLayout(page, "STEP3-DESKTOP", false);
@@ -184,11 +183,12 @@ async function main() {
     check(frameworkScrolls, "STEP1-NARROW-SCROLL", "窄屏披露框架仍为三列两行并可横向滚动");
     await page.screenshot({ path: path.join(evidenceDir, "step1-narrow.png"), fullPage: true });
     await openStep(page, projectId, 3);
-    await page.getByRole("button", { name: "年度资料清单", exact: true }).click();
+    await page.getByRole("button", { name: /定量资料/ }).click();
     await tableLayout(page, "STEP3-NARROW", true);
     await page.screenshot({ path: path.join(evidenceDir, "step3-narrow.png"), fullPage: true });
     await openStep(page, projectId, 4);
-    await tableLayout(page, "STEP4-NARROW", true);
+    check(await page.getByRole("heading", { name: "报告大纲生成与调整" }).isVisible()
+      && await page.evaluate(() => document.documentElement.scrollWidth === window.innerWidth), "STEP4-NARROW", "窄屏大纲和编辑区均可使用且页面无横向溢出");
     await page.screenshot({ path: path.join(evidenceDir, "step4-narrow.png"), fullPage: true });
     check(browserErrors.length === 0, "BROWSER-ERRORS", "Chromium console/page errors = 0");
   } catch (error) {

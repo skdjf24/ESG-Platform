@@ -1,3 +1,4 @@
+import { normalizeCollectionWorkflow } from "@/lib/project/workflow";
 import type {
   CreateProjectInput,
   ProjectFileRecord,
@@ -119,7 +120,7 @@ export function normalizeProjectData(value: unknown, expectedProjectId: string):
   for (const collection of [project.topics, project.disclosureRequirements, project.reportSections, project.dataRequirements]) {
     if (new Set(collection.map((item) => item.id)).size !== collection.length) throw new ProjectStorageError("incompatible", "项目存档包含重复 ID，已停止读取以保护数据。");
   }
-  return restoreReferencedSourceMetadata(project);
+  return normalizeCollectionWorkflow(restoreReferencedSourceMetadata(project));
 }
 
 function parseLegacyProject(raw: string, projectId: string) {

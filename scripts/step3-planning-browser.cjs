@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { isDeepStrictEqual } = require("node:util");
-const { mutateProject, readProject } = require("./indexeddb-test-helpers.cjs");
+const { mutateProject, readProject, readProjectFiles } = require("./indexeddb-test-helpers.cjs");
 const legacyQuality = require("./fixtures/legacy-disclosure-quality.json");
 
 const baseUrl = process.env.STEP3_BASE_URL || "http://127.0.0.1:4325";
@@ -82,73 +82,256 @@ async function main() {
     await page.getByRole("button", { name: "保存议题" }).click();
     await save(page, id, "保存草稿");
 
-    await openStep(page, id, 3, "?requirementId=old-link");
-    const modules = page.getByRole("group", { name: "Step 3 模块" }).getByRole("button");
-    check(isDeepStrictEqual(await modules.allTextContents(), ["报告目录", "年度资料清单"])
-      && await modules.first().getAttribute("aria-pressed") === "true"
-      && await page.getByRole("heading", { name: "构建报告大纲与年度资料清单", exact: true }).isVisible()
-      && !await page.getByText(/披露要求矩阵|披露要求覆盖|用户确认适用性|条款确认度/).count(), "MODULES", "旧矩阵链接进入目录，Step 3 仅有两个模块且默认目录");
-    const title = "验收资源与环境";
-    await page.getByRole("button", { name: "新增章节" }).click();
-    await page.locator("#new-section-order").fill("8");
-    await page.locator("#new-section-title-input").fill(title);
-    await page.locator("#new-section-description").fill("核对年度资源管理资料。");
-    await page.getByRole("button", { name: "创建章节" }).click();
-    await page.getByRole("button", { name: "编辑关联" }).click();
-    await page.getByRole("checkbox", { name: /验收议题：资源效率/ }).check();
-    const outlined = await save(page, id, "保存章节");
-    const chapterId = outlined.reportSections.find((item) => item.title === title).id;
-    check(outlined.reportSections.some((item) => item.id === chapterId && item.topics.includes(topicName))
-      && outlined.writing.chapters.some((item) => item.id === chapterId && item.title === title && item.blocks[0].mappings.length === 0), "OUTLINE-TOPIC", "新增章节保存 Step 2 议题关联，并同步创建 Step 5 章节");
-    await page.screenshot({ path: path.join(outputDir, "outline.png") });
+    const missingTopic = "验收议题：待补证据";
+    await mutateProject(page, (project, names) => {
+      const first = project.topics.find((topic) => topic.name === names[0]);
+      const second = { ...first, id: "topic-acceptance-missing", name: names[1] };
+      project.topics.push(second);
+      project.materiality.includedTopicIds = [first.id, second.id];
+    }, [topicName, missingTopic], id);
+    await openStep(page, id, 2);
+    await page.getByRole("button", { name: "确认评估结果", exact: true }).click();
+    const assessed = await save(page, id, "保存草稿");
+    check(assessed.materiality.confirmed, "CONFIRMED-SCOPE", "Step 2 实际确认本次验收项目的两个议题");
 
-    await modules.last().click();
-    check(await page.getByText("暂无资料项，可按报告需要新增。").isVisible(), "EMPTY-MATERIALS", "空白项目可直接开始编制年度资料清单");
-    await page.getByRole("button", { name: "新增资料项" }).click();
-    const firstItemName = "资源管理佐证材料";
-    await page.getByLabel("资料名称", { exact: true }).fill(firstItemName);
-    await page.getByLabel("对应章节", { exact: true }).selectOption(`8 ${title}`);
+    await page.getByRole("button", { name: "下一步", exact: true }).click();
+    await page.waitForURL(/\/step\/3$/);
+    await ready(page);
+    const categories = page.getByRole("group", { name: "资料分类" });
+    check(await page.getByRole("heading", { name: "ESG资料收集与整理" }).isVisible()
+      && await categories.getByRole("button", { name: /定性资料/ }).getAttribute("aria-pressed") === "true"
+      && await categories.getByRole("button", { name: /定量资料/ }).isVisible()
+      && !await page.getByText(/披露要求矩阵|披露要求覆盖|用户确认适用性|条款确认度/).count(), "COLLECTION-FIRST", "Step 2 下一步进入资料收集，定性与定量独立分类");
+
+    await page.getByRole("button", { name: "管理部门", exact: true }).click();
+    await page.getByLabel("部门名称", { exact: true }).fill("能源项目组");
+    const managed = await save(page, id, "保存部门");
+    const departmentId = managed.departments.find((item) => item.name === "能源项目组").id;
+    await page.getByLabel("部门操作", { exact: true }).selectOption(departmentId);
+    await page.getByLabel("部门名称", { exact: true }).fill("能源与资源组");
+    const renamedDepartment = await save(page, id, "保存部门");
+    check(renamedDepartment.departments.find((item) => item.id === departmentId).name === "能源与资源组"
+      && ["hr", "finance", "legal"].every((key) => renamedDepartment.departments.some((item) => item.id === key)), "DEPARTMENTS", "默认部门可用，自定义部门改名后稳定 ID 保留");
+    await page.getByRole("button", { name: "关闭部门管理" }).click();
+
+    const itemName = "资源管理年度工作记录及节能项目访谈摘要";
+    await page.getByRole("button", { name: "新增资料", exact: true }).click();
+    await page.getByLabel("资料名称", { exact: true }).fill("资源管理工作记录");
     await page.getByLabel("资料类型", { exact: true }).selectOption("案例");
-    await page.getByLabel("责任部门", { exact: true }).selectOption("安全环保部");
+    await page.getByLabel("主要负责部门", { exact: true }).selectOption(departmentId);
+    for (const name of ["财务部", "法务合规部", /验收议题：资源效率/]) await page.getByRole("checkbox", { name }).check();
     await page.getByLabel("收集方式", { exact: true }).selectOption("在线补充");
-    await page.getByLabel("截止日期", { exact: true }).fill("2026-12-10");
-    const created = await save(page, id, "保存资料项");
-    const itemId = created.dataRequirements.find((item) => item.itemName === firstItemName).id;
-    check(await page.getByRole("row", { name: new RegExp(firstItemName) }).isVisible(), "ADD-MATERIAL", "新增资料项后显示章节、部门、类型、截止日期和状态");
-    await page.getByRole("button", { name: `编辑${firstItemName}`, exact: true }).click();
-    const itemName = "资源管理年度记录";
+    await page.getByLabel("收集状态", { exact: true }).selectOption("收集中");
+    const created = await save(page, id, "保存资料");
+    const itemId = created.dataRequirements.find((item) => item.itemName === "资源管理工作记录").id;
+    check(created.dataRequirements[0].section === "" && created.dataRequirements[0].departmentId === departmentId
+      && created.dataRequirements[0].topicIds.includes(assessed.topics.find((item) => item.name === topicName).id)
+      && isDeepStrictEqual(created.dataRequirements[0].collaboratorDepartmentIds, ["finance", "legal"]), "UNASSIGNED-MATERIAL", "没有章节关联即可保存定性资料、议题、主责和两个协作部门");
+    await page.getByRole("button", { name: "详情与编辑", exact: true }).click();
     await page.getByLabel("资料名称", { exact: true }).fill(itemName);
     await page.getByLabel("截止日期", { exact: true }).fill("2026-12-20");
-    await save(page, id, "保存资料项");
-    await openStep(page, id, 3, `?chapterId=${encodeURIComponent(chapterId)}`);
-    check(await page.locator("#section-title").inputValue() === title, "OUTLINE-LOCATOR", "章节定位参数打开对应目录编辑项");
-    const renamed = "验收资源与环境策略";
-    await page.locator("#section-title").fill(renamed);
-    const saved = await save(page, id, "保存章节");
-    const item = saved.dataRequirements.find((entry) => entry.id === itemId);
-    check(item.itemName === itemName && item.dueDate === "2026-12-20" && item.section === `8 ${renamed}` && item.collectionMethod === "在线补充"
-      && saved.writing.chapters.find((entry) => entry.id === chapterId)?.title === renamed, "MATERIALS-RENAME", "资料编辑可刷新恢复，章节改名同步资料清单与正文目录");
-    await page.setViewportSize({ width: 390, height: 844 });
-    await modules.last().click();
-    check(await modules.last().isVisible() && await page.getByRole("table").evaluate((table) => table.parentElement.scrollWidth > table.parentElement.clientWidth), "NARROW", "窄屏可切换模块，资料表可横向滚动");
-    await page.screenshot({ path: path.join(outputDir, "materials-narrow.png"), fullPage: true });
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    await save(page, id, "保存资料");
+    await openStep(page, id, 3);
+    const qualitativeRow = page.getByRole("row", { name: new RegExp(itemName) });
+    await page.getByLabel("部门筛选", { exact: true }).selectOption("hr");
+    check(await qualitativeRow.count() === 0, "FILTER-EXCLUDED", "无关部门筛选排除资料");
+    await page.getByLabel("部门筛选", { exact: true }).selectOption("finance");
+    await page.getByLabel("议题筛选", { exact: true }).selectOption({ label: topicName });
+    await page.getByLabel("状态筛选", { exact: true }).selectOption("收集中");
+    await page.getByRole("searchbox", { name: "搜索资料任务" }).fill("访谈摘要");
+    check(await qualitativeRow.getByText("能源与资源组", { exact: false }).isVisible(), "FILTER-EDIT", "刷新后按协作部门、议题、状态和关键词筛出已编辑的资料");
 
-    await openStep(page, id, 4);
-    check(await page.getByRole("row", { name: new RegExp(itemName) }).getByLabel(`${itemName}责任部门`).inputValue() === "安全环保部"
-      && await page.getByRole("row", { name: new RegExp(itemName) }).getByText(`8 ${renamed}`, { exact: true }).isVisible(), "STEP4-TASK", "Step 4 使用同一资料任务、责任部门及章节");
-    await page.getByRole("button", { name: "在线补充", exact: true }).click();
+    await qualitativeRow.getByRole("button", { name: "在线补充", exact: true }).click();
     const resourceName = "验收资料来源记录";
-    await page.getByLabel("关联资料项", { exact: true }).selectOption(itemId);
     await page.getByLabel("补充标题").fill(resourceName);
     await page.getByLabel("资料内容").fill("此资料用于验证章节资料来源的保存和读取。");
     const withResource = await save(page, id, "保存来源记录");
     const resource = withResource.resources.find((entry) => entry.title === resourceName);
+    check(resource.chapterIds.length === 0 && !resource.confirmed && withResource.sources.find((item) => item.id === resource.sourceReferences[0].sourceId).materialId === itemId, "ONLINE-PENDING", "在线补充关联资料，保持待人工确认且不依赖章节");
+    await page.getByLabel("状态筛选", { exact: true }).selectOption("待确认");
+    await qualitativeRow.getByRole("button", { name: "详情与编辑" }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    const reviewedResource = await save(page, id, "人工确认资料");
+    check(reviewedResource.resources.find((item) => item.id === resource.id).confirmed
+      && reviewedResource.dataRequirements.find((item) => item.id === itemId).state === "已确认", "ONLINE-REVIEW", "在线内容经显式人工确认后才进入已确认资料");
+
+    await openStep(page, id, 3);
+    await categories.getByRole("button", { name: /定量资料/ }).click();
+    await page.getByRole("button", { name: "新增资料", exact: true }).click();
+    const metricItemName = "总部月度节能量";
+    await page.getByLabel("资料名称", { exact: true }).fill(metricItemName);
+    await page.getByLabel("主要负责部门", { exact: true }).selectOption("ehs");
+    await page.getByRole("checkbox", { name: /验收议题：资源效率/ }).check();
+    for (const [label, value] of [["数值", "681.5"], ["单位", "MWh"], ["统计期间", "2026-06"], ["统计范围", "总部"], ["来源位置", "能源汇总 B4"]]) {
+      await page.getByLabel(label, { exact: true }).fill(value);
+    }
+    const draftMetric = await save(page, id, "保存资料");
+    const metricItem = draftMetric.dataRequirements.find((item) => item.itemName === metricItemName);
+    check(metricItem.quantitative.value === "681.5" && metricItem.quantitative.boundary === "总部"
+      && metricItem.section === "" && draftMetric.facts.length === 0, "QUANTITATIVE-DRAFT", "数值、单位、统计期间和范围可单独保存，未人工确认的手填记录不会进事实库");
+
+    const quantitativeRow = page.getByRole("row", { name: new RegExp(metricItemName) });
+    await quantitativeRow.getByRole("button", { name: "上传", exact: true }).click();
+    const sourceName = "phase2-metrics.xlsx";
+    const fixture = path.resolve(__dirname, "../fixtures/phase2", sourceName);
+    await page.getByLabel("选择资料文件").setInputFiles(fixture);
+    const uploaded = await save(page, id, "保存来源记录");
+    const fileSource = uploaded.sources.find((item) => item.name === sourceName);
+    const originalFiles = await readProjectFiles(page, id);
+    check(fileSource.materialId === metricItem.id && originalFiles.some((item) => item.fileId === fileSource.fileId)
+      && uploaded.facts.length === 0, "UPLOAD-BYTES", "Excel 原始字节保存在 IndexedDB，上传本身不会创建事实");
+    await page.getByRole("button", { name: /解析结果 \/ 候选确认/ }).click();
+    await page.getByRole("button", { name: "开始解析" }).click();
+    await page.getByText(/已使用 .*浏览器本地解析/).waitFor({ timeout: 30_000 });
+    const parsed = await readProject(page, id);
+    check(parsed.sources.find((item) => item.id === fileSource.id).parserStatus === "parsed" && parsed.facts.length === 0, "PARSE-ONLY", "真实解析生成候选，人工确认前事实库仍为空");
+    await page.getByRole("button", { name: /综合能源消耗.*metric/ }).first().click();
+    await page.getByLabel("候选统计边界").fill("验收企业总部");
+    const reviewedMetric = await save(page, id, "人工确认入库");
+    const metricFact = reviewedMetric.facts.find((fact) => fact.sourceReferences.some((reference) => reference.sourceId === fileSource.id));
+    check(metricFact.state === "已确认" && metricFact.sourceReferences[0].sourceLocator.cell === "B4", "PARSE-REVIEW", "人工确认入库保留 Excel 工作表和单元格定位");
+    await page.getByRole("button", { name: /^资料清单/ }).click();
+    await categories.getByRole("button", { name: /定量资料/ }).click();
+    await quantitativeRow.getByRole("button", { name: "详情与编辑" }).click();
+    await page.getByLabel("来源文件或表单").selectOption(fileSource.id);
+    await save(page, id, "保存资料");
+    await quantitativeRow.getByRole("button", { name: "详情与编辑" }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    const withManualMetric = await save(page, id, "人工确认资料");
+    check(withManualMetric.facts.some((fact) => fact.name === metricItemName && fact.value === "681.5"
+      && fact.period === "2026-06" && fact.sourceReferences[0].fileId === fileSource.fileId), "STRUCTURED-REVIEW", "手填指标完成来源核对后进入事实库并保留来源文件");
+    await categories.getByRole("button", { name: /定性资料/ }).click();
+    await page.screenshot({ path: path.join(outputDir, "collection.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const tableLayout = await page.getByRole("table").evaluate((table) => ({
+      scroll: table.parentElement.scrollWidth > table.parentElement.clientWidth,
+      noWrap: [...table.querySelectorAll("td, th")].every((cell) => getComputedStyle(cell).whiteSpace === "nowrap"),
+      pageFits: document.documentElement.scrollWidth === window.innerWidth,
+    }));
+    check(tableLayout.scroll && tableLayout.noWrap && tableLayout.pageFits, "COLLECTION-NARROW", "窄屏资料表单行，表格容器横向滚动且页面无整体溢出");
+    await page.screenshot({ path: path.join(outputDir, "collection-narrow.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    await page.getByRole("button", { name: "下一步", exact: true }).click();
+    await page.waitForURL(/\/step\/4$/);
+    await ready(page);
+    await page.getByRole("button", { name: "生成建议大纲", exact: true }).click();
+    const suggestions = page.getByLabel("大纲建议列表");
+    check(await suggestions.getByText(/验收样本企业 2026 年度的验收议题：资源效率.*2 项确认资料和 2 条确认事实/).isVisible()
+      && await suggestions.getByText(/验收议题：待补证据.*0 项确认资料和 0 条确认事实/).isVisible(), "OUTLINE-EVIDENCE", "规则建议读取真实项目画像、已确认评估、最新资料和事实，保留待补证据议题");
+    const outlined = await save(page, id, "采用所选建议（2）");
+    const suggestedSection = outlined.reportSections.find((item) => item.title === topicName);
+    const missingSection = outlined.reportSections.find((item) => item.title === missingTopic);
+    check(suggestedSection.materialIds.includes(itemId) && suggestedSection.materialIds.includes(metricItem.id)
+      && suggestedSection.factIds.includes(metricFact.id) && outlined.writing.chapters.some((chapter) => chapter.id === missingSection.id)
+      && isDeepStrictEqual(outlined.reportSections.filter((section) => withManualMetric.reportSections.some((base) => base.id === section.id)), withManualMetric.reportSections), "OUTLINE-MERGE", "采用规则建议新增两个章节并关联证据，既有章节完整保留");
+    await page.getByRole("button", { name: new RegExp(missingTopic) }).click();
+    check(await page.getByRole("button", { name: "前往 Step 3 补充资料" }).isVisible(), "OUTLINE-MISSING", "缺少证据的议题章节可保存并标注待补充");
+
+    const title = "验收资源与环境";
+    await page.getByRole("button", { name: "新增章节" }).click();
+    await page.locator("#new-section-order").fill("10");
+    await page.locator("#new-section-title-input").fill(title);
+    await page.locator("#new-section-description").fill("核对年度资源管理资料。");
+    await page.getByRole("button", { name: "创建章节" }).click();
+    await page.getByRole("button", { name: "编辑关联" }).click();
+    await page.getByRole("checkbox", { name: new RegExp(topicName) }).check();
+    await page.getByText("关联或调整资料与事实", { exact: true }).click();
+    await page.getByRole("checkbox", { name: new RegExp(itemName) }).check();
+    await page.getByRole("checkbox", { name: new RegExp(metricFact.name) }).check();
+    const added = await save(page, id, "保存章节");
+    const chapterId = added.reportSections.find((item) => item.title === title).id;
+    const chapter = added.reportSections.find((item) => item.id === chapterId);
+    check(chapter.topics.includes(topicName) && chapter.materialIds.includes(itemId) && chapter.factIds.includes(metricFact.id), "CHAPTER-LINKS", "人工新增章节，并保存议题、资料及单独指定的事实");
+
+    await openStep(page, id, 3, `?chapterId=${encodeURIComponent(chapterId)}`);
+    check(new URL(page.url()).pathname.endsWith("/4") && await page.locator("#section-title").inputValue() === title, "OLD-OUTLINE-LOCATOR", "旧 Step 3 章节深链接跳转 Step 4 对应目录项");
+    const renamed = "验收资源管理策略";
+    await page.locator("#section-title").fill(renamed);
+    await page.locator("#section-order").fill("11");
+    const saved = await save(page, id, "保存章节");
+    check(saved.writing.chapters.some((item) => item.id === chapterId && item.title === renamed && item.order === "11"), "RENAME-REORDER", "改名及顺序持久化并同步 Step 5 目录");
+    await page.screenshot({ path: path.join(outputDir, "outline.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(await page.locator("#section-title").isVisible() && await page.evaluate(() => document.documentElement.scrollWidth === window.innerWidth), "OUTLINE-NARROW", "窄屏大纲和章节编辑正常，无全页横向溢出");
+    await page.screenshot({ path: path.join(outputDir, "outline-narrow.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.getByRole("button", { name: "删除章节", exact: true }).click();
+    check((await readProject(page, id)).revision === saved.revision, "DELETE-CANCEL", "取消章节移除未保存任何变化");
+    page.once("dialog", (dialog) => dialog.accept());
+    const removed = await save(page, id, "删除章节");
+    check(removed.reportSections.find((item) => item.id === chapterId).sourceState === "upstream-removed"
+      && isDeepStrictEqual(removed.writing.chapters.find((item) => item.id === chapterId).blocks, saved.writing.chapters.find((item) => item.id === chapterId).blocks), "ARCHIVE-CHAPTER", "从目录移除章节仍保留正文与关联");
+    await page.getByText(/已移除章节（1）/).click();
+    const restored = await save(page, id, "恢复章节");
+    check(restored.writing.chapters.find((item) => item.id === chapterId).sourceState === "active", "RESTORE-CHAPTER", "恢复章节使用原 ID 和正文");
+
+    await openStep(page, id, 4, `?factId=${encodeURIComponent(metricFact.id)}`);
+    check(new URL(page.url()).pathname.endsWith("/3") && await page.getByLabel(`${metricFact.name}数值`).isVisible(), "OLD-FACT-LOCATOR", "旧 Step 4 事实深链接跳转 Step 3 并展开事实");
     await openStep(page, id, 5, `?chapterId=${encodeURIComponent(chapterId)}`);
+    check(await page.getByRole("heading", { name: metricFact.name, exact: true }).isVisible(), "STEP5-FACT", "Step 5 可直接查看 Step 4 关联的已确认事实");
     await page.getByRole("tab", { name: "相关资料", exact: true }).click();
-    check(resource.chapterIds.includes(chapterId) && await page.getByLabel("章节标题", { exact: true }).inputValue() === renamed
+    check(await page.getByLabel("章节标题", { exact: true }).inputValue() === renamed
       && await page.getByText(itemName, { exact: true }).isVisible() && await page.getByText(resourceName, { exact: true }).isVisible()
-      && !await page.getByRole("tab", { name: "披露要求", exact: true }).count(), "STEP5-RESOURCES", "Step 5 显示同一章节、资料任务及 Step 4 补充来源");
+      && !await page.getByRole("tab", { name: "披露要求", exact: true }).count(), "STEP5-RESOURCES", "Step 5 读取更名后的章节、资料任务和已核验定性资料");
+
+    const filesBeforeMigration = await readProjectFiles(page, id);
+    const legacyProject = await mutateProject(page, (project, current) => {
+      delete project.workflowOrder;
+      delete project.departments;
+      project.report.currentStep = 3;
+      const section = project.reportSections.find((entry) => entry.id === current.chapterId);
+      delete section.materialIds;
+      const material = project.dataRequirements.find((entry) => entry.id === current.itemId);
+      material.section = `${section.order} ${section.title}`;
+      delete material.departmentId;
+      const block = project.writing.chapters.find((entry) => entry.id === current.chapterId).blocks[0];
+      block.sourceReferences = project.facts.find((fact) => fact.id === current.factId).sourceReferences;
+    }, { chapterId, itemId, factId: metricFact.id }, id);
+    await openStep(page, id, 4, `?chapterId=${encodeURIComponent(chapterId)}`);
+    check(await page.getByRole("list", { name: "本章关联资料" }).getByText(new RegExp(itemName)).isVisible(), "LEGACY-MATERIAL-LINK", "读取旧字段恢复历史章节资料关联");
+    const upgraded = await save(page, id, "保存章节");
+    check(upgraded.workflowOrder === "collection-first" && upgraded.report.currentStep === 4
+      && upgraded.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
+      && isDeepStrictEqual(upgraded.facts, legacyProject.facts) && isDeepStrictEqual(upgraded.sources, legacyProject.sources)
+      && isDeepStrictEqual(upgraded.writing.chapters.map((item) => item.blocks), legacyProject.writing.chapters.map((item) => item.blocks))
+      && isDeepStrictEqual(await readProjectFiles(page, id), filesBeforeMigration), "LEGACY-COMPATIBILITY", "保存原版存档只补充新关联和步骤位置，原文件字节、人工确认和正文均保留");
+
+    await page.goto(baseUrl);
+    const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "目录与资料链路验收报告", exact: true }) });
+    await card.waitFor();
+    const download = page.waitForEvent("download");
+    await card.getByRole("button", { name: "导出备份" }).click();
+    const archive = JSON.parse(fs.readFileSync(await (await download).path(), "utf8"));
+    const backupHasOriginal = Buffer.from(archive.files.find((file) => file.name === sourceName).dataBase64, "base64").equals(fs.readFileSync(fixture));
+    const restoreId = `${id}-restore`;
+    archive.manifest.projectId = restoreId;
+    archive.project.projectId = restoreId;
+    archive.project.report.id = restoreId;
+    for (const file of archive.files) file.projectId = restoreId;
+    await page.getByLabel("选择项目备份").setInputFiles({ name: "workflow-restore.esgbackup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(archive)) });
+    await page.getByText(/已恢复/).waitFor();
+    const restoredCopy = await readProject(page, restoreId);
+    const restoredFile = restoredCopy.sources.find((item) => item.id === fileSource.id);
+    const restoredDepartmentId = upgraded.dataRequirements.find((item) => item.id === itemId).departmentId;
+    check(backupHasOriginal && restoredCopy.departments.some((item) => item.id === restoredDepartmentId && item.name === "能源与资源组")
+      && restoredCopy.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
+      && restoredCopy.facts.find((item) => item.id === metricFact.id).state === "已确认"
+      && restoredCopy.facts.find((item) => item.id === metricFact.id).sourceReferences[0].fileId === restoredFile.fileId
+      && restoredCopy.writing.chapters.find((item) => item.id === chapterId).blocks[0].sourceReferences[0].fileId === restoredFile.fileId
+      && (await readProjectFiles(page, restoreId)).some((file) => file.fileId === restoredFile.fileId && file.text === originalFiles[0].text), "WORKFLOW-BACKUP", "备份与恢复保留部门、章节资料关联及确认事实，并连接同一原始文件内容");
+    const originalCard = card.filter({ has: page.locator("span.font-mono").getByText(id, { exact: true }) });
+    await originalCard.getByRole("button", { name: "复制下一年度" }).click();
+    await page.getByText(/已复制为 2027 年项目/).waitFor();
+    const copiedId = `${id.replace(/-20\d{2}(?:-\d+)?$/, "")}-2027`;
+    const copied = await readProject(page, copiedId);
+    const copiedFile = copied.sources.find((item) => item.id === fileSource.id);
+    check(copied.report.year === 2027 && copied.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
+      && !copied.materiality.confirmed && copied.facts.every((item) => item.state === "待人工确认")
+      && copied.facts.find((item) => item.id === metricFact.id).sourceReferences[0].fileId === copiedFile.fileId
+      && copied.writing.chapters.find((item) => item.id === chapterId).blocks[0].sourceReferences[0].fileId === copiedFile.fileId
+      && (await readProjectFiles(page, copiedId)).some((file) => file.fileId === copiedFile.fileId && file.fileId !== fileSource.fileId && file.text === originalFiles[0].text), "WORKFLOW-ANNUAL-COPY", "年度复制保留资料和正文对原始文件的引用，各项目取得独立文件 ID 并重新确认年度数据");
 
     await mutateProject(page, (project, archived) => {
       const sectionChapter = project.writing.chapters.find((chapter) => chapter.id === archived.chapterId);

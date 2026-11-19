@@ -90,18 +90,18 @@ async function main() {
   const downloadedHistory = await historyDownload;
   check(fs.readFileSync(await downloadedHistory.path()).equals(historyBytes), "P1-FILE-REFRESH", "刷新后历史报告文件仍可下载且字节一致");
 
-  await page.goto(`${baseUrl}/reports/${projectId}/step/4`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/reports/${projectId}/step/3`, { waitUntil: "networkidle" });
   await waitForReady(page);
   await page.getByRole("button", { name: /上传资料/ }).click();
-  const step4Bytes = Buffer.from("PHASE1-STEP4-REAL-BYTES");
-  await page.getByLabel("选择资料文件").setInputFiles({ name: "phase1-data.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: step4Bytes });
+  const step3Bytes = Buffer.from("PHASE1-STEP4-REAL-BYTES");
+  await page.getByLabel("选择资料文件").setInputFiles({ name: "phase1-data.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: step3Bytes });
   await page.getByRole("button", { name: "保存来源记录" }).click();
   await page.getByText(/已保存项目数据/).waitFor({ timeout: 15_000 });
   project = await readProject(page, projectId);
   files = await readProjectFiles(page, projectId);
-  const step4Source = project.sources.find((item) => item.name === "phase1-data.xlsx");
-  check(step4Source?.fileId && files.some((item) => item.fileId === step4Source.fileId && item.text === step4Bytes.toString()), "P1-STEP4-BYTES", "Step 4 资料文件保存真实字节");
-  check(!project.facts.some((fact) => fact.sourceReferences.some((reference) => reference.sourceId === step4Source.id)), "P1-NO-FAKE-PARSE", "未解析文件没有伪造事实或解析结果");
+  const step3Source = project.sources.find((item) => item.name === "phase1-data.xlsx");
+  check(step3Source?.fileId && files.some((item) => item.fileId === step3Source.fileId && item.text === step3Bytes.toString()), "P1-STEP3-BYTES", "Step 3 资料文件保存真实字节");
+  check(!project.facts.some((fact) => fact.sourceReferences.some((reference) => reference.sourceId === step3Source.id)), "P1-NO-FAKE-PARSE", "未解析文件没有伪造事实或解析结果");
 
   const secondId = await createProject(page, { title: "Second isolated project", enterpriseName: "Second Enterprise", year: 2026 });
   const secondFiles = await readProjectFiles(page, secondId);
@@ -136,7 +136,7 @@ async function main() {
   fs.rmSync(restoredBackupPath, { force: true });
   const restored = await readProject(page, restoredId);
   const restoredFiles = await readProjectFiles(page, restoredId);
-  check(restored?.writing.chapters.length === project.writing.chapters.length && restoredFiles.length === 2 && restoredFiles.some((item) => item.text === step4Bytes.toString()), "P1-RESTORE", "恢复后 Step 1–8 状态和文件字节完整");
+  check(restored?.writing.chapters.length === project.writing.chapters.length && restoredFiles.length === 2 && restoredFiles.some((item) => item.text === step3Bytes.toString()), "P1-RESTORE", "恢复后 Step 1–8 状态和文件字节完整");
 
   await projectCard.getByRole("button", { name: "复制下一年度" }).click();
   await page.getByText(/已复制为 2027 年项目/).waitFor({ timeout: 15_000 });

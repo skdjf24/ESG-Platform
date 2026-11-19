@@ -4,7 +4,9 @@ import { createQualityState } from "@/lib/quality/state";
 import { ensureStorageCapacity, FILE_STORE, openProjectDatabase, PROJECT_STORE, requestResult, transactionDone } from "@/lib/project/indexed-db";
 import { normalizeProjectData, projectFileRepository, projectRepository, ProjectStorageError } from "@/lib/project/repository";
 import { checksumBlob } from "@/lib/parsing/security";
+import type { SourceReference } from "@/lib/types/esg";
 import type { ProjectFileRecord, ReportProjectData } from "@/lib/types/project-data";
+import type { WritingChapter } from "@/lib/types/writing";
 
 export const PROJECT_BACKUP_SCHEMA_VERSION = 1;
 
@@ -114,6 +116,33 @@ async function putProjectAndFiles(project: ReportProjectData, files: ProjectFile
   await transactionDone(transaction);
 }
 
+function remapFileReferences(project: ReportProjectData, fileIds: Map<string, string>): ReportProjectData {
+  const remap = <T extends { sourceReferences: SourceReference[] }>(item: T): T => ({
+    ...item,
+    sourceReferences: item.sourceReferences.map((reference) => {
+      const fileId = reference.fileId && fileIds.get(reference.fileId);
+      return fileId ? { ...reference, fileId } : reference;
+    }),
+  });
+  const remapChapter = (chapter: WritingChapter) => ({ ...chapter, blocks: chapter.blocks.map(remap) });
+  return {
+    ...project,
+    facts: project.facts.map(remap),
+    resources: project.resources.map(remap),
+    writing: {
+      ...project.writing,
+      chapters: project.writing.chapters.map(remapChapter),
+      versions: project.writing.versions.map((version) => ({ ...version, snapshot: remapChapter(version.snapshot) })),
+    },
+    presentation: {
+      ...project.presentation,
+      observations: project.presentation.observations.map(remap),
+      charts: project.presentation.charts.map((chart) => ({ ...chart, observationSnapshots: chart.observationSnapshots.map(remap) })),
+    },
+    quality: { ...project.quality, issues: project.quality.issues.map(remap) },
+  };
+}
+
 export async function restoreProjectBackup(file: File) {
   let archive: ProjectBackupArchive;
   try {
@@ -150,10 +179,10 @@ export async function restoreProjectBackup(file: File) {
       blob,
     } satisfies ProjectFileRecord;
   }));
-  const project = {
+  const project = remapFileReferences({
     ...normalizedProject,
     sources: normalizedProject.sources.map((source) => source.fileId ? { ...source, fileId: fileIdMap.get(source.fileId) } : source),
-  };
+  }, fileIdMap);
   await putProjectAndFiles(project, files);
   return project;
 }
@@ -199,7 +228,7 @@ export async function copyProjectToNextYear(projectId: string, targetYear?: numb
     },
     materiality: { ...source.materiality, confirmed: false, confirmedAt: undefined, revision: source.materiality.revision + 1 },
     disclosureRequirements: source.disclosureRequirements.map((item) => ({ ...item, userConfirmed: false, reviewStatus: "待复核", revision: item.revision + 1 })),
-    dataRequirements: source.dataRequirements.map((item) => ({ ...item, state: "待收集", reviewStatus: "待复核", revision: item.revision + 1 })),
+    dataRequirements: source.dataRequirements.map((item) => ({ ...item, state: "待收集", reviewStatus: "待复核", confirmedAt: undefined, revision: item.revision + 1 })),
     sources: source.sources.map((item) => {
       const copiedFileId = item.fileId ? fileIdMap.get(item.fileId) : undefined;
       return {
@@ -223,6 +252,7 @@ export async function copyProjectToNextYear(projectId: string, targetYear?: numb
     impacts: [],
     migrations: [...source.migrations, { id: `copy-next-year-${newProjectId}`, from: source.projectId, migratedAt: now, note: `从 ${source.report.year} 年项目复制结构到 ${year} 年；Materiality、Requirement、Facts、Step 7 和 Step 8 状态已重置。` }],
   };
-  await putProjectAndFiles(project, files);
-  return project;
+  const copied = remapFileReferences(project, fileIdMap);
+  await putProjectAndFiles(copied, files);
+  return copied;
 }

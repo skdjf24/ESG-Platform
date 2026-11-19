@@ -57,11 +57,33 @@ export interface ProjectReportSection extends ReportSection {
   revision: number;
   sourceState: SourceState;
   topicReviewStatus?: "待复核";
+  materialIds?: string[];
+  factIds?: string[];
+}
+
+export interface ProjectDepartment {
+  id: string;
+  name: string;
+}
+
+export interface QuantitativeMaterial {
+  value: string;
+  unit: string;
+  period: string;
+  boundary: string;
+  sourceId?: string;
+  locator: string;
 }
 
 export interface ProjectDataRequirement extends DataRequirement {
   revision: number;
   reviewStatus: EntityReviewStatus;
+  topicIds?: string[];
+  sourceIds?: string[];
+  departmentId?: string;
+  collaboratorDepartmentIds?: string[];
+  quantitative?: QuantitativeMaterial;
+  confirmedAt?: string;
 }
 
 export interface ProjectWritingState {
@@ -104,6 +126,8 @@ export interface MigrationRecord {
 
 export interface ReportProjectData {
   schemaVersion: 2;
+  workflowOrder?: "collection-first";
+  departments?: ProjectDepartment[];
   projectKind?: "blank" | "sample";
   projectId: string;
   revision: number;

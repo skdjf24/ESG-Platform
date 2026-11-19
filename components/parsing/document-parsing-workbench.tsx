@@ -78,12 +78,12 @@ function SourceIcon({ type }: { type: UploadedSource["fileType"] }) {
   return type === "XLSX" ? <FileSpreadsheet className="size-4" /> : <FileText className="size-4" />;
 }
 
-export function DocumentParsingWorkbench() {
+export function DocumentParsingWorkbench({ initialSourceId }: { initialSourceId?: string }) {
   const { project, editProject, saveProject, setMessage } = useProjectData();
   const [documents, setDocuments] = useState<ParsedDocument[]>([]);
   const [candidates, setCandidates] = useState<ExtractionCandidate[]>([]);
   const [files, setFiles] = useState<ProjectFileRecord[]>([]);
-  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState(initialSourceId ?? "");
   const [selectedSegment, setSelectedSegment] = useState("");
   const [selectedBlockId, setSelectedBlockId] = useState<string>();
   const [selectedCandidateId, setSelectedCandidateId] = useState<string>();
@@ -138,7 +138,7 @@ export function DocumentParsingWorkbench() {
       unit: candidate.unit ?? "",
       period: candidate.period ?? "",
       boundary: candidate.boundary ?? "",
-      note: candidate.note ?? "",
+      note: candidate.note || project.topics.find((topic) => project.dataRequirements.find((material) => material.id === selectedSource?.materialId)?.topicIds?.includes(topic.id))?.name || "",
     });
   }
 
@@ -156,7 +156,7 @@ export function DocumentParsingWorkbench() {
       let base = outcome.parserVersionChanged ? markProjectSourceNeedsReview(project, selectedSource.id) : project;
       base = updateSourceFromDocument(base, outcome.document, outcome.candidates);
       editProject(base);
-      await saveProject(4, outcome.parserVersionChanged ? "重新解析并标记来源复核" : "保存文件解析结果", base);
+      await saveProject(3, outcome.parserVersionChanged ? "重新解析并标记来源复核" : "保存文件解析结果", base);
       setMessage(`已使用 ${outcome.document.parserVersion} 在浏览器本地解析；生成 ${outcome.candidates.length} 条规则候选，尚未自动入库。`);
     } catch (error) {
       const documentError = error instanceof DocumentParsingError ? error.document : undefined;
@@ -164,7 +164,7 @@ export function DocumentParsingWorkbench() {
       if (documentError) {
         const next = updateSourceFromDocument(project, documentError, fileCandidates);
         editProject(next);
-        await saveProject(4, "记录文件解析失败", next);
+        await saveProject(3, "记录文件解析失败", next);
       }
       setWorkbenchError(message);
     } finally {
@@ -197,7 +197,7 @@ export function DocumentParsingWorkbench() {
         } : source),
       };
       editProject(next);
-      if (!await saveProject(4, `人工确认${draft.type === "metric" ? "指标" : "资料"}候选`, next)) return;
+      if (!await saveProject(3, `人工确认${draft.type === "metric" ? "指标" : "资料"}候选`, next)) return;
       await extractionCandidateRepository.save(result.candidate);
       await refreshArtifacts();
       setMessage(draft.type === "metric"
@@ -239,7 +239,7 @@ export function DocumentParsingWorkbench() {
         } : source),
       };
       editProject(next);
-      await saveProject(4, "替换原始资料并标记下游复核", next);
+      await saveProject(3, "替换原始资料并标记下游复核", next);
       await refreshArtifacts();
       setMessage("原始文件已替换；旧解析快照保留为 stale，已确认事实未被覆盖，相关下游内容已进入待复核。");
     } catch (error) {

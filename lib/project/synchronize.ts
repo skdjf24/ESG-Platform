@@ -5,6 +5,7 @@ import { synchronizeObservations } from "@/lib/presentation/state";
 import { markQualityChecksStale } from "@/lib/quality/engine";
 import { qualityInputFingerprint } from "@/lib/quality/validity";
 import { describeTopicRemoval } from "@/lib/project/topics";
+import { chapterEvidence, manualMaterialFactId } from "@/lib/project/materials";
 
 const unique = <T,>(items: T[]) => [...new Set(items)];
 const comparable = <T extends object>(value: T, ignored: string[]) => Object.fromEntries(Object.entries(value).filter(([key]) => !ignored.includes(key)));
@@ -134,10 +135,11 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         ...chapter, status: "待完善", reviewStatus: "待复核",
       } : chapter);
 
-      const targetSteps: ProjectStep[] = hasDownstreamLinks ? [3, 5, 7, 8] : [7, 8];
+      const materials = next.dataRequirements.filter((item) => item.topicIds?.includes(topic.id));
+      const targetSteps: ProjectStep[] = [...(materials.length ? [3 as const] : []), ...(hasDownstreamLinks ? [4, 5] as const : []), 7, 8];
       const impact = createImpact(2, "topic", topic.id,
         `已从当前项目移除议题“${topic.name}”。${hasDownstreamLinks ? "已解除相关大纲关联。请复核章节议题与资料引用。" : "原评分及确认信息保留在评估记录。"}`,
-        [...sectionIds], targetSteps);
+        [...sectionIds, ...materials.map((item) => item.id)], targetSteps);
       impacts.push({
         ...impact,
         status: assessmentNeedsReview || previous.quality.runs.length || previous.quality.fullCheck ? "待复核" : "已知悉",
@@ -172,27 +174,30 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       } : section);
       impacts.push(createImpact(2, "topic", affectedTopicIds[0], affectedSectionIds.size
         ? "重要性评估已更新，请复核相关报告章节的议题关联。"
-        : "重要性评估已更新，历史检查记录保留。", [...affectedSectionIds], affectedSectionIds.size ? [3, 7, 8] : [7, 8]));
+        : "重要性评估已更新，历史检查记录保留。", [...affectedSectionIds], [3, 4, 7, 8]));
     } else if (changed(previous.materiality, next.materiality, ["revision", "confirmedAt"])) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
     }
   }
 
-  if (sourceStep === 3) {
+  if (sourceStep === 4) {
     const sectionIds = unique([...previous.reportSections.map((item) => item.id), ...next.reportSections.map((item) => item.id)]);
     const activeSections = next.reportSections.filter((item) => item.sourceState !== "upstream-removed");
     const activeSectionIds = new Set(activeSections.map((item) => item.id));
     const sectionRenames = new Map<string, string>();
+    const layoutChanges = new Set<string>();
     for (const id of sectionIds) {
       const before = previous.reportSections.find((item) => item.id === id);
       const current = next.reportSections.find((item) => item.id === id);
-      if (before && !current) {
+      if (before && before.sourceState !== "upstream-removed" && !activeSectionIds.has(id)) {
+        if (current) current.revision = before.revision + 1;
+        layoutChanges.add(id);
         next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? { ...chapter, sourceState: "upstream-removed", status: "待完善", reviewStatus: "待复核" } : chapter);
-        impacts.push(createImpact(3, "section", id, `目录章节“${before.title}”已从 Step 3 移除；Step 5 正文、历史版本及 Step 6 版面仍保留，等待人工处理、质量复检和定稿复核。`, [id], [5, 6, 7, 8]));
+        impacts.push(createImpact(4, "section", id, `目录章节“${before.title}”已从 Step 4 移除；Step 5 正文、历史版本及 Step 6 版面仍保留，等待人工处理、质量复检和定稿复核。`, [id], [5, 6, 7, 8]));
         continue;
       }
       if (!current || !activeSectionIds.has(id)) continue;
-      if (!before || before.order !== current.order || before.title !== current.title) {
+      if (!before || before.sourceState === "upstream-removed" || before.order !== current.order || before.title !== current.title) {
         current.order = current.order.trim();
         current.title = current.title.trim();
         if (!current.order || !current.title) throw new Error("请填写章节编号和章节名称。");
@@ -202,7 +207,7 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       }
       const existing = next.writing.chapters.find((chapter) => chapter.id === id);
       const sectionChanged = Boolean(before && changed(before, current, ["revision", "sourceState", "state", "requirementCount", "topicReviewStatus"]));
-      if (before && (sectionChanged || before.topicReviewStatus !== current.topicReviewStatus)) current.revision = Math.max(before.revision + 1, current.revision);
+      if (before && (sectionChanged || before.topicReviewStatus !== current.topicReviewStatus || before.sourceState !== current.sourceState)) current.revision = Math.max(before.revision + 1, current.revision);
       if (existing) {
         if (sectionChanged || !before || existing.sourceState === "upstream-removed") {
           next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? {
@@ -223,26 +228,37 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         const previousLabel = `${before.order} ${before.title}`;
         const nextLabel = `${current.order} ${current.title}`;
         if (previousLabel !== nextLabel) sectionRenames.set(previousLabel, nextLabel);
-        impacts.push(createImpact(3, "section", id, `报告目录已更新为“${nextLabel}”，资料清单与正文目录已同步。`, [id], [4, 5, 6, 7, 8]));
+        impacts.push(createImpact(4, "section", id, `报告目录已更新为“${nextLabel}”，资料关联与正文目录已同步。`, [id], [3, 5, 6, 7, 8]));
       }
+      if (before && (before.order !== current.order || before.title !== current.title || before.sourceState !== current.sourceState)) layoutChanges.add(id);
     }
     next.dataRequirements = next.dataRequirements.map((item) => {
       const section = sectionRenames.get(item.section);
       return section && previous.dataRequirements.some((before) => before.id === item.id && before.section === item.section)
         ? { ...item, section } : item;
     });
+    next.presentation.charts = next.presentation.charts.map((chart) => layoutChanges.has(chart.chapterId) ? {
+      ...chart, layoutReviewStatus: "待复核", changeNote: "报告章节已调整，请复核图表所在章节及版面。", revision: chart.revision + 1,
+    } : chart);
     next.reportSections.sort((left, right) => left.order.localeCompare(right.order, "zh-CN", { numeric: true }));
   }
 
+  const unconfirmedManualFacts = new Set<string>();
   next.dataRequirements = next.dataRequirements.map((requirement) => {
     const before = previous.dataRequirements.find((item) => item.id === requirement.id);
     if (!before) return { ...requirement, revision: Math.max(1, requirement.revision) };
     if (!changed(before, requirement, ["revision", "reviewStatus"])) return { ...requirement, revision: before.revision };
-    if (sourceStep === 3) impacts.push(createImpact(3, "data-requirement", requirement.id, `资料需求“${requirement.itemName}”已更新，Step 4 分工与收集状态需要复核。`, [requirement.id], [4]));
-    return { ...requirement, revision: Math.max(before.revision + 1, requirement.revision), reviewStatus: sourceStep === 4 ? "有效" : "待复核" };
+    if (sourceStep === 3 && (requirement.type !== before.type || requirement.itemName !== before.itemName
+      || JSON.stringify(requirement.quantitative) !== JSON.stringify(before.quantitative))) {
+      unconfirmedManualFacts.add(manualMaterialFactId(requirement.id));
+    }
+    return { ...requirement, revision: Math.max(before.revision + 1, requirement.revision) };
   });
 
-  if (sourceStep === 4) {
+  if (sourceStep === 3) {
+    next.facts = next.facts.map((fact) => unconfirmedManualFacts.has(fact.id) ? {
+      ...fact, state: "待人工确认", confirmedBy: undefined, sourceConfirmationStatus: "待确认",
+    } : fact);
     const candidateFactIds = new Set(next.facts.map((fact) => fact.id));
     for (const before of previous.facts) {
       if (!candidateFactIds.has(before.id)) {
@@ -264,8 +280,28 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       const affectedBlocks = next.writing.chapters.flatMap((chapter) => chapter.blocks.filter((block) => block.citations.some((citation) => changedFacts.includes(citation.factId))).map((block) => block.id));
       next = synchronizeObservations(next, changedFacts);
       const affectedCharts = next.presentation.charts.filter((chart) => chart.status === "需更新" && chart.metricObservationIds.some((observationId) => changedFacts.some((factId) => observationId === `observation-${factId}`))).map((chart) => chart.chartId);
-      impacts.push(createImpact(4, "fact", changedFacts[0], "企业事实或 ESG 指标已更新；相关正文和图表保留旧版本，质量结论与定稿状态标记为待复核。", [...affectedBlocks, ...affectedCharts], [5, 6, 7, 8]));
+      impacts.push(createImpact(3, "fact", changedFacts[0], "企业事实或 ESG 指标已更新；相关正文和图表保留旧版本，质量结论与定稿状态标记为待复核。", [...affectedBlocks, ...affectedCharts], [4, 5, 6, 7, 8]));
     }
+
+    const revisedResources = next.resources.filter((item) => {
+      const before = previous.resources.find((resource) => resource.id === item.id);
+      return before && changed(before, item, ["revision"]);
+    });
+    const revisedSourceRefs = new Set(revisedResources.flatMap((item) => [item, previous.resources.find((resource) => resource.id === item.id)]
+      .flatMap((resource) => resource?.sourceReferences.map((reference) => reference.id) ?? [])));
+    const affectedSections = new Set(next.reportSections.filter((section) => section.sourceState === "active" &&
+      JSON.stringify(chapterEvidence(previous, section.id)) !== JSON.stringify(chapterEvidence(next, section.id))).map((section) => section.id));
+    next.writing.chapters = next.writing.chapters.map((chapter) => {
+      const usesRevisedSource = chapter.blocks.some((block) => block.sourceReferences.some((reference) => revisedSourceRefs.has(reference.id)));
+      if (!affectedSections.has(chapter.id) && !usesRevisedSource) return chapter;
+      return {
+        ...chapter, status: "待完善", reviewStatus: "待复核",
+        blocks: usesRevisedSource ? chapter.blocks.map((block) => block.sourceReferences.some((reference) => revisedSourceRefs.has(reference.id))
+          ? { ...block, reviewStatus: "待复核", pendingKind: "待更新", resolved: false } : block) : chapter.blocks,
+      };
+    });
+    if (affectedSections.size) impacts.push(createImpact(3, "data-requirement", next.projectId,
+      "关联资料或来源已更新，请复核报告大纲和章节资料包。", [...affectedSections], [4, 5, 7, 8]));
   }
 
   next.impacts = [...next.impacts, ...impacts];

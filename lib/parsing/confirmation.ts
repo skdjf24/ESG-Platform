@@ -71,10 +71,9 @@ export function applyCandidateConfirmation(
   } else {
     confirmedEntityId = `resource-${candidate.candidateId}`;
     const existing = project.resources.find((resource) => resource.id === confirmedEntityId);
-    const firstChapter = project.writing.chapters.find((chapter) => chapter.sourceState !== "upstream-removed");
     const resource: WritingResource = {
       id: confirmedEntityId,
-      chapterIds: existing?.chapterIds ?? (firstChapter ? [firstChapter.id] : []),
+      chapterIds: existing?.chapterIds ?? [],
       kind: candidate.sourceKind === "historical" ? "历史资料" : draft.type === "policy" ? "制度" : "案例",
       title: label,
       description: String(draft.value ?? candidate.excerpt).trim(),

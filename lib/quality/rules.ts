@@ -161,17 +161,17 @@ function sourceRules(project: ReportProjectData) {
       for (const citation of block.citations) {
         const fact = project.facts.find((item) => item.id === citation.factId);
         if (!fact) {
-          findings.push(makeFinding({ ruleId: "SRC-001", identity: `${block.id}:${citation.factId}:missing`, title: "正文引用的企业事实已不存在", description: "内容块保留了事实 ID，但统一事实库中找不到对应对象。", sourceStep: 4, severity: "阻断", chapterId: chapter.id, blockId: block.id, factIds: [citation.factId], evidence: [{ label: "内容块", value: block.title, entityType: "block", entityId: block.id }], suggestedAction: "返回 Step 4 恢复或替换事实，并在 Step 5 重新确认引用。" }));
+          findings.push(makeFinding({ ruleId: "SRC-001", identity: `${block.id}:${citation.factId}:missing`, title: "正文引用的企业事实已不存在", description: "内容块保留了事实 ID，但统一事实库中找不到对应对象。", sourceStep: 3, severity: "阻断", chapterId: chapter.id, blockId: block.id, factIds: [citation.factId], evidence: [{ label: "内容块", value: block.title, entityType: "block", entityId: block.id }], suggestedAction: "返回 Step 3 恢复或替换事实，并在 Step 5 重新确认引用。" }));
           continue;
         }
         if (fact.state !== "已确认" || fact.sourceState === "upstream-removed") {
-          findings.push(makeFinding({ ruleId: "SRC-001", identity: `${block.id}:${fact.id}:confirmation`, title: `引用事实“${fact.name}”未处于已确认状态`, description: "未确认或已由上游撤销的事实不能直接作为正式披露依据。", sourceStep: 4, chapterId: chapter.id, blockId: block.id, factIds: [fact.id], sourceReferences: fact.sourceReferences, evidence: [{ label: "事实状态", value: fact.sourceState === "upstream-removed" ? "上游已移除" : fact.state, entityType: "fact", entityId: fact.id }], suggestedAction: "返回 Step 4 核对事实、统计口径与来源，由用户重新确认。" }));
+          findings.push(makeFinding({ ruleId: "SRC-001", identity: `${block.id}:${fact.id}:confirmation`, title: `引用事实“${fact.name}”未处于已确认状态`, description: "未确认或已由上游撤销的事实不能直接作为正式披露依据。", sourceStep: 3, chapterId: chapter.id, blockId: block.id, factIds: [fact.id], sourceReferences: fact.sourceReferences, evidence: [{ label: "事实状态", value: fact.sourceState === "upstream-removed" ? "上游已移除" : fact.state, entityType: "fact", entityId: fact.id }], suggestedAction: "返回 Step 3 核对事实、统计口径与来源，由用户重新确认。" }));
         }
         if (citation.factRevision !== fact.revision) {
           findings.push(makeFinding({ ruleId: "SRC-001", identity: `${block.id}:${fact.id}:revision`, title: `“${fact.name}”引用版本已过期`, description: `正文引用 v${citation.factRevision}，事实库当前为 v${fact.revision}；正文没有被自动覆盖。`, sourceStep: 5, chapterId: chapter.id, blockId: block.id, factIds: [fact.id], sourceReferences: fact.sourceReferences, evidence: [{ label: "引用版本", value: `v${citation.factRevision}`, entityType: "block", entityId: block.id }, { label: "当前事实版本", value: `v${fact.revision}`, entityType: "fact", entityId: fact.id }], suggestedAction: "核对变更内容后，在 Step 5 更新正文引用并提交复检。" }));
         }
         if (!fact.sourceReferences.length || fact.sourceReferences.some((source) => !source.fileName.trim() || !source.locator.trim())) {
-          findings.push(makeFinding({ ruleId: "SRC-002", identity: fact.id, title: `事实“${fact.name}”缺少可定位来源`, description: "来源文件及工作表、页码或位置必须保留；仅有事实值不足以证明来源。", sourceStep: 4, chapterId: chapter.id, blockId: block.id, factIds: [fact.id], sourceReferences: fact.sourceReferences, evidence: [{ label: "来源数量", value: String(fact.sourceReferences.length), entityType: "fact", entityId: fact.id }], suggestedAction: "在 Step 4 补充来源文件和具体定位，并由用户确认。" }));
+          findings.push(makeFinding({ ruleId: "SRC-002", identity: fact.id, title: `事实“${fact.name}”缺少可定位来源`, description: "来源文件及工作表、页码或位置必须保留；仅有事实值不足以证明来源。", sourceStep: 3, chapterId: chapter.id, blockId: block.id, factIds: [fact.id], sourceReferences: fact.sourceReferences, evidence: [{ label: "来源数量", value: String(fact.sourceReferences.length), entityType: "fact", entityId: fact.id }], suggestedAction: "在 Step 3 补充来源文件和具体定位，并由用户确认。" }));
         }
         const periods = unique(blockText(block).match(/20\d{2}(?:年度|年)/g) ?? []);
         if (periods.length && !periods.some((period) => fact.period.includes(period.slice(0, 4)))) {
@@ -205,7 +205,7 @@ function dataRules(project: ReportProjectData) {
   for (const items of groups.values()) {
     const values = unique(items.map((item) => item.value));
     if (items.length < 2 || values.length < 2) continue;
-    findings.push(makeFinding({ ruleId: "DATA-001", identity: comparableKey(items[0]), title: `同口径指标“${items[0].metricName}”存在数值冲突`, description: "仅在指标定义、单位、报告期和已核验统计边界均一致时执行了自动冲突判断。", sourceStep: 4, severity: "高", factIds: items.map((item) => item.metricId), sourceReferences: items.flatMap((item) => item.sourceReferences), evidence: items.map((item) => ({ label: item.observationId, value: `${item.value} ${item.unit} · ${item.reportingPeriod} · ${item.reportingBoundary}`, entityType: "observation", entityId: item.observationId })), suggestedAction: "返回 Step 4 核对重复指标记录、来源及修订版本；不同口径数据请明确区分指标定义。" }));
+    findings.push(makeFinding({ ruleId: "DATA-001", identity: comparableKey(items[0]), title: `同口径指标“${items[0].metricName}”存在数值冲突`, description: "仅在指标定义、单位、报告期和已核验统计边界均一致时执行了自动冲突判断。", sourceStep: 3, severity: "高", factIds: items.map((item) => item.metricId), sourceReferences: items.flatMap((item) => item.sourceReferences), evidence: items.map((item) => ({ label: item.observationId, value: `${item.value} ${item.unit} · ${item.reportingPeriod} · ${item.reportingBoundary}`, entityType: "observation", entityId: item.observationId })), suggestedAction: "返回 Step 3 核对重复指标记录、来源及修订版本；不同口径数据请明确区分指标定义。" }));
   }
 
   for (const chapter of project.writing.chapters) {
@@ -236,7 +236,7 @@ function dataRules(project: ReportProjectData) {
       findings.push(makeFinding({ ruleId: "DATA-003", identity: `${chart.chartId}:unconfirmed`, title: `图表“${chart.title}”尚未确认`, description: "待配置或待确认图表不能作为正式披露成果。", sourceStep: 6, severity: "高", chapterId: chart.chapterId, blockId: chart.blockId, chartIds: [chart.chartId], evidence: [{ label: "图表状态", value: chart.status, entityType: "chart", entityId: chart.chartId }], suggestedAction: "在 Step 6 选择符合单位、期间、边界和来源要求的指标，并由用户确认图表。" }));
     }
     if (chart.status === "已确认" && live.some((item) => item.confirmationStatus !== "已确认" || item.sourceConfirmationStatus !== "已确认")) {
-      findings.push(makeFinding({ ruleId: "DATA-003", identity: `${chart.chartId}:source-confirmation`, title: `图表“${chart.title}”包含未经确认的指标`, description: "指标或来源确认状态变化后，图表不能继续作为已确认成果。", sourceStep: 6, severity: "阻断", chapterId: chart.chapterId, blockId: chart.blockId, chartIds: [chart.chartId], sourceReferences: live.flatMap((item) => item.sourceReferences), evidence: live.map((item) => ({ label: item.metricName, value: `${item.confirmationStatus} / 来源${item.sourceConfirmationStatus}`, entityType: "observation", entityId: item.observationId })), suggestedAction: "返回 Step 4 确认指标与来源，再在 Step 6 更新图表。" }));
+      findings.push(makeFinding({ ruleId: "DATA-003", identity: `${chart.chartId}:source-confirmation`, title: `图表“${chart.title}”包含未经确认的指标`, description: "指标或来源确认状态变化后，图表不能继续作为已确认成果。", sourceStep: 6, severity: "阻断", chapterId: chart.chapterId, blockId: chart.blockId, chartIds: [chart.chartId], sourceReferences: live.flatMap((item) => item.sourceReferences), evidence: live.map((item) => ({ label: item.metricName, value: `${item.confirmationStatus} / 来源${item.sourceConfirmationStatus}`, entityType: "observation", entityId: item.observationId })), suggestedAction: "返回 Step 3 确认指标与来源，再在 Step 6 更新图表。" }));
     }
   }
   return findings;
@@ -280,12 +280,12 @@ function layoutRules(project: ReportProjectData) {
   const activeChapters = project.writing.chapters.filter((item) => item.sourceState !== "upstream-removed");
   for (const section of activeSections) {
     if (activeChapters.some((chapter) => chapter.id === section.id)) continue;
-    findings.push(makeFinding({ ruleId: "LAYOUT-001", identity: `missing:${section.id}`, title: `目录章节“${section.title}”没有报告正文节点`, description: "Step 3 目录存在，但 Step 5/6 没有对应章节。", sourceStep: 3, severity: "阻断", chapterId: section.id, evidence: [{ label: "Step 3 章节", value: `${section.order} ${section.title}`, entityType: "chapter", entityId: section.id }], suggestedAction: "返回 Step 3 保存目录同步，保留已有正文后重新检查。" }));
+    findings.push(makeFinding({ ruleId: "LAYOUT-001", identity: `missing:${section.id}`, title: `目录章节“${section.title}”没有报告正文节点`, description: "Step 4 目录存在，但 Step 5/6 没有对应章节。", sourceStep: 4, severity: "阻断", chapterId: section.id, evidence: [{ label: "Step 4 章节", value: `${section.order} ${section.title}`, entityType: "chapter", entityId: section.id }], suggestedAction: "返回 Step 4 保存目录同步，保留已有正文后重新检查。" }));
   }
   const expectedOrder = activeSections.map((item) => item.id).join("|");
   const actualOrder = [...activeChapters].sort((left, right) => left.order.localeCompare(right.order, "zh-CN", { numeric: true })).map((item) => item.id).join("|");
   if (expectedOrder !== actualOrder) {
-    findings.push(makeFinding({ ruleId: "LAYOUT-001", identity: "chapter-order", title: "Step 3 目录与报告章节顺序不一致", description: "浏览器预览应按 Step 3/5 章节顺序生成，当前顺序需要核对。", sourceStep: 6, severity: "高", evidence: [{ label: "Step 3 顺序", value: activeSections.map((item) => item.title).join(" → ") }, { label: "Step 5/6 顺序", value: activeChapters.map((item) => item.title).join(" → ") }], suggestedAction: "返回 Step 3 调整目录并保存；Step 5 正文不会被自动删除。" }));
+    findings.push(makeFinding({ ruleId: "LAYOUT-001", identity: "chapter-order", title: "Step 4 目录与报告章节顺序不一致", description: "浏览器预览应按 Step 4/5 章节顺序生成，当前顺序需要核对。", sourceStep: 6, severity: "高", evidence: [{ label: "Step 4 顺序", value: activeSections.map((item) => item.title).join(" → ") }, { label: "Step 5/6 顺序", value: activeChapters.map((item) => item.title).join(" → ") }], suggestedAction: "返回 Step 4 调整目录并保存；Step 5 正文不会被自动删除。" }));
   }
   for (const chart of project.presentation.charts.filter((item) => item.layoutReviewStatus === "待复核")) {
     findings.push(makeFinding({ ruleId: "LAYOUT-002", identity: chart.chartId, title: `图表“${chart.title}”版面待复核`, description: chart.changeNote ?? "图表配置或关联数据变化后，相关页面需要复核。", sourceStep: 6, severity: chart.status === "已确认" ? "提示" : "高", chapterId: chart.chapterId, blockId: chart.blockId, chartIds: [chart.chartId], evidence: [{ label: "图表状态", value: `${chart.status} / 版面${chart.layoutReviewStatus}`, entityType: "chart", entityId: chart.chartId }], suggestedAction: "进入 Step 6 核对图表数据、尺寸和页面位置。" }));
@@ -318,11 +318,17 @@ function inScope(finding: Finding, project: ReportProjectData, options: QualityC
 }
 
 export function runQualityRules(project: ReportProjectData, options: QualityCheckOptions): QualityRuleResult {
+  const archived = new Set(project.writing.chapters.filter((chapter) => chapter.sourceState === "upstream-removed").map((chapter) => chapter.id));
+  const activeProject = archived.size ? {
+    ...project,
+    writing: { ...project.writing, chapters: project.writing.chapters.filter((chapter) => !archived.has(chapter.id)) },
+    presentation: { ...project.presentation, charts: project.presentation.charts.filter((chart) => !archived.has(chart.chapterId)) },
+  } : project;
   const all = [
-    ...sourceRules(project),
-    ...dataRules(project),
-    ...writingRules(project),
-    ...layoutRules(project),
+    ...sourceRules(activeProject),
+    ...dataRules(activeProject),
+    ...writingRules(activeProject),
+    ...layoutRules(activeProject),
   ];
   const merged = mergeFindings(all);
   return {

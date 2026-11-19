@@ -145,7 +145,7 @@ export function StepSix({ initialBlockId }: { initialBlockId?: string }) {
   return (
     <div className="animate-fade-up">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 06 · Visualization & layout</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">数据可视化、版式与整本报告预览</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">读取 Step 5 已保存正文和 Step 4 已确认指标，形成可追溯的 A4 连续预览。</p></div>
+        <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 06 · Visualization & layout</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">数据可视化、版式与整本报告预览</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">读取 Step 5 已保存正文和 Step 3 已确认指标，形成可追溯的 A4 连续预览。</p></div>
         <div className="flex flex-wrap gap-2"><button onClick={() => void navigateToStepFive(selectedPage.chapterId, selectedBlockId ?? undefined)} className={buttonClass}><ChevronLeft className="size-3.5" />返回 Step 5 编辑</button><button onClick={() => setFocusMode(!focusMode)} className={buttonClass}><Maximize2 className="size-3.5" />{focusMode ? "退出整本预览" : "整本报告预览"}</button><button disabled={saving} onClick={() => void savePresentation()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white disabled:opacity-50"><Save className="size-3.5" />{saving ? "保存中…" : dirty ? "保存版式" : "版式已保存"}</button></div>
       </div>
 

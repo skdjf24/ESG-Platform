@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ProjectDataProvider } from "@/components/project/project-data-provider";
 import { StepFour } from "@/components/workbench/step-four";
 import { StepFive } from "@/components/workbench/step-five";
@@ -9,31 +9,34 @@ import { StepOne } from "@/components/workbench/step-one";
 import { StepThree } from "@/components/workbench/step-three";
 import { StepTwo } from "@/components/workbench/step-two";
 import { WorkbenchShell } from "@/components/workbench/workbench-shell";
-import { projectIdFromRoute } from "@/lib/project/route-id";
+import { formatProjectStep, projectIdFromRoute } from "@/lib/project/route-id";
 
 export default async function ReportStepPage({
   params,
   searchParams,
 }: {
   params: Promise<{ projectId: string; step: string }>;
-  searchParams: Promise<{ chapterId?: string; blockId?: string; factId?: string }>;
+  searchParams: Promise<{ chapterId?: string; blockId?: string; factId?: string; sourceId?: string }>;
 }) {
   const { projectId: routeProjectId, step: stepParam } = await params;
   const projectId = projectIdFromRoute(routeProjectId);
-  const { chapterId, blockId, factId } = await searchParams;
+  const { chapterId, blockId, factId, sourceId } = await searchParams;
   const step = Number(stepParam);
 
   if (!projectId.trim() || !Number.isInteger(step) || step < 1 || step > 8) {
     notFound();
   }
 
+  if (step === 3 && chapterId && !factId) redirect(`${formatProjectStep(projectId, 4)}?chapterId=${encodeURIComponent(chapterId)}`);
+  if (step === 4 && factId && !chapterId) redirect(`${formatProjectStep(projectId, 3)}?factId=${encodeURIComponent(factId)}`);
+
   return (
     <ProjectDataProvider projectId={projectId}>
       <WorkbenchShell currentStep={step}>
         {step === 1 ? <StepOne /> : null}
         {step === 2 ? <StepTwo /> : null}
-        {step === 3 ? <StepThree initialChapterId={chapterId} /> : null}
-        {step === 4 ? <StepFour initialFactId={factId} /> : null}
+        {step === 3 ? <StepThree initialFactId={factId} initialSourceId={sourceId} /> : null}
+        {step === 4 ? <StepFour initialChapterId={chapterId} /> : null}
         {step === 5 ? <StepFive initialChapterId={chapterId} initialBlockId={blockId} /> : null}
         {step === 6 ? <StepSix initialBlockId={blockId} /> : null}
         {step === 7 ? <StepSeven /> : null}

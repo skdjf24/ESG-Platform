@@ -165,8 +165,8 @@ async function main() {
   assert(await page.getByText("上游已变化 · 待复检").isVisible(), "工作台明确提示上游版本变化");
 
   const smokeHeadings = new Map([
-    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "构建报告大纲与年度资料清单"],
-    [4, "ESG 资料收集、汇总与规整"], [5, "报告内容生成与编辑"], [6, "数据可视化、版式与整本报告预览"],
+    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "ESG资料收集与整理"],
+    [4, "报告大纲生成与调整"], [5, "报告内容生成与编辑"], [6, "数据可视化、版式与整本报告预览"],
   ]);
   for (const [step, heading] of smokeHeadings) {
     await openStep(page, step);
@@ -212,6 +212,7 @@ async function main() {
   delete legacy.quality;
   legacy.migrations = legacy.migrations.filter((item) => item.id !== "migration-quality-check-v1");
   await legacyPage.goto(baseUrl, { waitUntil: "networkidle" });
+  await legacyPage.getByRole("heading", { name: "尚无本地项目", exact: true }).waitFor();
   await writeProject(legacyPage, legacy);
   await openStep(legacyPage, 7);
   assert(await legacyPage.getByRole("heading", { name: "报告质量检查" }).isVisible(), "缺少 Step 7 状态的历史项目可兼容打开");

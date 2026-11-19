@@ -2,6 +2,7 @@ import { extractionCandidateRepository, parsedDocumentRepository } from "@/lib/p
 import { documentParserRegistry } from "@/lib/parsing/registry";
 import { fileExtension } from "@/lib/parsing/security";
 import { projectFileRepository } from "@/lib/project/repository";
+import { materialSources } from "@/lib/project/materials";
 import type { ReportProjectData } from "@/lib/types/project-data";
 import type { ParsedDocument, ParserType } from "@/lib/types/parsing";
 
@@ -107,6 +108,8 @@ export async function replaceProjectSourceFile(input: {
 export function markProjectSourceNeedsReview(project: ReportProjectData, sourceId: string) {
   return {
     ...project,
+    dataRequirements: project.dataRequirements.map((item) => materialSources(project, item).some((source) => source.id === sourceId)
+      ? { ...item, state: "待确认" as const, reviewStatus: "待复核" as const } : item),
     sources: project.sources.map((source) => source.id === sourceId ? {
       ...source,
       parserStatus: "stale" as const,

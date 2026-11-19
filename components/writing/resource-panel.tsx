@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, CheckCircle2, ChevronRight, ClipboardList, Database, ExternalLink, FileText, Link2, PanelRightClose, Plus, RefreshCw, Search, ShieldCheck, Unlink, X } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
+import { chapterEvidence, isConfirmedFact, materialState } from "@/lib/project/materials";
 import type { SourceReference } from "@/lib/types/esg";
 import type { ContentBlock, WritingChapter, WritingFact, WritingResource } from "@/lib/types/writing";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -16,6 +17,7 @@ interface ResourcePanelProps {
   onBlockChange: (block: ContentBlock) => void;
   onFactChange: (fact: WritingFact) => void;
   onResourceChange: (resource: WritingResource) => void;
+  onReviewSource: (sourceId: string) => void;
   onFocusBlock: (id: string) => void;
   onClose: () => void;
 }
@@ -26,9 +28,8 @@ function uniqueReferences(references: SourceReference[]) {
   return references.filter((reference, index) => references.findIndex((item) => item.id === reference.id) === index);
 }
 
-export function ResourcePanel({ chapter, block, facts, resources, onBlockChange, onFactChange, onResourceChange, onFocusBlock, onClose }: ResourcePanelProps) {
+export function ResourcePanel({ chapter, block, facts, resources, onBlockChange, onFactChange, onResourceChange, onReviewSource, onFocusBlock, onClose }: ResourcePanelProps) {
   const { project } = useProjectData();
-  const reportSections = project.reportSections;
   const [tab, setTab] = useState<Tab>("facts");
   const [allFacts, setAllFacts] = useState(false);
   const [factQuery, setFactQuery] = useState("");
@@ -36,16 +37,14 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
   const [resourceChecks, setResourceChecks] = useState<Record<string, boolean>>({});
   const [sourceView, setSourceView] = useState<{ title: string; sources: SourceReference[] } | null>(null);
   const [message, setMessage] = useState("");
-  const section = reportSections.find((item) => item.id === chapter.id);
-  const topicNames = section?.topics ?? [];
-  const materialTasks = section ? project.dataRequirements.filter((item) => item.section === `${section.order} ${section.title}`) : [];
-  const relatedFacts = facts.filter((fact) => topicNames.includes(fact.topic) || chapter.blocks.some((itemBlock) => itemBlock.citations.some((citation) => citation.factId === fact.id)));
+  const { materials: materialTasks, facts: linkedFacts } = chapterEvidence(project, chapter.id);
+  const relatedFacts = facts.filter((fact) => linkedFacts.some((item) => item.id === fact.id) || chapter.blocks.some((itemBlock) => itemBlock.citations.some((citation) => citation.factId === fact.id)));
   const visibleFacts = (allFacts ? facts : relatedFacts).filter((fact) => `${fact.name}${fact.topic}${fact.period}`.includes(factQuery.trim()));
   const pendingBlocks = chapter.blocks.filter((item) => (item.pendingKind && !item.resolved) || item.reviewStatus === "待复核");
-  const chapterResources = resources.filter((resource) => resource.chapterIds.includes(chapter.id));
+  const chapterResources = resources;
 
   function toggleFact(fact: WritingFact) {
-    if (!block || fact.state !== "已确认") return;
+    if (!block || !isConfirmedFact(fact)) return;
     const cited = block.citations.some((citation) => citation.factId === fact.id);
     const citations = cited ? block.citations.filter((citation) => citation.factId !== fact.id) : [...block.citations, { factId: fact.id, factRevision: fact.revision }];
     const remainingFactSourceIds = new Set(facts.filter((item) => citations.some((citation) => citation.factId === item.id)).flatMap((item) => item.sourceReferences.map((source) => source.id)));
@@ -93,12 +92,12 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
             const citation = block?.citations.find((item) => item.factId === fact.id);
             const stale = citation && citation.factRevision !== fact.revision;
             return <article key={fact.id} className="rounded-xl border border-[#e0e8e2] p-3" data-testid={`fact-${fact.id}`}>
-              <div className="flex flex-wrap items-center gap-2"><StatusBadge tone={fact.state === "已确认" ? "green" : "amber"}>{fact.state}</StatusBadge><span className="text-[10px] text-[#89958c]">v{fact.revision} · {fact.temporalType}</span></div>
+              <div className="flex flex-wrap items-center gap-2"><StatusBadge tone={isConfirmedFact(fact) ? "green" : "amber"}>{fact.state}</StatusBadge><span className="text-[10px] text-[#89958c]">v{fact.revision} · {fact.temporalType}</span></div>
               <h3 className="mt-3 text-xs font-semibold text-[#344c3d]">{fact.name}</h3><p className="mt-1 text-xl font-semibold tracking-tight text-[#214c35]">{fact.value}<span className="ml-1.5 text-xs font-normal text-[#748779]">{fact.unit}</span></p><p className="mt-1 text-[10px] text-[#91a094]">{fact.period} · {fact.topic}</p>
               {stale ? <p className="mt-2 rounded bg-amber-50 p-2 text-[10px] leading-5 text-amber-800">引用版本 v{citation.factRevision}，来源已更新至 v{fact.revision}，正文待复核。</p> : null}
               <button onClick={() => setSourceView({ title: fact.name, sources: fact.sourceReferences })} className="mt-3 inline-flex items-center gap-1 text-[11px] text-[#176b52]"><ExternalLink className="size-3" />查看来源 · {fact.sourceReferences.length} 处</button>
-              {fact.state !== "已确认" ? <div className="mt-3 border-t border-[#eef2ef] pt-3"><label className="flex items-start gap-2 text-[10px] leading-5 text-[#687c6e]"><input type="checkbox" checked={Boolean(confirmedChecks[fact.id])} onChange={(event) => setConfirmedChecks((current) => ({ ...current, [fact.id]: event.target.checked }))} className="mt-1 accent-[#176b52]" /><span>我已核对原始来源、数值和统计口径</span></label><button className={`${buttonClass} mt-2 w-full`} disabled={!confirmedChecks[fact.id]} onClick={() => { onFactChange({ ...fact, state: "已确认", confirmedBy: "当前用户", revision: fact.revision + 1 }); setMessage(`“${fact.name}”已由用户确认，可选择引用。`); }}><ShieldCheck className="size-3.5" />确认该事实</button></div> : null}
-              <div className="mt-3 flex flex-wrap gap-2"><button className={buttonClass} disabled={!block || fact.state !== "已确认"} onClick={() => toggleFact(fact)}>{citation ? <Unlink className="size-3" /> : <Link2 className="size-3" />}{citation ? "解除引用" : "引用资料"}</button>{stale && fact.state === "已确认" ? <button className={buttonClass} onClick={() => { if (block) { onBlockChange({ ...block, citations: block.citations.map((item) => item.factId === fact.id ? { ...item, factRevision: fact.revision } : item), sourceReferences: uniqueReferences([...block.sourceReferences, ...fact.sourceReferences]), reviewStatus: "待复核" }); setMessage("引用版本已更新，请对照来源审阅正文后确认审校。"); } }}><RefreshCw className="size-3" />更新引用</button> : null}</div>
+              {!isConfirmedFact(fact) && fact.sourceState !== "upstream-removed" && fact.sourceReferences.length ? <div className="mt-3 border-t border-[#eef2ef] pt-3"><label className="flex items-start gap-2 text-[10px] leading-5 text-[#687c6e]"><input type="checkbox" checked={Boolean(confirmedChecks[fact.id])} onChange={(event) => setConfirmedChecks((current) => ({ ...current, [fact.id]: event.target.checked }))} className="mt-1 accent-[#176b52]" /><span>我已核对原始来源、数值和统计口径</span></label><button className={`${buttonClass} mt-2 w-full`} disabled={!confirmedChecks[fact.id]} onClick={() => { onFactChange({ ...fact, state: "已确认", sourceConfirmationStatus: "已确认", confirmedBy: "当前用户", revision: fact.revision + 1 }); setMessage(`“${fact.name}”已由用户确认，可选择引用。`); }}><ShieldCheck className="size-3.5" />确认该事实</button></div> : null}
+              <div className="mt-3 flex flex-wrap gap-2"><button className={buttonClass} disabled={!block || !isConfirmedFact(fact)} onClick={() => toggleFact(fact)}>{citation ? <Unlink className="size-3" /> : <Link2 className="size-3" />}{citation ? "解除引用" : "引用资料"}</button>{stale && isConfirmedFact(fact) ? <button className={buttonClass} onClick={() => { if (block) { onBlockChange({ ...block, citations: block.citations.map((item) => item.factId === fact.id ? { ...item, factRevision: fact.revision } : item), sourceReferences: uniqueReferences([...block.sourceReferences, ...fact.sourceReferences]), reviewStatus: "待复核" }); setMessage("引用版本已更新，请对照来源审阅正文后确认审校。"); } }}><RefreshCw className="size-3" />更新引用</button> : null}</div>
               <button onClick={() => { onFactChange({ ...fact, revision: fact.revision + 1, state: "待人工确认", confirmedBy: undefined }); setConfirmedChecks((current) => ({ ...current, [fact.id]: false })); setMessage("已模拟来源版本变化，数值未改变；相关正文需要重新复核。"); }} className="mt-3 text-[10px] text-[#8c9a90] underline decoration-dotted underline-offset-4">模拟来源更新（不改数值）</button>
             </article>;
           })}
@@ -108,7 +107,7 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
           {materialTasks.length ? (
             <div className="rounded-xl border border-[#e0e8e2] bg-[#f7faf8] p-3">
               <h3 className="text-xs font-semibold text-[#4c6555]">本章资料任务</h3>
-              <ul className="mt-2 space-y-2 text-[11px] text-[#536d5c]">{materialTasks.map((item) => <li key={item.id} className="flex items-center justify-between gap-2"><span className="break-words">{item.itemName}</span><StatusBadge tone="gray">{item.state}</StatusBadge></li>)}</ul>
+              <ul className="mt-2 space-y-2 text-[11px] text-[#536d5c]">{materialTasks.map((item) => <li key={item.id} className="flex items-center justify-between gap-2"><span className="break-words">{item.itemName}</span><StatusBadge tone="gray">{materialState(item)}</StatusBadge></li>)}</ul>
             </div>
           ) : null}
           {chapterResources.map((resource) => {
@@ -124,7 +123,7 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
         </> : null}
         {tab === "pending" ? <><p className="text-[10px] leading-5 text-[#869389]">汇总本章内部占位和来源变更，点击可定位对应内容块。</p>{pendingBlocks.map((item) => <button key={item.id} onClick={() => onFocusBlock(item.id)} className="w-full rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-left"><div className="flex items-center justify-between"><StatusBadge tone="amber">{item.reviewStatus === "待复核" ? "待复核" : item.pendingKind}</StatusBadge><ChevronRight className="size-3.5 text-amber-600" /></div><p className="mt-2 text-xs font-semibold leading-5 text-[#626348]">{item.title || "未命名内容块"}</p><p className="mt-1 text-[10px] text-[#8d927e]">定位正文 · {item.id.slice(-8)}</p></button>)}{pendingBlocks.length === 0 ? <div className="rounded-xl border border-[#dce9df] bg-[#f5faf6] p-5 text-center"><CheckCircle2 className="mx-auto size-6 text-[#6aab7e]" /><p className="mt-2 text-xs text-[#6b8573]">本章暂无待处理事项</p></div> : null}</> : null}
       </div>
-      {sourceView ? <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#12271d]/45 p-4 backdrop-blur-[2px]" onKeyDown={(event) => event.key === "Escape" && setSourceView(null)} onMouseDown={(event) => event.target === event.currentTarget && setSourceView(null)}><section role="dialog" aria-modal="true" aria-labelledby="writing-source-title" className="max-h-[80vh] w-full max-w-xl overflow-auto rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between gap-3 border-b border-[#e5ece7] p-5"><div><p className="text-[10px] font-semibold tracking-wider text-[#819387]">原始资料 · 来源定位</p><h2 id="writing-source-title" className="mt-1 text-base font-semibold text-[#274735]">{sourceView.title}</h2></div><button autoFocus onClick={() => setSourceView(null)} className="grid size-8 place-items-center rounded-lg text-[#708779] hover:bg-[#edf4ef]" aria-label="关闭来源详情"><X className="size-4" /></button></header><div className="space-y-3 p-5">{sourceView.sources.map((source) => <article key={source.id} className="rounded-xl border border-[#dce6df] p-4"><div className="flex gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-[#36805a]" /><h3 className="break-all text-sm font-semibold text-[#44634f]">{source.fileName}</h3></div><p className="mt-2 text-xs font-medium text-[#548366]">定位：{source.locator}</p><blockquote className="mt-3 border-l-2 border-[#98c4a7] bg-[#f3f8f4] p-3 text-xs leading-6 text-[#6b8273]">{source.excerpt}</blockquote><p className="mt-2 break-all font-mono text-[10px] text-[#9aaba0]">来源 ID：{source.sourceId} · 引用 ID：{source.id}</p></article>)}{sourceView.sources.length === 0 ? <EmptyState text="当前资料尚未提交，暂无可查看的来源内容。" /> : null}<p className="text-[11px] leading-5 text-[#93a197]">此处展示模拟资料的文件名、定位及摘录；当前版本不包含真实原文件下载。</p></div><footer className="flex justify-end border-t border-[#e5ece7] p-4"><button className={buttonClass} onClick={() => setSourceView(null)}><Check className="size-3" />完成查看</button></footer></section></div> : null}
+      {sourceView ? <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#12271d]/45 p-4 backdrop-blur-[2px]" onKeyDown={(event) => event.key === "Escape" && setSourceView(null)} onMouseDown={(event) => event.target === event.currentTarget && setSourceView(null)}><section role="dialog" aria-modal="true" aria-labelledby="writing-source-title" className="max-h-[80vh] w-full max-w-xl overflow-auto rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between gap-3 border-b border-[#e5ece7] p-5"><div><p className="text-[10px] font-semibold tracking-wider text-[#819387]">原始资料 · 来源定位</p><h2 id="writing-source-title" className="mt-1 text-base font-semibold text-[#274735]">{sourceView.title}</h2></div><button autoFocus onClick={() => setSourceView(null)} className="grid size-8 place-items-center rounded-lg text-[#708779] hover:bg-[#edf4ef]" aria-label="关闭来源详情"><X className="size-4" /></button></header><div className="space-y-3 p-5">{sourceView.sources.map((source) => <article key={source.id} className="rounded-xl border border-[#dce6df] p-4"><div className="flex gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-[#36805a]" /><h3 className="break-all text-sm font-semibold text-[#44634f]">{source.fileName}</h3></div><p className="mt-2 text-xs font-medium text-[#548366]">定位：{source.locator}</p><blockquote className="mt-3 border-l-2 border-[#98c4a7] bg-[#f3f8f4] p-3 text-xs leading-6 text-[#6b8273]">{source.excerpt}</blockquote>{project.sources.some((item) => item.id === source.sourceId && item.fileId) ? <button onClick={() => onReviewSource(source.sourceId)} className="mt-2 text-xs font-semibold text-[#176b52] hover:underline">在 Step 3 查阅原文件</button> : null}<p className="mt-2 break-all font-mono text-[10px] text-[#9aaba0]">来源 ID：{source.sourceId} · 引用 ID：{source.id}</p></article>)}{sourceView.sources.length === 0 ? <EmptyState text="当前资料尚未提交，暂无可查看的来源内容。" /> : null}</div><footer className="flex justify-end border-t border-[#e5ece7] p-4"><button className={buttonClass} onClick={() => setSourceView(null)}><Check className="size-3" />完成查看</button></footer></section></div> : null}
     </aside>
   );
 }
