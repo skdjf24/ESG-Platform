@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
-import type { ProjectStep, ReportProjectData } from "@/lib/types/project-data";
+import type { ProjectSaveContext, ProjectStep, ReportProjectData } from "@/lib/types/project-data";
 import { createBlankProjectData } from "@/lib/project/seed";
 import { projectRepository, ProjectStorageError } from "@/lib/project/repository";
 
@@ -40,7 +40,7 @@ function reducer(state: ProjectState, action: ProjectAction): ProjectState {
 
 interface ProjectDataContextValue extends ProjectState {
   editProject: (next: ReportProjectData | ((current: ReportProjectData) => ReportProjectData)) => void;
-  saveProject: (step: ProjectStep, label: string, override?: ReportProjectData) => Promise<boolean>;
+  saveProject: (step: ProjectStep, label: string, override?: ReportProjectData, options?: Pick<ProjectSaveContext, "removeTopicId">) => Promise<boolean>;
   undo: () => void;
   redo: () => void;
   message: string;
@@ -94,7 +94,7 @@ export function ProjectDataProvider({ projectId, children }: { projectId: string
     dispatch({ type: "edit", project: typeof next === "function" ? next(current) : next });
   }
 
-  async function saveProject(step: ProjectStep, label: string, override?: ReportProjectData) {
+  async function saveProject(step: ProjectStep, label: string, override?: ReportProjectData, options?: Pick<ProjectSaveContext, "removeTopicId">) {
     const current = state;
     if (!current.ready || current.saving || blocked) {
       setMessage(blocked ? "当前存档处于保护状态，不能覆盖原数据。" : "项目数据尚未就绪，请稍后再保存。");
@@ -107,6 +107,7 @@ export function ProjectDataProvider({ projectId, children }: { projectId: string
         label,
         expectedRevision: current.savedProject.revision,
         previous: current.savedProject,
+        ...options,
       });
       dispatch({ type: "saved", project: result.project });
       setMessage(result.impacts.length

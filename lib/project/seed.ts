@@ -12,6 +12,7 @@ import { createBlankWritingDocument, createWritingDocument } from "@/lib/writing
 import { createPresentationState } from "@/lib/presentation/state";
 import { createQualityState } from "@/lib/quality/state";
 import { createFinalizationState } from "@/lib/finalization/state";
+import { unscoredPresetTopic } from "@/lib/project/topics";
 
 const seedTimestamp = "2026-10-26T08:00:00.000Z";
 
@@ -57,8 +58,7 @@ export function createBlankProjectData(projectId: string, options?: SeedOptions)
       owner: "",
     },
     boundary: { items: [], note: "" },
-    topics: esgTopics.map((topic) => ({ id: topic.id, category: topic.category, name: topic.name,
-      origin: "通用候选" as const, financialScore: 0, impactScore: 0, confirmed: false })),
+    topics: esgTopics.map(unscoredPresetTopic),
     materiality: { method: "综合评估", includedTopicIds: esgTopics.map((topic) => topic.id), confirmed: false, revision: 1 },
     disclosureRequirements: [],
     reportSections: reportSections.map((section) => ({ ...structuredClone(section), description: "", topics: [],

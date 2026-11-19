@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
@@ -13,6 +13,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
+import { availableTopicPresets, describeTopicRemoval, unscoredPresetTopic } from "@/lib/project/topics";
 
 type Filter = "全部" | EsgCategory;
 type Method = "综合评估" | "管理层评估" | "利益相关方问卷";
@@ -51,15 +53,22 @@ const methodOptions: Array<{
 ];
 
 export function StepTwo() {
-  const { project, editProject } = useProjectData();
+  const { project, savedProject, ready, saving, editProject, saveProject, message, setMessage } = useProjectData();
   const topics = project.topics;
   const [filter, setFilter] = useState<Filter>("全部");
   const [query, setQuery] = useState("");
   const [topicEditor, setTopicEditor] = useState<TopicEditor | null>(null);
   const [topicError, setTopicError] = useState("");
+  const [presetId, setPresetId] = useState("");
+  const [removeTopicId, setRemoveTopicId] = useState<string>();
+  const [deleteFailed, setDeleteFailed] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const method = project.materiality.method;
   const includedIds = new Set(project.materiality.includedTopicIds);
   const confirmed = project.materiality.confirmed;
+  const needsReview = project.materiality.reviewStatus === "待复核";
+  const removal = removeTopicId ? describeTopicRemoval(project, removeTopicId, savedProject) : undefined;
+  const presets = topicEditor && !topicEditor.id ? availableTopicPresets(topics) : [];
 
   const filteredTopics = useMemo(
     () => topics.filter((topic) => (filter === "全部" || topic.category === filter) && topic.name.includes(query.trim())),
@@ -67,7 +76,8 @@ export function StepTwo() {
   );
   const assessedTopics = topics.filter((topic) => includedIds.has(topic.id));
   const scoredTopics = assessedTopics.filter((topic) => topic.financialScore >= 1 && topic.impactScore >= 1);
-  const priorityTopics = scoredTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3);
+  const priorityTopics = scoredTopics.filter((topic) => topic.financialScore >= 4 || topic.impactScore >= 4.3)
+    .sort((left, right) => (right.financialScore + right.impactScore) - (left.financialScore + left.impactScore));
   const canConfirm = assessedTopics.length > 0 && scoredTopics.length === assessedTopics.length;
 
   function toggleTopic(id: string) {
@@ -89,6 +99,7 @@ export function StepTwo() {
   function openTopicEditor(id?: string) {
     const topic = id ? topics.find((item) => item.id === id) : undefined;
     setTopicError("");
+    setPresetId("");
     setTopicEditor(topic ? { id: topic.id, name: topic.name, category: topic.category, financialScore: topic.financialScore ? String(topic.financialScore) : "", impactScore: topic.impactScore ? String(topic.impactScore) : "" } : { name: "", category: "E", financialScore: "", impactScore: "" });
   }
 
@@ -113,25 +124,71 @@ export function StepTwo() {
     const scores = { financialScore: financialScore ?? 0, impactScore: impactScore ?? 0 };
     editProject((current) => {
       const existing = topicEditor.id ? current.topics.find((item) => item.id === topicEditor.id) : undefined;
-      const id = existing?.id ?? `topic-user-${Date.now()}`;
+      const id = existing?.id ?? `topic-user-${crypto.randomUUID()}`;
       const nextTopics = existing
         ? current.topics.map((item) => item.id === id ? { ...item, name, category: topicEditor.category, ...scores, confirmed: false } : item)
         : [...current.topics, { id, name, category: topicEditor.category, origin: "用户新增" as const, ...scores, confirmed: false }];
+      const renameLinks = existing && existing.name !== name
+        && !current.topics.some((item) => item.id !== id && item.name === existing.name);
       return {
         ...current,
         topics: nextTopics,
-        disclosureRequirements: existing && existing.name !== name
+        disclosureRequirements: renameLinks
           ? current.disclosureRequirements.map((item) => item.topic === existing.name ? { ...item, topic: name, userConfirmed: false, reviewStatus: "待复核" as const } : item)
           : current.disclosureRequirements,
+        reportSections: renameLinks ? current.reportSections.map((item) => item.topics.includes(existing.name) ? {
+          ...item, topics: item.topics.map((topic) => topic === existing.name ? name : topic), revision: item.revision + 1,
+        } : item) : current.reportSections,
         materiality: {
           ...current.materiality,
-          includedTopicIds: current.materiality.includedTopicIds.includes(id) ? current.materiality.includedTopicIds : [...current.materiality.includedTopicIds, id],
+          includedTopicIds: existing ? current.materiality.includedTopicIds : [...current.materiality.includedTopicIds, id],
           confirmed: false,
           confirmedAt: undefined,
         },
       };
     });
     setTopicEditor(null);
+  }
+
+  async function addPresetTopic() {
+    const preset = presets.find((item) => item.id === presetId);
+    if (!preset || saving) return;
+    setTopicError("");
+    const added = await saveProject(2, "添加预设议题", { ...project, topics: [...topics, unscoredPresetTopic(preset)] });
+    if (!added) {
+      setTopicError("添加未保存，请查看项目提示后重试。");
+      return;
+    }
+    setTopicEditor(null);
+    setFilter("全部");
+    setQuery("");
+    setMessage(`已将“${preset.name}”添加到议题池。勾选后可参与评估。`);
+  }
+
+  async function deleteTopic() {
+    if (!removal || saving) return;
+    setDeleteFailed(false);
+    const { topic, assessmentNeedsReview } = removal;
+    const deleted = await saveProject(2, "删除议题", undefined, { removeTopicId: topic.id });
+    if (!deleted) {
+      setDeleteFailed(true);
+      return;
+    }
+    setRemoveTopicId(undefined);
+    setTopicEditor(null);
+    setMessage(`已删除议题“${topic.name}”。${assessmentNeedsReview ? "请复核受影响的评估及关联。" : ""}`);
+  }
+
+  function confirmAssessment(confirmed: boolean) {
+    editProject((current) => ({
+      ...current,
+      materiality: {
+        ...current.materiality,
+        confirmed,
+        confirmedAt: confirmed ? new Date().toISOString() : undefined,
+        ...(confirmed ? { reviewStatus: undefined } : {}),
+      },
+    }));
   }
 
   function updateScore(id: string, field: "financialScore" | "impactScore", rawValue: string) {
@@ -152,19 +209,21 @@ export function StepTwo() {
         description="调整议题范围，选择评估方式，并从财务重要性与影响重要性两个维度形成评估结果。所有重要性结论均由用户最终确认。"
         completed={confirmed}
         action={
-          <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dbe2de] bg-white px-4 text-xs font-semibold text-[#536159] hover:bg-[#f6f8f7]">
+          <button type="button" aria-expanded={historyOpen} aria-controls="materiality-history" onClick={() => setHistoryOpen((value) => !value)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#dbe2de] bg-white px-4 text-xs font-semibold text-[#536159] hover:bg-[#f6f8f7]">
             <ClipboardCheck className="size-4" />查看评估记录
           </button>
         }
       />
 
+      {historyOpen ? <div id="materiality-history" className="mb-5"><TopicRemovalHistory /></div> : null}
+
       <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#e0e6e2] bg-[#e7ece9] sm:grid-cols-5">
         {[
-          ["01", "议题调整", includedIds.size ? "已选择" : "待选择"],
+          ["01", "议题调整", assessedTopics.length ? "已选择" : "待选择"],
           ["02", "评估方式", "已选择"],
           ["03", "双重重要性", `${scoredTopics.length} 项已评分`],
           ["04", "重要性矩阵", scoredTopics.length ? "已生成" : "待评分"],
-          ["05", "结果确认", confirmed ? "已确认" : "待确认"],
+          ["05", "结果确认", confirmed ? "已确认" : needsReview ? "待复核" : "待确认"],
         ].map(([number, label, state], index) => (
           <div key={number} className={`bg-white px-4 py-3.5 ${index === 4 && !confirmed ? "sm:bg-amber-50/40" : ""}`}>
             <div className="flex items-center gap-2">
@@ -185,8 +244,8 @@ export function StepTwo() {
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(310px,.58fr)]">
         <SectionCard
           title="议题池与议题调整"
-          description={`当前纳入 ${includedIds.size} 项议题，可根据本年度经营与利益相关方关注进行调整`}
-          action={<button onClick={() => openTopicEditor()} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52] hover:bg-[#e3f0ea]"><Plus className="size-3.5" />新增议题</button>}
+          description={`当前纳入 ${assessedTopics.length} 项议题，可根据本年度经营与利益相关方关注进行调整`}
+          action={<button disabled={!ready || saving} onClick={() => openTopicEditor()} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52] hover:bg-[#e3f0ea] disabled:opacity-50"><Plus className="size-3.5" />新增议题</button>}
           flush
         >
           <div className="flex flex-col gap-3 border-b border-[#edf0ee] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -227,7 +286,7 @@ export function StepTwo() {
                     </div>
                     <div className="mt-1 text-[10px] text-[#85908a]">{style.label}类议题 · {active ? "已纳入本次评估" : "暂不纳入"}</div>
                   </div>
-                  <button onClick={() => openTopicEditor(topic.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8d9792] hover:bg-[#f2f5f3] hover:text-[#45534b]" aria-label={`编辑${topic.name}`}><PencilLine className="size-3.5" /></button>
+                  <button disabled={!ready || saving} onClick={() => openTopicEditor(topic.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8d9792] hover:bg-[#f2f5f3] hover:text-[#45534b] disabled:opacity-50" aria-label={`编辑${topic.name}`}><PencilLine className="size-3.5" /></button>
                 </div>
               );
             })}
@@ -336,30 +395,31 @@ export function StepTwo() {
           </div>
         </SectionCard>
 
-        <SectionCard title="结果确认" description="确认后将作为披露框架与报告大纲的输入">
+        <SectionCard title="结果确认" description="确认后将作为披露框架与报告大纲的输入" action={needsReview ? <StatusBadge tone="amber">待复核</StatusBadge> : undefined}>
           <div className="flex items-end justify-between rounded-xl bg-[#f2f7f4] p-4">
             <div><div className="text-[10px] text-[#728078]">重点议题</div><div className="mt-1 text-2xl font-semibold text-[#173e30]">{priorityTopics.length}<span className="ml-1 text-[10px] font-medium text-[#7b8b83]">项</span></div></div>
             <BarChart3 className="size-8 text-[#70a38e]" />
           </div>
-          <div className="mt-4 space-y-2">
+          <ol aria-label="重点议题排序" className="mt-4 space-y-2">
             {priorityTopics.slice(0, 6).map((topic, index) => (
-              <div key={topic.id} className="flex items-center justify-between rounded-lg border border-[#e6eae8] px-3 py-2.5">
+              <li key={topic.id} className="flex items-center justify-between rounded-lg border border-[#e6eae8] px-3 py-2.5">
                 <div className="flex items-center gap-2.5"><span className="text-[10px] font-semibold tabular-nums text-[#9aa29e]">{String(index + 1).padStart(2, "0")}</span><span className="text-[11px] font-semibold text-[#36443c]">{topic.name}</span></div>
                 <span className="text-[10px] font-semibold tabular-nums text-[#176b52]">{((topic.financialScore + topic.impactScore) / 2).toFixed(1)}</span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-[10px] leading-5 text-amber-800">
             <div className="flex items-center gap-2 font-semibold"><Sparkles className="size-3.5" />结果说明</div>
             <p className="mt-1">排序基于已录入评分，仅供整理参考，不代表系统自动作出重要性判断。</p>
+            {needsReview ? <p className="mt-1 font-semibold">议题已移除，请核对当前评估范围和评分后重新确认。</p> : null}
           </div>
           <label className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#e2e7e4] p-3 text-[10px] leading-5 text-[#59675f]">
-            <input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(event) => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: event.target.checked, confirmedAt: event.target.checked ? new Date().toISOString() : undefined } }))} className="mt-1 size-3.5 accent-[#176b52]" />
+            <input type="checkbox" checked={confirmed} disabled={!canConfirm} onChange={(event) => confirmAssessment(event.target.checked)} className="mt-1 size-3.5 accent-[#176b52]" />
             <span>我已复核评估依据与评分，并确认上述重要性评估结果。</span>
           </label>
           <button
             disabled={!canConfirm}
-            onClick={() => editProject((current) => ({ ...current, materiality: { ...current.materiality, confirmed: true, confirmedAt: new Date().toISOString() } }))}
+            onClick={() => confirmAssessment(true)}
             className={`mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${confirmed ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-[#176b52] text-white hover:bg-[#105c46]"}`}
           >
             {confirmed ? <><CheckCircle2 className="size-4" />已由用户确认</> : <><ClipboardCheck className="size-4" />确认评估结果</>}
@@ -369,14 +429,26 @@ export function StepTwo() {
 
       <StepFooter currentStep={2} />
 
-      {topicEditor ? (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-[#10241c]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="topic-editor-title" onMouseDown={(event) => event.target === event.currentTarget && setTopicEditor(null)}>
+      {topicEditor && !removal ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-[#10241c]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="topic-editor-title" onMouseDown={(event) => !saving && event.target === event.currentTarget && setTopicEditor(null)}>
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#e5e9e7] px-5 py-4">
               <div><h2 id="topic-editor-title" className="text-sm font-semibold text-[#26352d]">{topicEditor.id ? "编辑议题" : "新增议题"}</h2><p className="mt-1 text-[10px] text-[#87918c]">修改后重要性结果将回到待确认状态。</p></div>
-              <button aria-label="关闭议题编辑" onClick={() => setTopicEditor(null)} className="grid size-8 place-items-center rounded-lg text-[#7d8882] hover:bg-[#f2f5f3]"><X className="size-4" /></button>
+              <button disabled={saving} aria-label="关闭议题编辑" onClick={() => setTopicEditor(null)} className="grid size-8 place-items-center rounded-lg text-[#7d8882] hover:bg-[#f2f5f3] disabled:opacity-50"><X className="size-4" /></button>
             </div>
-            <div className="space-y-4 p-5">
+            <fieldset disabled={saving} className="space-y-4 p-5">
+              {presets.length > 0 ? (
+                <div className="rounded-lg border border-[#e5e9e7] p-3">
+                  <label htmlFor="topic-preset" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">从预设添加</label>
+                  <div className="flex flex-wrap gap-2">
+                    <select id="topic-preset" value={presetId} onChange={(event) => setPresetId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[#dce3df] bg-white px-2 text-xs">
+                      <option value="">选择预设议题</option>
+                      {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.category} · {preset.name}</option>)}
+                    </select>
+                    <button type="button" disabled={!presetId} onClick={() => void addPresetTopic()} className="h-9 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52] disabled:opacity-50">添加预设议题</button>
+                  </div>
+                </div>
+              ) : null}
               <div><label htmlFor="topic-name" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">议题名称</label><input id="topic-name" autoFocus value={topicEditor.name} onChange={(event) => setTopicEditor({ ...topicEditor, name: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none focus:border-[#6f9f8c]" /></div>
               <div><label htmlFor="topic-category" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">ESG 类别</label><select id="topic-category" value={topicEditor.category} onChange={(event) => setTopicEditor({ ...topicEditor, category: event.target.value as EsgCategory })} className="h-10 w-full rounded-lg border border-[#dce3df] bg-white px-3 text-xs outline-none"><option value="E">E · 环境</option><option value="S">S · 社会</option><option value="G">G · 治理</option></select></div>
               <div className="grid grid-cols-2 gap-3">
@@ -384,12 +456,82 @@ export function StepTwo() {
                 <div><label htmlFor="topic-impact" className="mb-1.5 block text-[11px] font-semibold text-[#536159]">影响重要性</label><input id="topic-impact" type="number" min="1" max="5" step="0.1" value={topicEditor.impactScore} onChange={(event) => setTopicEditor({ ...topicEditor, impactScore: event.target.value })} className="h-10 w-full rounded-lg border border-[#dce3df] px-3 text-xs outline-none" /></div>
               </div>
               {topicError ? <p role="alert" className="text-[10px] text-rose-600">{topicError}</p> : null}
+            </fieldset>
+            <div className="flex flex-wrap items-center gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-5 py-4">
+              {topicEditor.id ? (
+                <button type="button" disabled={saving} onClick={() => { setDeleteFailed(false); setRemoveTopicId(topicEditor.id); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-50 px-3 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"><Trash2 className="size-3.5" />删除议题</button>
+              ) : null}
+              <div className="ml-auto flex gap-2">
+                <button type="button" disabled={saving} onClick={() => setTopicEditor(null)} className="h-9 rounded-lg border border-[#dce3df] px-4 text-[11px] font-semibold text-[#5b6861] disabled:opacity-50">取消</button>
+                <button type="button" disabled={saving} onClick={saveTopicEditor} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white disabled:opacity-50">保存议题</button>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-[#e5e9e7] bg-[#fafbf9] px-5 py-4"><button onClick={() => setTopicEditor(null)} className="h-9 rounded-lg border border-[#dce3df] px-4 text-[11px] font-semibold text-[#5b6861]">取消</button><button onClick={saveTopicEditor} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white">保存议题</button></div>
           </div>
         </div>
       ) : null}
+      {removal ? <TopicRemovalDialog removal={removal} saving={saving} error={deleteFailed ? message : ""} onCancel={() => setRemoveTopicId(undefined)} onConfirm={() => void deleteTopic()} /> : null}
     </>
+  );
+}
+
+function TopicRemovalDialog({ removal, saving, error, onCancel, onConfirm }: {
+  removal: NonNullable<ReturnType<typeof describeTopicRemoval>>;
+  saving: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+
+  return (
+    <dialog ref={dialogRef} aria-labelledby="topic-removal-title" aria-describedby="topic-removal-impact" onCancel={(event) => { event.preventDefault(); if (!saving) onCancel(); }} className="m-auto max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl bg-white p-0 text-[#26352d] shadow-2xl backdrop:bg-[#10241c]/45">
+      <div className="p-5 sm:p-6">
+        <h2 id="topic-removal-title" className="break-words text-base font-semibold">删除议题“{removal.topic.name}”？</h2>
+        <ul id="topic-removal-impact" className="mt-4 list-disc space-y-1 pl-5 text-xs leading-6 text-[#536159]">
+          <li>此议题将从当前项目的议题池移除，其他项目和公共模板保留。</li>
+          {removal.included ? <li>此议题将退出本次评估，同步更新评分表、矩阵和重点议题排序。</li> : <li>此议题当前未纳入本次评估。</li>}
+          {removal.assessmentNeedsReview ? <li>受影响的评估结果将标为待复核，原评分与确认信息保留在评估记录中。</li> : null}
+          {removal.requirements.length > 0 || removal.sections.length > 0 ? <li>将解除 {removal.requirements.length} 项披露条款和 {removal.sections.length} 个大纲章节的此议题关联，并标为待复核。</li> : null}
+          <li>已有披露条款、报告正文、资料和事实均会保留。</li>
+        </ul>
+        {error ? <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{error}</p> : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" disabled={saving} onClick={onCancel} className="h-9 rounded-lg border border-[#dce3df] px-4 text-xs font-semibold text-[#5b6861] disabled:opacity-50">取消</button>
+          <button type="button" disabled={saving} onClick={onConfirm} className="h-9 rounded-lg bg-rose-700 px-4 text-xs font-semibold text-white hover:bg-rose-800 disabled:opacity-50">{saving ? "正在删除…" : "确认删除"}</button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function TopicRemovalHistory() {
+  const { project } = useProjectData();
+  const removals = project.impacts.filter((impact) => impact.topicRemoval).reverse();
+  return (
+    <SectionCard title="议题删除记录">
+      {removals.length === 0 ? <p className="text-xs text-[#65736b]">尚无已删除议题。</p> : null}
+      <ul className="space-y-3">
+        {removals.map((impact) => {
+          if (!impact.topicRemoval) return null;
+          const { topic, assessment, lastSavedConfirmation, requirements, sectionIds } = impact.topicRemoval;
+          const wasIncluded = assessment.includedTopicIds.includes(topic.id);
+          return (
+            <li key={impact.id} className="rounded-lg border border-[#e5e9e7] px-3 py-2 text-xs leading-6 text-[#536159]">
+              <div className="flex flex-wrap justify-between gap-x-3"><strong>{topic.name}</strong><time dateTime={impact.createdAt}>{new Date(impact.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}</time></div>
+              <div>{topic.category} · {assessment.method} · {wasIncluded ? "已纳入评估" : "未纳入评估"}{wasIncluded && assessment.confirmed ? " · 原评估已确认" : ""}</div>
+              <div>财务重要性 {topic.financialScore || "未评分"} · 影响重要性 {topic.impactScore || "未评分"}</div>
+              {lastSavedConfirmation ? <div>原已保存确认的评分：财务 {lastSavedConfirmation.topic.financialScore} · 影响 {lastSavedConfirmation.topic.impactScore}</div> : null}
+              <div>解除 {requirements.length} 项披露条款、{sectionIds.length} 个大纲章节的关联</div>
+            </li>
+          );
+        })}
+      </ul>
+    </SectionCard>
   );
 }
 

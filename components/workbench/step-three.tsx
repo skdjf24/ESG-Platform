@@ -70,6 +70,7 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
   const withoutCatalog = project.report.frameworks.filter((item) => !requirements.some((requirement) => requirement.framework === (frameworkRequirementNames[item] ?? item)));
   const hasLegacyCass = project.report.frameworks.some((item) => item.startsWith("CASS-ESG")) || requirements.some((item) => item.framework === "CASS-ESG");
   const sections = project.reportSections.filter((item) => item.sourceState === "active");
+  const topicNames = [...new Set(project.topics.map((topic) => topic.name))];
   const [search, setSearch] = useState(() => requirements.find((item) => item.id === initialRequirementId)?.code ?? "");
   const [framework, setFramework] = useState("全部框架");
 
@@ -85,7 +86,7 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
     const query = search.trim().toLowerCase();
     return requirements.filter((item) => {
       const frameworkMatches = framework === "全部框架" || item.framework === framework;
-      const queryMatches = !query || `${item.framework}${item.code}${item.topic}${item.summary}${item.mappedSection}`.toLowerCase().includes(query);
+      const queryMatches = !query || `${item.framework}${item.code}${item.topic}${item.originalTopic ?? ""}${item.summary}${item.mappedSection}`.toLowerCase().includes(query);
       return frameworkMatches && queryMatches;
     });
   }, [framework, requirements, search]);
@@ -96,6 +97,15 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
 
   const confirmDecision = (id: string) => {
     editProject((current) => ({ ...current, disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? { ...item, userConfirmed: true, reviewStatus: "有效" } : item) }));
+  };
+
+  const updateTopic = (id: string, topic: string) => {
+    editProject((current) => ({
+      ...current,
+      disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? {
+        ...item, topic, userConfirmed: false, reviewStatus: "待复核",
+      } : item),
+    }));
   };
 
   const updateMapping = (id: string, mappedSection: string) => {
@@ -197,7 +207,17 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
                       <span className="font-semibold text-[#26362d]">{item.framework}</span>
                       <span className="ml-2 text-[11px] text-[#708078]">{item.code}</span>
                     </td>
-                    <td className="px-4 py-4"><StatusBadge tone="teal">{item.topic}</StatusBadge></td>
+                    <td className="px-4 py-4">
+                      {item.originalTopic !== undefined ? (
+                        <div className="flex items-center gap-2">
+                          <select aria-label={`${item.code} 关联议题`} value={item.topic} onChange={(event) => updateTopic(item.id, event.target.value)} className="h-8 min-w-[112px] rounded-lg border border-[#dce3df] bg-white px-2 text-xs text-[#536159]">
+                            <option value="">未关联</option>
+                            {topicNames.map((name) => <option key={name} value={name}>{name}</option>)}
+                          </select>
+                          <span className="text-[#65736b]">原议题：{item.originalTopic}</span>
+                        </div>
+                      ) : <StatusBadge tone="teal">{item.topic || "未关联"}</StatusBadge>}
+                    </td>
                     <td className="px-4 py-4 leading-5 text-[#4d5b54]">
                       <span className="block">{item.summary}</span>
                       {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block text-[#176b52] underline">来源：{item.sourceTitle} · {item.sourceVersion}</a> : null}
@@ -231,13 +251,16 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
                       {confirmed ? (
                         <StatusBadge tone="green"><Check className="size-3" />已确认</StatusBadge>
                       ) : (
-                        <button
-                          disabled={item.applicability === "待确认"}
-                          onClick={() => confirmDecision(item.id)}
-                          className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          人工确认
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {item.originalTopic !== undefined && item.reviewStatus === "待复核" ? <StatusBadge tone="amber">待复核</StatusBadge> : null}
+                          <button
+                            disabled={item.applicability === "待确认"}
+                            onClick={() => confirmDecision(item.id)}
+                            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-55"
+                          >
+                            人工确认
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -256,7 +279,7 @@ function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: s
 }
 
 function ReportOutline() {
-  const { project, savedProject, editProject, saveProject } = useProjectData();
+  const { project, savedProject, editProject, saveProject, saving } = useProjectData();
   const sections = project.reportSections;
   const [selectedId, setSelectedId] = useState("section-4-2");
   const [addingSection, setAddingSection] = useState(false);
@@ -295,6 +318,11 @@ function ReportOutline() {
     updateSection({ topics: selectedSection.topics.includes(topicName) ? selectedSection.topics.filter((item) => item !== topicName) : [...selectedSection.topics, topicName] });
   }
 
+  function confirmSectionTopics() {
+    const reportSections = sections.map((item) => item.id === selectedSection.id ? { ...item, topicReviewStatus: undefined } : item);
+    return saveProject(3, "确认章节议题关联", { ...project, reportSections });
+  }
+
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(480px,1.35fr)] animate-fade-up">
       <SectionCard
@@ -329,7 +357,7 @@ function ReportOutline() {
       <SectionCard
         title="章节编辑"
         description={`正在编辑 ${selectedSection.order} ${selectedSection.title}`}
-        action={<StatusBadge tone={selectedSection.state === "已就绪" ? "green" : "amber"}>{selectedSection.state}</StatusBadge>}
+        action={selectedSection.topicReviewStatus ? <StatusBadge tone="amber">待复核</StatusBadge> : <StatusBadge tone={selectedSection.state === "已就绪" ? "green" : "amber"}>{selectedSection.state}</StatusBadge>}
       >
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
@@ -356,6 +384,12 @@ function ReportOutline() {
             <div className="mt-3 flex min-h-7 flex-wrap gap-2">
               {selectedSection.topics.length ? selectedSection.topics.map((topic) => <StatusBadge key={topic} tone="teal">{topic}</StatusBadge>) : <span className="text-[11px] text-[#949e99]">暂未关联议题</span>}
             </div>
+            {selectedSection.topicReviewStatus ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <p>上游议题已移除，请复核此章节的议题关联。</p>
+                <button type="button" disabled={saving} onClick={() => void confirmSectionTopics()} className="font-semibold hover:underline disabled:opacity-50">确认议题关联</button>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-[#e5e9e7] p-4">
@@ -377,7 +411,7 @@ function ReportOutline() {
 
           <div className="flex justify-end gap-2 border-t border-[#edf0ee] pt-5">
             <button onClick={() => { const saved = savedProject.reportSections.find((item) => item.id === selectedSection.id); if (saved) updateSection(saved); }} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f7f9f8]">取消修改</button>
-            <button onClick={() => void saveProject(3, `保存章节 ${selectedSection.order}`)} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46]">保存章节</button>
+            <button disabled={saving} onClick={() => void saveProject(3, `保存章节 ${selectedSection.order}`)} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46] disabled:opacity-50">保存章节</button>
           </div>
         </div>
       </SectionCard>
@@ -473,6 +507,7 @@ export function StepThree({ initialRequirementId }: { initialRequirementId?: str
   const requirementCount = project.disclosureRequirements.length;
   const confirmedCount = project.disclosureRequirements.filter((item) => item.userConfirmed && item.reviewStatus === "有效").length;
   const completion = requirementCount ? Math.round(confirmedCount / requirementCount * 100) : 0;
+  const outlineNeedsReview = project.reportSections.some((item) => item.topicReviewStatus === "待复核");
 
   return (
     <>
@@ -480,7 +515,7 @@ export function StepThree({ initialRequirementId }: { initialRequirementId?: str
         eyebrow="Step 3 · 框架与大纲"
         title="构建披露框架与报告大纲"
         description="将已选披露框架映射到报告章节，逐项确认适用性，并形成可执行的本年度资料清单。"
-        completed={requirementCount > 0 && confirmedCount === requirementCount}
+        completed={requirementCount > 0 && confirmedCount === requirementCount && !outlineNeedsReview}
         action={
           <div className="rounded-xl border border-[#dfe6e2] bg-white px-4 py-3 text-right">
             <div className="text-[10px] text-[#8a948f]">已建档条款确认度</div>
