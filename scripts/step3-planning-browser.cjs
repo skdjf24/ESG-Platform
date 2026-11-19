@@ -286,7 +286,9 @@ async function main() {
       const material = project.dataRequirements.find((entry) => entry.id === current.itemId);
       material.section = `${section.order} ${section.title}`;
       delete material.departmentId;
-    }, { chapterId, itemId }, id);
+      const block = project.writing.chapters.find((entry) => entry.id === current.chapterId).blocks[0];
+      block.sourceReferences = project.facts.find((fact) => fact.id === current.factId).sourceReferences;
+    }, { chapterId, itemId, factId: metricFact.id }, id);
     await openStep(page, id, 4, `?chapterId=${encodeURIComponent(chapterId)}`);
     check(await page.getByRole("list", { name: "本章关联资料" }).getByText(new RegExp(itemName)).isVisible(), "LEGACY-MATERIAL-LINK", "读取旧字段恢复历史章节资料关联");
     const upgraded = await save(page, id, "保存章节");
@@ -302,6 +304,7 @@ async function main() {
     const download = page.waitForEvent("download");
     await card.getByRole("button", { name: "导出备份" }).click();
     const archive = JSON.parse(fs.readFileSync(await (await download).path(), "utf8"));
+    const backupHasOriginal = Buffer.from(archive.files.find((file) => file.name === sourceName).dataBase64, "base64").equals(fs.readFileSync(fixture));
     const restoreId = `${id}-restore`;
     archive.manifest.projectId = restoreId;
     archive.project.projectId = restoreId;
@@ -310,17 +313,25 @@ async function main() {
     await page.getByLabel("选择项目备份").setInputFiles({ name: "workflow-restore.esgbackup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(archive)) });
     await page.getByText(/已恢复/).waitFor();
     const restoredCopy = await readProject(page, restoreId);
-    check(restoredCopy.departments.some((item) => item.id === departmentId) && restoredCopy.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
+    const restoredFile = restoredCopy.sources.find((item) => item.id === fileSource.id);
+    const restoredDepartmentId = upgraded.dataRequirements.find((item) => item.id === itemId).departmentId;
+    check(backupHasOriginal && restoredCopy.departments.some((item) => item.id === restoredDepartmentId && item.name === "能源与资源组")
+      && restoredCopy.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
       && restoredCopy.facts.find((item) => item.id === metricFact.id).state === "已确认"
-      && (await readProjectFiles(page, restoreId)).some((file) => file.name === sourceName && file.text === originalFiles[0].text), "WORKFLOW-BACKUP", "备份与恢复保留部门、章节资料关联、确认事实和原始文件");
+      && restoredCopy.facts.find((item) => item.id === metricFact.id).sourceReferences[0].fileId === restoredFile.fileId
+      && restoredCopy.writing.chapters.find((item) => item.id === chapterId).blocks[0].sourceReferences[0].fileId === restoredFile.fileId
+      && (await readProjectFiles(page, restoreId)).some((file) => file.fileId === restoredFile.fileId && file.text === originalFiles[0].text), "WORKFLOW-BACKUP", "备份与恢复保留部门、章节资料关联及确认事实，并连接同一原始文件内容");
     const originalCard = card.filter({ has: page.locator("span.font-mono").getByText(id, { exact: true }) });
     await originalCard.getByRole("button", { name: "复制下一年度" }).click();
     await page.getByText(/已复制为 2027 年项目/).waitFor();
     const copiedId = `${id.replace(/-20\d{2}(?:-\d+)?$/, "")}-2027`;
     const copied = await readProject(page, copiedId);
+    const copiedFile = copied.sources.find((item) => item.id === fileSource.id);
     check(copied.report.year === 2027 && copied.reportSections.find((item) => item.id === chapterId).materialIds.includes(itemId)
       && !copied.materiality.confirmed && copied.facts.every((item) => item.state === "待人工确认")
-      && (await readProjectFiles(page, copiedId)).some((file) => file.fileId !== fileSource.fileId && file.text === originalFiles[0].text), "WORKFLOW-ANNUAL-COPY", "年度复制保留材料关系与文件内容，各项目拥有独立文件 ID 并重新确认年度数据");
+      && copied.facts.find((item) => item.id === metricFact.id).sourceReferences[0].fileId === copiedFile.fileId
+      && copied.writing.chapters.find((item) => item.id === chapterId).blocks[0].sourceReferences[0].fileId === copiedFile.fileId
+      && (await readProjectFiles(page, copiedId)).some((file) => file.fileId === copiedFile.fileId && file.fileId !== fileSource.fileId && file.text === originalFiles[0].text), "WORKFLOW-ANNUAL-COPY", "年度复制保留资料和正文对原始文件的引用，各项目取得独立文件 ID 并重新确认年度数据");
 
     await mutateProject(page, (project, archived) => {
       const sectionChapter = project.writing.chapters.find((chapter) => chapter.id === archived.chapterId);
