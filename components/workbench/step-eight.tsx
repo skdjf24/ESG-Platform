@@ -12,6 +12,7 @@ import { createFinalReportDocx } from "@/lib/export/docx";
 import { activeFinalVersion, finalizationFingerprint, isFinalVersionCurrent } from "@/lib/finalization/state";
 import { createReportPages } from "@/lib/presentation/pages";
 import { getStep8QualityGate } from "@/lib/quality/validity";
+import { isCurrentQualityIssue, isOpenQualityIssue, summarizeQuality } from "@/lib/quality/state";
 import type { FinalApprovalDeclarations, FinalReportVersion } from "@/lib/types/finalization";
 import type { QualityIssue } from "@/lib/types/quality";
 
@@ -22,16 +23,13 @@ const declarationLabels: Record<keyof FinalApprovalDeclarations, string> = {
   exportPreviewReviewed: "已核对最终版式、页码及打印/PDF 预览",
 };
 
-const activeStatuses = new Set(["待处理", "处理中", "待复检"]);
-
 export function StepEight() {
   const router = useRouter();
   const { project, saveProject, saving, setMessage, ready } = useProjectData();
   const gate = useMemo(() => getStep8QualityGate(project), [project]);
-  const activeIssues = useMemo(
-    () => project.quality.issues.filter((issue) => activeStatuses.has(issue.status)),
-    [project.quality.issues],
-  );
+  const currentIssues = useMemo(() => project.quality.issues.filter(isCurrentQualityIssue), [project.quality.issues]);
+  const activeIssues = currentIssues.filter(isOpenQualityIssue);
+  const issueSummary = summarizeQuality(currentIssues);
   const activeVersion = activeFinalVersion(project);
   const versionCurrent = isFinalVersionCurrent(project, activeVersion);
   const pageCount = useMemo(() => createReportPages(project).length, [project]);
@@ -53,7 +51,6 @@ export function StepEight() {
     const params = new URLSearchParams();
     if (location?.chapterId ?? issue.chapterId) params.set("chapterId", location?.chapterId ?? issue.chapterId ?? "");
     if (location?.blockId ?? issue.blockId) params.set("blockId", location?.blockId ?? issue.blockId ?? "");
-    if (location?.requirementId ?? issue.requirementIds[0]) params.set("requirementId", location?.requirementId ?? issue.requirementIds[0] ?? "");
     if (location?.factId ?? issue.factIds[0]) params.set("factId", location?.factId ?? issue.factIds[0] ?? "");
     const step = location?.sourceStep ?? issue.sourceStep;
     return `/reports/${project.projectId}/step/${step}${params.size ? `?${params.toString()}` : ""}`;
@@ -90,13 +87,13 @@ export function StepEight() {
       reportingPeriod: structuredClone(project.report.reportingPeriod),
       pageCount,
       issueSummary: {
-        total: project.quality.issues.length,
-        blockers: project.quality.summary.blockerCount,
-        high: project.quality.summary.highCount,
-        notices: project.quality.summary.noticeCount,
-        acceptedExceptions: project.quality.summary.acceptedExceptionCount,
+        total: currentIssues.length,
+        blockers: issueSummary.blockerCount,
+        high: issueSummary.highCount,
+        notices: issueSummary.noticeCount,
+        acceptedExceptions: issueSummary.acceptedExceptionCount,
       },
-      issueRecords: project.quality.issues.map((issue) => ({
+      issueRecords: currentIssues.map((issue) => ({
         issueId: issue.issueId,
         stableKey: issue.stableKey,
         category: issue.category,
@@ -179,14 +176,14 @@ export function StepEight() {
         <div className="max-w-3xl">
           <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 08 · Finalization & export</p>
           <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">定稿与导出</h1>
-          <p className="mt-2 text-xs leading-5 text-[#78877e]">直接读取 Step 7.1 的全面检查有效性、质量输入指纹和规则集指纹，形成可追溯定稿版本。</p>
+          <p className="mt-2 text-xs leading-5 text-[#78877e]">完成当前报告的全面质量检查和人工确认后，可生成定稿版本。</p>
         </div>
         {activeVersion ? <VersionBadge version={activeVersion} current={versionCurrent} /> : null}
       </div>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatusCard icon={ShieldCheck} label="Step 7 Gate" value={gate.validFullCheck ? 1 : 0} detail={gate.readiness} tone={gate.canSubmit ? "green" : "red"} />
-        <StatusCard icon={AlertTriangle} label="活动问题" value={activeIssues.length} detail={`${project.quality.summary.blockerCount} 项阻断`} tone={activeIssues.length ? "red" : "green"} />
+        <StatusCard icon={AlertTriangle} label="活动问题" value={activeIssues.length} detail={`${issueSummary.blockerCount} 项阻断`} tone={activeIssues.length ? "red" : "green"} />
         <StatusCard icon={FileCheck2} label="最终页面" value={pageCount} detail="按当前字体与版式重算" tone="gray" />
         <StatusCard icon={History} label="定稿版本" value={project.finalization.versions.length} detail={activeVersion ? activeVersion.label : "尚未创建"} tone="blue" />
       </div>

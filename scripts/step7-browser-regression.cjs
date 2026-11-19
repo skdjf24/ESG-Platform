@@ -51,7 +51,7 @@ async function main() {
   await page.getByRole("button", { name: "打开示例项目" }).click();
   await page.waitForURL(/\/reports\/public-preview-sample-2025\/step\/1/);
   await openStep(page, 7);
-  assert(await page.getByRole("heading", { name: "报告质量与披露完整性检查" }).isVisible(), "Step 7 工作台可实际打开");
+  assert(await page.getByRole("heading", { name: "报告质量检查" }).isVisible(), "Step 7 工作台可实际打开");
   await page.getByRole("button", { name: "开始全面检查" }).click();
   let project = await waitForStored(page, (value) => value.quality?.runs?.length === 1);
   assert(project.quality.runs[0].status === "已完成", "全面检查生成独立 QualityCheckRun");
@@ -108,8 +108,7 @@ async function main() {
   await page.getByRole("button", { name: "开始全面检查" }).click();
   project = await waitForStored(page, (value) => value.quality?.runs?.length === 2);
   const active = project.quality.issues.filter((issue) => issue.status !== "已复检解决");
-  assert(active.some((issue) => issue.ruleId === "DISC-001" && issue.requirementIds.includes("req-gri-403")), "移除已确认适用要求的映射后发现未覆盖问题");
-  assert(active.some((issue) => issue.ruleId === "DISC-002" && issue.requirementIds.includes("req-gri-302-1")), "仅有标题映射时不判定为充分披露");
+  assert(!active.some((issue) => issue.ruleId.startsWith("DISC-")), "未映射历史条款与仅关联标题均不产生条款问题");
   assert(active.some((issue) => issue.ruleId === "SRC-001" && issue.factIds.includes("fact-training-2025") && issue.title.includes("版本")), "修改已引用事实后识别旧引用版本");
   assert(active.some((issue) => issue.ruleId === "SRC-002" && issue.factIds.includes("fact-training-2025")), "删除事实来源后发现来源定位问题");
   assert(active.some((issue) => issue.ruleId === "DATA-002" && issue.blockId === "section-5-training"), "正文指标与同口径已确认事实不一致时发现冲突");
@@ -118,9 +117,7 @@ async function main() {
   assert(active.some((issue) => issue.ruleId === "WRITE-001" && issue.title.includes("高度重视")), "Writing Policy 规则识别空泛表述并生成建议");
   assert(active.some((issue) => issue.ruleId === "WRITE-003"), "未解决内部待办和占位信息被发现");
 
-  await page.getByRole("button", { name: /披露完整性/ }).first().click();
-  await page.locator('[aria-label="质量问题清单"] button').first().click();
-  await page.screenshot({ path: `${screenshotDir}/02-disclosure-completeness.png`, fullPage: true });
+  assert(!await page.getByRole("button", { name: /披露完整性/ }).count(), "质量工作台无披露覆盖分类");
   await page.getByRole("button", { name: /数据一致性/ }).first().click();
   await page.locator('[aria-label="质量问题清单"] button').first().click();
   await page.screenshot({ path: `${screenshotDir}/03-fact-data-consistency.png`, fullPage: true });
@@ -168,7 +165,7 @@ async function main() {
   assert(await page.getByText("上游已变化 · 待复检").isVisible(), "工作台明确提示上游版本变化");
 
   const smokeHeadings = new Map([
-    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "构建披露框架与报告大纲"],
+    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "构建报告大纲与年度资料清单"],
     [4, "ESG 资料收集、汇总与规整"], [5, "报告内容生成与编辑"], [6, "数据可视化、版式与整本报告预览"],
   ]);
   for (const [step, heading] of smokeHeadings) {
@@ -217,7 +214,7 @@ async function main() {
   await legacyPage.goto(baseUrl, { waitUntil: "networkidle" });
   await writeProject(legacyPage, legacy);
   await openStep(legacyPage, 7);
-  assert(await legacyPage.getByRole("heading", { name: "报告质量与披露完整性检查" }).isVisible(), "缺少 Step 7 状态的历史项目可兼容打开");
+  assert(await legacyPage.getByRole("heading", { name: "报告质量检查" }).isVisible(), "缺少 Step 7 状态的历史项目可兼容打开");
   await legacyPage.getByRole("button", { name: "开始全面检查" }).click();
   const migrated = await waitForStored(legacyPage, (value) => value.quality?.runs?.length === 1);
   assert(migrated.writing.chapters.length === originalChapterCount && migrated.migrations.some((item) => item.id === "migration-quality-check-v1"), "历史项目迁移保留 Step 1–6 数据并记录迁移");

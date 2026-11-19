@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require("playwright");
 const fs = require("node:fs");
+const legacyQuality = require("./fixtures/legacy-disclosure-quality.json");
 const { clearProjectDatabase, mutateProject, readProject } = require("./indexeddb-test-helpers.cjs");
 
 const baseUrl = process.env.STEP7_BASE_URL || "http://127.0.0.1:4325";
@@ -127,37 +128,22 @@ async function main() {
   const partiallyUpdatedSource = project.quality.issues.find((issue) => issue.ruleId === "SRC-002" && issue.factIds.includes("fact-training-2025"));
   assert(partiallyUpdatedSource?.status !== "已复检解决" && partiallyUpdatedSource?.locations.length === 2, "C4 章节检查只移除实际修复位置，不会误解决其他章节仍存在的聚合问题");
 
-  // D：披露要求 reviewStatus 变化后，历史覆盖不能继续有效。
+  // D：旧条款检查归档保留，新检查与旧映射脱钩。
   await fresh(page);
-  await run(page, "开始全面检查", 1);
-  await mutateProject(page, (value) => {
-    const requirement = value.disclosureRequirements.find((item) => item.id === "req-gri-302-1");
-    requirement.applicability = "适用";
-    requirement.userConfirmed = true;
-    requirement.reviewStatus = "有效";
-    for (const candidate of value.writing.chapters.flatMap((item) => item.blocks)) {
-      candidate.mappings = candidate.mappings.filter((mapping) => mapping.requirementId !== requirement.id);
-    }
-    const chapter = value.writing.chapters.find((item) => item.id === "section-5") || value.writing.chapters[0];
-    const block = chapter.blocks.find((item) => item.kind === "paragraph") || chapter.blocks.find((item) => item.kind !== "heading");
-    block.html = "<p>本段为披露覆盖状态回归测试，内容具有明确的人工审校状态。</p>";
-    block.pendingKind = undefined;
-    block.resolved = true;
-    block.reviewStatus = "已审校";
-    block.mappings = [...block.mappings.filter((item) => item.requirementId !== requirement.id), { requirementId: requirement.id, coverage: "已覆盖" }];
-  });
+  await mutateProject(page, (value, archived) => { value.quality = { ...value.quality, ...archived }; }, legacyQuality);
   await reloadProject(page);
+  assert(await page.getByText("上游已变化 · 待复检").isVisible(), "D1 旧规则的全面检查提示重新运行");
   project = await run(page, "开始全面检查", 2);
-  assert(project.quality.coverage.find((item) => item.requirementId === "req-gri-302-1")?.status === "已核验覆盖", "D1 有效要求和人工审校正文可形成已核验覆盖记录");
+  assert(JSON.stringify(project.quality.coverage) === JSON.stringify(legacyQuality.coverage)
+    && project.quality.issues.some((issue) => issue.issueId === legacyQuality.issues[0].issueId && issue.status === "待处理")
+    && !project.quality.runs.at(-1).ruleVersions["DISC-001"], "D2 归档覆盖和问题保留，现行规则不产生条款检查");
   await mutateProject(page, (value) => {
     const requirement = value.disclosureRequirements.find((item) => item.id === "req-gri-302-1");
     requirement.reviewStatus = "待复核";
     requirement.revision += 1;
   });
   await reloadProject(page);
-  assert(await page.getByText("上游已变化 · 待复检").isVisible(), "D2 输入指纹变化即时使全面检查失效");
-  project = await run(page, "开始全面检查", 3);
-  assert(project.quality.coverage.find((item) => item.requirementId === "req-gri-302-1")?.status === "待核验", "D3 reviewStatus 待复核后覆盖状态失效为待核验");
+  assert(!await page.getByText("上游已变化 · 待复检").count() && !await page.getByText(legacyQuality.issues[0].title).count(), "D3 历史条款状态与检查问题不会使当前全面检查失效或出现在活动列表");
 
   // E/F：解决记录不重复，重新出现时重新打开并保留历史。
   await fresh(page);
@@ -217,9 +203,9 @@ async function main() {
   assert(project.migrations.some((item) => item.id === "migration-quality-check-v2"), "G3 项目保存迁移审计记录");
 
   const headings = new Map([
-    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "构建披露框架与报告大纲"],
+    [1, "创建报告与企业基础画像"], [2, "ESG 实质性议题评估"], [3, "构建报告大纲与年度资料清单"],
     [4, "ESG 资料收集、汇总与规整"], [5, "报告内容生成与编辑"], [6, "数据可视化、版式与整本报告预览"],
-    [7, "报告质量与披露完整性检查"],
+    [7, "报告质量检查"],
   ]);
   for (const [step, heading] of headings) {
     await openStep(page, step);

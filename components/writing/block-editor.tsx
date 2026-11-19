@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Check, CircleDashed, FileText, GripVertical, Heading2, Layers3, Link2, ListTodo, Plus, Quote, Table2, Trash2 } from "lucide-react";
+import { BarChart3, Check, CircleDashed, FileText, GripVertical, Heading2, Link2, ListTodo, Plus, Quote, Table2, Trash2 } from "lucide-react";
 import type { BlockKind, ContentBlock, PendingKind } from "@/lib/types/writing";
 import { plainText } from "@/lib/writing/document";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -115,7 +115,7 @@ export function BlockEditor({ block, selected, onSelect, onChange, onDelete, onS
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#f0f3f1] px-4 py-2 text-[10px] text-[#8a978f]">
-        <div className="flex gap-3"><span className="inline-flex items-center gap-1"><Layers3 className="size-3" />{block.mappings.length} 项披露映射</span><span className="inline-flex items-center gap-1"><Link2 className="size-3" />{block.citations.length} 条事实引用</span></div>
+        <span className="inline-flex items-center gap-1"><Link2 className="size-3" />{block.citations.length} 条事实引用</span>
         <span>{block.kind === "table" ? `${Math.max(block.rows.length - 1, 0)} 条数据` : `${plainText(block.html).length} 字`}</span>
       </div>
     </article>

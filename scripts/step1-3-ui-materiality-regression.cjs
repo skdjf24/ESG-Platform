@@ -85,15 +85,13 @@ async function main() {
     await page.screenshot({ path: path.join(evidenceDir, "step1-desktop.png"), fullPage: true });
     await save(page);
     project = await readProject(page, projectId);
-    const bseRows = project.disclosureRequirements.filter((item) => item.framework === "北交所");
-    check(bseRows.length === 2 && bseRows.every((item) => item.sourceUrl?.includes("bse.cn") && item.sourceVersion?.includes("2025-04-25") && !item.userConfirmed && item.applicability === "待确认"), "STEP1-BSE-SOURCE", "北交所第35/36条独立建档，标明官网来源和修订版本且待用户确认");
-
+    check(project.report.frameworks.includes("北交所指引") && project.disclosureRequirements.length === 0, "STEP1-BSE-REFERENCE", "北交所作为编制参考保存，不生成披露条款");
     await openStep(page, projectId, 3);
-    const filter = page.getByLabel("筛选披露框架");
-    check((await filter.locator("option").allTextContents()).includes("北交所") && !(await filter.locator("option").allTextContents()).includes("CASS-ESG"), "STEP3-FILTER", "新项目矩阵有北交所筛选且无 CASS 筛选");
-    await filter.selectOption("北交所");
-    check(await page.getByText("第三十五条").count() > 0 && await page.getByText("第三十六条").count() > 0 && await page.getByRole("link", { name: /来源：北京证券交易所/ }).count() === 2, "STEP3-BSE-MAPPING", "北交所条款和独立来源在矩阵内可查看");
-    await filter.selectOption("全部框架");
+    const tabs = page.getByRole("group", { name: "Step 3 模块" }).getByRole("button");
+    check(JSON.stringify(await tabs.allTextContents()) === JSON.stringify(["报告目录", "年度资料清单"])
+      && await tabs.first().getAttribute("aria-pressed") === "true" && await page.locator("#section-title").isVisible(), "STEP3-OUTLINE", "Step 3 仅保留两个模块并默认显示目录");
+    check(!await page.getByText(/披露要求矩阵|披露要求覆盖|条款确认度/).count(), "STEP3-NO-MATRIX", "无披露矩阵和确认进度");
+    await tabs.last().click();
     await tableLayout(page, "STEP3-DESKTOP", false);
     await page.screenshot({ path: path.join(evidenceDir, "step3-desktop.png"), fullPage: true });
 
@@ -150,7 +148,7 @@ async function main() {
     await save(page);
     project = await readProject(page, projectId);
     check(project.topics.find((item) => item.name === "气候变化")?.financialScore === 3.1 && project.topics.find((item) => item.name === "气候变化")?.impactScore === 3.2 && !project.materiality.confirmed, "STEP2-PERSIST", "评分与待确认状态保存到 IndexedDB");
-    check(project.disclosureRequirements.find((item) => item.id === "req-sse-4")?.reviewStatus === "待复核" && project.quality.stale && !project.quality.fullCheck.valid && project.quality.fullCheck.runId === qualityRunId, "STEP2-DOWNSTREAM", "关联披露和质量快照待复核，旧记录与正文保留");
+    check(project.reportSections.find((item) => item.id === "section-4")?.topicReviewStatus === "待复核" && project.quality.stale && !project.quality.fullCheck.valid && project.quality.fullCheck.runId === qualityRunId, "STEP2-DOWNSTREAM", "关联目录和质量快照待复核，旧记录与正文保留");
     await page.getByRole("button", { name: "下一步" }).click();
     await page.waitForURL(/\/step\/3/);
     await page.getByRole("button", { name: "上一步" }).click();
@@ -175,17 +173,18 @@ async function main() {
     await page.reload({ waitUntil: "networkidle" });
     await page.locator('[aria-busy="false"]').first().waitFor();
     check(await page.getByText(/旧项目保留了 CASS-ESG 6.0/).isVisible() && !await frameworkSection.locator("label").filter({ hasText: "CASS" }).count(), "LEGACY-WARNING", "旧 CASS 选项有明确提示，但不出现在新选项中");
-    await page.getByRole("button", { name: "移除旧框架选项并标记相关要求待复核" }).click();
+    await page.getByRole("button", { name: "移除旧框架选项" }).click();
     await save(page);
     project = await readProject(page, projectId);
     const oldRow = project.disclosureRequirements.find((item) => item.id === "req-cass-legacy-test");
-    check(!project.report.frameworks.includes("CASS-ESG 6.0") && oldRow?.reviewStatus === "待复核" && oldRow?.userConfirmed && oldRow?.applicability === "适用" && project.writing.chapters.flatMap((chapter) => chapter.blocks).length === writingCount, "LEGACY-PRESERVE", "移除旧选项保留历史确认与正文，仅使该确认待复核且不转成北交所");
+    check(!project.report.frameworks.includes("CASS-ESG 6.0") && oldRow?.reviewStatus === "有效" && oldRow?.userConfirmed && oldRow?.applicability === "适用" && project.writing.chapters.flatMap((chapter) => chapter.blocks).length === writingCount, "LEGACY-PRESERVE", "移除旧参考框架后完整保留历史确认与正文");
 
     await page.setViewportSize({ width: 390, height: 844 });
     const frameworkScrolls = await frameworkSection.locator(".overflow-x-auto").evaluate((element) => element.scrollWidth > element.clientWidth);
     check(frameworkScrolls, "STEP1-NARROW-SCROLL", "窄屏披露框架仍为三列两行并可横向滚动");
     await page.screenshot({ path: path.join(evidenceDir, "step1-narrow.png"), fullPage: true });
     await openStep(page, projectId, 3);
+    await page.getByRole("button", { name: "年度资料清单", exact: true }).click();
     await tableLayout(page, "STEP3-NARROW", true);
     await page.screenshot({ path: path.join(evidenceDir, "step3-narrow.png"), fullPage: true });
     await openStep(page, projectId, 4);

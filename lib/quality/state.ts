@@ -1,7 +1,5 @@
 import type { ReportProjectData } from "@/lib/types/project-data";
 import type {
-  DisclosureCoverageRecord,
-  FinalizationReadiness,
   QualityCheckState,
   QualityCheckSummary,
   QualityIssue,
@@ -153,34 +151,30 @@ export function ensureQualityState(project: Omit<ReportProjectData, "quality"> &
 
 const activeStatuses = new Set<QualityIssue["status"]>(["待处理", "处理中", "待复检"]);
 
-export function readinessForIssues(issues: QualityIssue[], stale: boolean, validFullCheck: boolean): FinalizationReadiness {
-  if (!validFullCheck) return issues.length || stale ? "待人工确认" : "未检查";
-  if (!issues.length) return "可提交定稿审核";
-  if (issues.some((issue) => activeStatuses.has(issue.status) && issue.severity === "阻断")) return "存在阻断问题";
-  if (stale || issues.some((issue) => activeStatuses.has(issue.status))) return "待人工确认";
-  return "可提交定稿审核";
+export function isCurrentQualityIssue(issue: QualityIssue) {
+  return issue.category !== "disclosure" && !issue.ruleId.startsWith("DISC-");
+}
+
+export function isOpenQualityIssue(issue: QualityIssue) {
+  return isCurrentQualityIssue(issue) && activeStatuses.has(issue.status);
 }
 
 export function summarizeQuality(
   issues: QualityIssue[],
-  coverage: DisclosureCoverageRecord[],
   lastRunId?: string,
   lastCheckedAt?: string,
 ): QualityCheckSummary {
-  const unresolved = issues.filter((issue) => activeStatuses.has(issue.status));
+  const current = issues.filter(isCurrentQualityIssue);
+  const unresolved = current.filter(isOpenQualityIssue);
   return {
-    applicableRequirementCount: coverage.length,
-    uncoveredCount: coverage.filter((item) => item.status === "未覆盖").length,
-    partialCoverageCount: coverage.filter((item) => item.status === "部分覆盖").length,
-    pendingVerificationCount: coverage.filter((item) => item.status === "待核验").length,
-    verifiedCoverageCount: coverage.filter((item) => item.status === "已核验覆盖").length,
+    ...emptyQualitySummary(),
     blockerCount: unresolved.filter((issue) => issue.severity === "阻断").length,
     highCount: unresolved.filter((issue) => issue.severity === "高").length,
     noticeCount: unresolved.filter((issue) => issue.severity === "提示").length,
     unresolvedCount: unresolved.length,
-    resolvedCount: issues.filter((issue) => issue.status === "已复检解决").length,
-    pendingRecheckCount: issues.filter((issue) => issue.status === "待复检").length,
-    acceptedExceptionCount: issues.filter((issue) => issue.status === "已接受例外").length,
+    resolvedCount: current.filter((issue) => issue.status === "已复检解决").length,
+    pendingRecheckCount: current.filter((issue) => issue.status === "待复检").length,
+    acceptedExceptionCount: current.filter((issue) => issue.status === "已接受例外").length,
     lastRunId,
     lastCheckedAt,
   };

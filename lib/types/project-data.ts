@@ -78,7 +78,7 @@ export interface TopicRemovalSnapshot {
   topic: EsgTopic;
   assessment: MaterialityAssessment;
   lastSavedConfirmation?: { topic: EsgTopic; assessment: MaterialityAssessment };
-  requirements: Pick<ProjectDisclosureRequirement, "id" | "topic" | "applicability" | "userConfirmed" | "reviewStatus" | "mappedSection">[];
+  requirements?: Pick<ProjectDisclosureRequirement, "id" | "topic" | "applicability" | "userConfirmed" | "reviewStatus" | "mappedSection">[];
   sectionIds: string[];
 }
 

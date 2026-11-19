@@ -89,7 +89,7 @@ function AiSession({ request, provider, onAccept, onClose }: AiDialogProps) {
 
         <div className="overflow-y-auto p-5 sm:p-6">
           <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs leading-5 text-violet-800"><Sparkles className="mt-0.5 size-4 shrink-0" /><p>{provider.mode === "mock" ? "本轮使用固定规则与 Mock 响应演示流程，未接入真实 AI。" : "当前建议由已配置的 AI 服务生成。"}建议不会自动写入正文，请对照来源核验数值、统计口径与时间范围后接受。</p></div>
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-[#63766b]"><span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#176b52]" />Writing Policy：{request.policy.tone}</span><span>已确认事实 {confirmedCount} 条</span><span>关联披露要求 {request.requirementIds.length} 项</span></div>
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-[#63766b]"><span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-[#176b52]" />Writing Policy：{request.policy.tone}</span><span>已确认事实 {confirmedCount} 条</span></div>
           <div className="grid gap-4 md:grid-cols-2">
             <section className="overflow-hidden rounded-xl border border-[#dfe7e2] bg-white">
               <div className="flex items-center justify-between border-b border-[#e9eeeb] bg-[#f7f9f8] px-4 py-3"><h3 className="text-xs font-semibold text-[#58695e]">原文</h3><span className="text-[10px] text-[#8a978f]">{request.selectedText ? "选中范围" : "保留原文"}</span></div>

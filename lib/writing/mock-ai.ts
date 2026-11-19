@@ -40,7 +40,7 @@ export const mockAiProvider: AiTaskProvider = {
     switch (request.operation) {
       case 'draft':
         usedFacts = facts;
-        suggestion = `${request.chapter.title}\n\n${evidence || '【待补充】本章节尚无可用于正文的已确认事实，请先核对资料包与原始来源。'}\n\n【待确认】请逐项复核本章对应披露要求、统计范围及指标口径。`;
+        suggestion = `${request.chapter.title}\n\n${evidence || '【待补充】本章节尚无可用于正文的已确认事实，请先核对资料包与原始来源。'}\n\n【待确认】请复核本章的统计范围及指标口径。`;
         break;
       case 'rewrite':
         suggestion = clean === source ? `就本节披露事项，${source || '【待补充选中文本】'}` : clean;

@@ -1,0 +1,77 @@
+{
+  "issues": [
+    {
+      "issueId": "legacy-disclosure-test-issue",
+      "stableKey": "DISC-001:legacy-test-requirement",
+      "projectId": "legacy-disclosure-fixture",
+      "checkRunId": "legacy-disclosure-test-run",
+      "ruleId": "DISC-001",
+      "ruleVersion": "1.0.0",
+      "category": "disclosure",
+      "severity": "阻断",
+      "title": "旧版条款阻断（验收样本）",
+      "description": "旧版披露矩阵质量记录的模拟存档",
+      "sourceStep": 3,
+      "locations": [{ "sourceStep": 3, "requirementId": "req-gri-302-1", "label": "302-1" }],
+      "requirementIds": ["req-gri-302-1"],
+      "factIds": [],
+      "chartIds": [],
+      "sourceReferences": [],
+      "evidence": [],
+      "suggestedAction": "返回旧版披露矩阵",
+      "findingMethod": "规则检查",
+      "status": "待处理",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "inputFingerprint": "legacy-disclosure-test-issue-input"
+    }
+  ],
+  "runs": [
+    {
+      "runId": "legacy-disclosure-test-run",
+      "projectId": "legacy-disclosure-fixture",
+      "startedAt": "2026-01-01T00:00:00.000Z",
+      "completedAt": "2026-01-01T00:00:00.000Z",
+      "scope": "full",
+      "inputProjectRevision": 1,
+      "inputFingerprint": "quality-input-v1-fixture",
+      "ruleSetFingerprint": "quality-rules-v1-fixture",
+      "ruleVersions": { "DISC-001": "1.0.0" },
+      "issueIds": ["legacy-disclosure-test-issue"],
+      "status": "已完成"
+    }
+  ],
+  "actions": [
+    {
+      "actionId": "legacy-disclosure-test-action",
+      "issueId": "legacy-disclosure-test-issue",
+      "action": "返回修改",
+      "note": "旧版处理记录验收样本",
+      "actor": "验收样本",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "method": "人工"
+    }
+  ],
+  "coverage": [
+    {
+      "requirementId": "req-gri-403",
+      "requirementRevision": 1,
+      "requirementFingerprint": "legacy-disclosure-test-coverage-input",
+      "status": "已核验覆盖",
+      "reason": "旧版历史标签验收样本",
+      "chapterIds": ["section-5"],
+      "blockIds": [],
+      "assessedAt": "2026-01-01T00:00:00.000Z",
+      "method": "规则检查"
+    }
+  ],
+  "fullCheck": {
+    "runId": "legacy-disclosure-test-run",
+    "inputProjectRevision": 1,
+    "savedProjectRevision": 2,
+    "inputFingerprint": "quality-input-v1-fixture",
+    "ruleSetFingerprint": "quality-rules-v1-fixture",
+    "completedAt": "2026-01-01T00:00:00.000Z",
+    "valid": true
+  }
+}

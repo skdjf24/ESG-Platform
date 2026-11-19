@@ -12,12 +12,6 @@ const changed = (left: object, right: object, ignored: string[] = []) => JSON.st
 const nowIso = () => new Date().toISOString();
 const makeId = () => `impact-${globalThis.crypto.randomUUID()}`;
 const escapeText = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const normalizeFramework = (value: string) => value.toLowerCase().replace(/standards?|esg|s1\/s2|6\.0|[\s·_-]|指引|准则|标准/g, "");
-const frameworkMatches = (projectFramework: string, requirementFramework: string) => {
-  const left = normalizeFramework(projectFramework);
-  const right = normalizeFramework(requirementFramework);
-  return Boolean(left && right && (left.includes(right) || right.includes(left)));
-};
 
 export function composeWritingDocument(project: ReportProjectData): WritingDocument {
   return {
@@ -61,32 +55,6 @@ function createImpact(
   };
 }
 
-function markRequirementMappings(project: ReportProjectData, requirementIds: string[]): ReportProjectData {
-  const ids = new Set(requirementIds);
-  if (!ids.size) return project;
-  return {
-    ...project,
-    writing: {
-      ...project.writing,
-      chapters: project.writing.chapters.map((chapter) => {
-        let affected = false;
-        const blocks = chapter.blocks.map((block) => {
-          if (!block.mappings.some((mapping) => ids.has(mapping.requirementId))) return block;
-          affected = true;
-          return {
-            ...block,
-            reviewStatus: "待复核" as const,
-            pendingKind: block.pendingKind ?? "待确认" as const,
-            resolved: false,
-            mappings: block.mappings.map((mapping) => ids.has(mapping.requirementId) ? { ...mapping, coverage: "待核验" as const } : mapping),
-          };
-        });
-        return affected ? { ...chapter, blocks, status: "待完善" as const, reviewStatus: "待复核" as const } : chapter;
-      }),
-    },
-  };
-}
-
 function markChartsForContextReview(project: ReportProjectData, message: string): ReportProjectData {
   if (!project.presentation.charts.length) return project;
   return {
@@ -105,14 +73,13 @@ function markChartsForContextReview(project: ReportProjectData, message: string)
   };
 }
 
-function createChapterHeading(sectionId: string, title: string, requirementIds: string[]): ContentBlock {
+function createChapterHeading(sectionId: string, title: string): ContentBlock {
   const block = createBlock(sectionId, "heading");
   return {
     ...block,
     id: `${sectionId}-heading`,
     title,
     html: `<h2>${escapeText(title)}</h2>`,
-    mappings: requirementIds.map((requirementId) => ({ requirementId, coverage: "待核验" as const })),
   };
 }
 
@@ -139,32 +106,17 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
       next = markChartsForContextReview(next, reason);
       impacts.push(createImpact(1, "presentation", next.projectId, reason, chartIds, [6, 7, 8]));
     }
-    const removedFrameworks = previous.report.frameworks.filter((framework) => !next.report.frameworks.includes(framework));
-    const removedTopics = previous.topics.filter((topic) => !next.topics.some((item) => item.id === topic.id));
-    const affectedRequirements = next.disclosureRequirements.filter((requirement) => removedFrameworks.some((framework) => frameworkMatches(framework, requirement.framework)) || removedTopics.some((topic) => topic.name === requirement.topic));
-    if (affectedRequirements.length) {
-      const ids = affectedRequirements.map((item) => item.id);
-      next.disclosureRequirements = next.disclosureRequirements.map((item) => ids.includes(item.id) ? {
-        ...item,
-        // Keep a legacy CASS decision in the project record for audit; its
-        // pending review status prevents it from counting as a current decision.
-        userConfirmed: item.framework === "CASS-ESG" ? item.userConfirmed : false,
-        reviewStatus: "待复核",
-      } : item);
-      next = markRequirementMappings(next, ids);
-      impacts.push(createImpact(1, removedTopics.length ? "topic" : "framework", removedTopics[0]?.id ?? removedFrameworks[0], "企业画像中的框架或议题已调整，相关披露要求、正文映射、报告版面、质量结论及定稿状态需要复核。", ids, [2, 3, 5, 6, 7, 8]));
-    }
+
   }
 
   if (sourceStep === 2) {
     if (removeTopicId !== undefined) {
       const removal = describeTopicRemoval(next, removeTopicId, previous);
       if (!removal) throw new Error("议题已不在当前项目中，请刷新后重试。");
-      const { topic, requirements, sections, assessmentNeedsReview, lastSavedConfirmation } = removal;
+      const { topic, sections, assessmentNeedsReview, lastSavedConfirmation } = removal;
       const assessment = next.materiality;
-      const requirementIds = new Set(requirements.map((item) => item.id));
       const sectionIds = new Set(sections.map((item) => item.id));
-      const hasDownstreamLinks = requirementIds.size + sectionIds.size > 0;
+      const hasDownstreamLinks = sectionIds.size > 0;
 
       next.topics = next.topics.filter((item) => item.id !== topic.id);
       next.materiality = {
@@ -172,24 +124,20 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         includedTopicIds: assessment.includedTopicIds.filter((id) => id !== topic.id),
         ...(assessmentNeedsReview ? { confirmed: false, confirmedAt: undefined, reviewStatus: "待复核" as const } : {}),
       };
-      next.disclosureRequirements = next.disclosureRequirements.map((item) => requirementIds.has(item.id) ? {
-        ...item, originalTopic: item.originalTopic ?? item.topic, topic: "", userConfirmed: false, reviewStatus: "待复核",
-      } : item);
       next.reportSections = next.reportSections.map((item) => sectionIds.has(item.id) ? {
         ...item,
         topics: item.topics.filter((name) => name !== topic.name),
         topicReviewStatus: "待复核",
         revision: item.revision + 1,
       } : item);
-      next = markRequirementMappings(next, [...requirementIds]);
       next.writing.chapters = next.writing.chapters.map((chapter) => sectionIds.has(chapter.id) ? {
         ...chapter, status: "待完善", reviewStatus: "待复核",
       } : chapter);
 
       const targetSteps: ProjectStep[] = hasDownstreamLinks ? [3, 5, 7, 8] : [7, 8];
       const impact = createImpact(2, "topic", topic.id,
-        `已从当前项目移除议题“${topic.name}”。${hasDownstreamLinks ? "相关披露与大纲关联已解除，原条款、章节与正文保留，等待复核。" : "原评分及确认信息保留在评估记录。"}`,
-        [...requirementIds, ...sectionIds], targetSteps);
+        `已从当前项目移除议题“${topic.name}”。${hasDownstreamLinks ? "已解除相关大纲关联。请复核章节议题与资料引用。" : "原评分及确认信息保留在评估记录。"}`,
+        [...sectionIds], targetSteps);
       impacts.push({
         ...impact,
         status: assessmentNeedsReview || previous.quality.runs.length || previous.quality.fullCheck ? "待复核" : "已知悉",
@@ -197,7 +145,6 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
           topic,
           assessment,
           lastSavedConfirmation,
-          requirements: requirements.map(({ id, topic, applicability, userConfirmed, reviewStatus, mappedSection }) => ({ id, topic, applicability, userConfirmed, reviewStatus, mappedSection })),
           sectionIds: [...sectionIds],
         },
       });
@@ -216,37 +163,26 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
     const methodChanged = previous.materiality.method !== next.materiality.method;
     const affectedTopicIds = unique([...topicIds, ...changedScoresOrTopics, ...(methodChanged ? next.materiality.includedTopicIds : [])]);
     const topicNames = unique([...previous.topics, ...next.topics].filter((topic) => affectedTopicIds.includes(topic.id)).map((topic) => topic.name));
-    const requirementIds = next.disclosureRequirements.filter((item) => topicNames.includes(item.topic)).map((item) => item.id);
     if (affectedTopicIds.length) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
-      next.disclosureRequirements = next.disclosureRequirements.map((item) => requirementIds.includes(item.id) ? { ...item, userConfirmed: false, reviewStatus: "待复核" } : item);
-      next = markRequirementMappings(next, requirementIds);
-      impacts.push(createImpact(2, "topic", affectedTopicIds[0], "实质性议题范围、评分或评估方式已变化，关联披露要求与正文覆盖保留并待复核；质量结论及定稿状态需要复检。", requirementIds, [3, 5, 6, 7, 8]));
+      const affectedSections = next.reportSections.filter((section) => section.sourceState !== "upstream-removed" && section.topics.some((name) => topicNames.includes(name)));
+      const affectedSectionIds = new Set(affectedSections.map((section) => section.id));
+      next.reportSections = next.reportSections.map((section) => affectedSectionIds.has(section.id) && section.topicReviewStatus !== "待复核" ? {
+        ...section, topicReviewStatus: "待复核", revision: section.revision + 1,
+      } : section);
+      impacts.push(createImpact(2, "topic", affectedTopicIds[0], affectedSectionIds.size
+        ? "重要性评估已更新，请复核相关报告章节的议题关联。"
+        : "重要性评估已更新，历史检查记录保留。", [...affectedSectionIds], affectedSectionIds.size ? [3, 7, 8] : [7, 8]));
     } else if (changed(previous.materiality, next.materiality, ["revision", "confirmedAt"])) {
       next.materiality.revision = Math.max(previous.materiality.revision + 1, next.materiality.revision);
     }
   }
 
-  const changedRequirementIds: string[] = [];
-  next.disclosureRequirements = next.disclosureRequirements.map((requirement) => {
-    const before = previous.disclosureRequirements.find((item) => item.id === requirement.id);
-    if (!before) return { ...requirement, revision: Math.max(1, requirement.revision) };
-    if (!changed(before, requirement, ["revision"])) return { ...requirement, revision: before.revision };
-    changedRequirementIds.push(requirement.id);
-    return {
-      ...requirement,
-      revision: Math.max(before.revision + 1, requirement.revision),
-      reviewStatus: requirement.userConfirmed ? requirement.reviewStatus : "待复核",
-    };
-  });
-  if (sourceStep === 3 && changedRequirementIds.length) {
-    next = markRequirementMappings(next, changedRequirementIds);
-    impacts.push(createImpact(3, "requirement", changedRequirementIds[0], "披露要求的适用性或章节映射已更新，已有正文映射保留并标记为待核验，质量结论及定稿状态需复检。", changedRequirementIds, [5, 6, 7, 8]));
-  }
-
   if (sourceStep === 3) {
     const sectionIds = unique([...previous.reportSections.map((item) => item.id), ...next.reportSections.map((item) => item.id)]);
-    const activeSectionIds = new Set(next.reportSections.map((item) => item.id));
+    const activeSections = next.reportSections.filter((item) => item.sourceState !== "upstream-removed");
+    const activeSectionIds = new Set(activeSections.map((item) => item.id));
+    const sectionRenames = new Map<string, string>();
     for (const id of sectionIds) {
       const before = previous.reportSections.find((item) => item.id === id);
       const current = next.reportSections.find((item) => item.id === id);
@@ -255,33 +191,47 @@ export function synchronizeProjectData(previous: ReportProjectData, candidate: R
         impacts.push(createImpact(3, "section", id, `目录章节“${before.title}”已从 Step 3 移除；Step 5 正文、历史版本及 Step 6 版面仍保留，等待人工处理、质量复检和定稿复核。`, [id], [5, 6, 7, 8]));
         continue;
       }
-      if (!current) continue;
+      if (!current || !activeSectionIds.has(id)) continue;
+      if (!before || before.order !== current.order || before.title !== current.title) {
+        current.order = current.order.trim();
+        current.title = current.title.trim();
+        if (!current.order || !current.title) throw new Error("请填写章节编号和章节名称。");
+        if (activeSections.some((item) => item.id !== id && (item.order.trim() === current.order || item.title.trim() === current.title))) {
+          throw new Error("章节编号或名称已存在。");
+        }
+      }
       const existing = next.writing.chapters.find((chapter) => chapter.id === id);
       const sectionChanged = Boolean(before && changed(before, current, ["revision", "sourceState", "state", "requirementCount", "topicReviewStatus"]));
       if (before && (sectionChanged || before.topicReviewStatus !== current.topicReviewStatus)) current.revision = Math.max(before.revision + 1, current.revision);
       if (existing) {
-        next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? {
-          ...chapter,
-          title: current.title,
-          order: current.order,
-          sourceState: "active",
-          ...(sectionChanged ? { status: "待完善" as const, reviewStatus: "待复核" as const } : {}),
-        } : chapter);
+        if (sectionChanged || !before || existing.sourceState === "upstream-removed") {
+          next.writing.chapters = next.writing.chapters.map((chapter) => chapter.id === id ? {
+            ...chapter,
+            title: before?.title === current.title ? chapter.title : current.title,
+            order: before?.order === current.order ? chapter.order : current.order,
+            sourceState: "active",
+            ...(sectionChanged ? { status: "待完善" as const, reviewStatus: "待复核" as const } : {}),
+          } : chapter);
+        }
       } else {
-        const mappedIds = next.disclosureRequirements.filter((item) => item.mappedSection === `${current.order} ${current.title}`).map((item) => item.id);
         next.writing.chapters.push({
           id, title: current.title, order: current.order, status: "未开始", reviewStatus: "未审校", revision: 1,
-          sourceState: "active", blocks: [createChapterHeading(id, current.title, mappedIds)],
+          sourceState: "active", blocks: [createChapterHeading(id, current.title)],
         });
       }
       if (before && sectionChanged) {
-        const oldMapping = `${before.order} ${before.title}`;
-        const newMapping = `${current.order} ${current.title}`;
-        next.disclosureRequirements = next.disclosureRequirements.map((item) => item.mappedSection === oldMapping ? { ...item, mappedSection: newMapping, revision: item.revision + 1, reviewStatus: "待复核", userConfirmed: false } : item);
-        impacts.push(createImpact(3, "section", id, `报告目录已更新为“${newMapping}”；Step 5–6 已同步章节信息并保留全部正文块，Step 7–8 需复检。`, [id], [5, 6, 7, 8]));
+        const previousLabel = `${before.order} ${before.title}`;
+        const nextLabel = `${current.order} ${current.title}`;
+        if (previousLabel !== nextLabel) sectionRenames.set(previousLabel, nextLabel);
+        impacts.push(createImpact(3, "section", id, `报告目录已更新为“${nextLabel}”，资料清单与正文目录已同步。`, [id], [4, 5, 6, 7, 8]));
       }
     }
-    next.writing.chapters = next.writing.chapters.map((chapter) => activeSectionIds.has(chapter.id) ? { ...chapter, sourceState: "active" } : chapter);
+    next.dataRequirements = next.dataRequirements.map((item) => {
+      const section = sectionRenames.get(item.section);
+      return section && previous.dataRequirements.some((before) => before.id === item.id && before.section === item.section)
+        ? { ...item, section } : item;
+    });
+    next.reportSections.sort((left, right) => left.order.localeCompare(right.order, "zh-CN", { numeric: true }));
   }
 
   next.dataRequirements = next.dataRequirements.map((requirement) => {

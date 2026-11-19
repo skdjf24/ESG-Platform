@@ -1,4 +1,5 @@
 import { qualityRuleDefinitions } from "@/lib/quality/rules";
+import { isOpenQualityIssue } from "@/lib/quality/state";
 import type { ReportProjectData } from "@/lib/types/project-data";
 import type { FinalizationReadiness, Step8QualityGate } from "@/lib/types/quality";
 
@@ -21,21 +22,25 @@ function hash(value: string) {
 
 /** Fingerprint only the report inputs consumed by deterministic quality rules. */
 export function qualityInputFingerprint(project: ReportProjectData) {
-  const report = { ...project.report };
-  delete (report as Partial<typeof report>).updatedAt;
+  const { updatedAt: _updatedAt, frameworks: _frameworks, ...report } = project.report;
+  void _updatedAt; void _frameworks;
   const snapshot = {
     enterprise: project.enterprise,
     report,
     boundary: project.boundary,
     topics: project.topics,
     materiality: project.materiality,
-    disclosureRequirements: project.disclosureRequirements,
-    reportSections: project.reportSections,
+    reportSections: project.reportSections.map(({ requirementCount: _historicalCount, ...section }) => { void _historicalCount; return section; }),
     dataRequirements: project.dataRequirements,
     sources: project.sources,
     facts: project.facts,
     resources: project.resources,
-    writing: { chapters: project.writing.chapters, policy: project.writing.policy },
+    writing: {
+      chapters: project.writing.chapters.map((chapter) => ({
+        ...chapter, blocks: chapter.blocks.map(({ mappings: _historicalMappings, ...block }) => { void _historicalMappings; return block; }),
+      })),
+      policy: project.writing.policy,
+    },
     presentation: {
       themeId: project.presentation.themeId,
       layout: project.presentation.layout,
@@ -43,7 +48,7 @@ export function qualityInputFingerprint(project: ReportProjectData) {
       charts: project.presentation.charts,
     },
   };
-  return `quality-input-v1-${hash(JSON.stringify(canonicalize(snapshot)))}`;
+  return `quality-input-v2-${hash(JSON.stringify(canonicalize(snapshot)))}`;
 }
 
 export function qualityRuleSetFingerprint() {
@@ -66,7 +71,7 @@ export function getStep8QualityGate(project: ReportProjectData): Step8QualityGat
   const fullRun = fullCheck ? project.quality.runs.find((run) => run.runId === fullCheck.runId) : undefined;
   if (fullCheck && (!fullRun || fullRun.scope !== "full" || fullRun.status !== "已完成")) reasons.push("全面检查运行记录不存在或未成功完成。");
   const validFullCheck = reasons.length === 0;
-  const active = project.quality.issues.filter((issue) => ["待处理", "处理中", "待复检"].includes(issue.status));
+  const active = project.quality.issues.filter(isOpenQualityIssue);
   const blockers = active.filter((issue) => issue.severity === "阻断");
   let readiness: FinalizationReadiness;
   if (!fullCheck) readiness = "未检查";

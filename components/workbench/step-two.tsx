@@ -81,10 +81,7 @@ export function StepTwo() {
   const canConfirm = assessedTopics.length > 0 && scoredTopics.length === assessedTopics.length;
 
   function toggleTopic(id: string) {
-    const topic = topics.find((item) => item.id === id);
     const removing = includedIds.has(id);
-    const affected = topic ? project.disclosureRequirements.filter((item) => item.topic === topic.name).length : 0;
-    if (removing && affected && !window.confirm(`调整“${topic?.name}”将使 ${affected} 项披露要求进入待复核状态，已有正文不会被删除。是否继续？`)) return;
     editProject((current) => ({
       ...current,
       materiality: {
@@ -133,11 +130,8 @@ export function StepTwo() {
       return {
         ...current,
         topics: nextTopics,
-        disclosureRequirements: renameLinks
-          ? current.disclosureRequirements.map((item) => item.topic === existing.name ? { ...item, topic: name, userConfirmed: false, reviewStatus: "待复核" as const } : item)
-          : current.disclosureRequirements,
         reportSections: renameLinks ? current.reportSections.map((item) => item.topics.includes(existing.name) ? {
-          ...item, topics: item.topics.map((topic) => topic === existing.name ? name : topic), revision: item.revision + 1,
+          ...item, topics: item.topics.map((topic) => topic === existing.name ? name : topic), topicReviewStatus: "待复核" as const, revision: item.revision + 1,
         } : item) : current.reportSections,
         materiality: {
           ...current.materiality,
@@ -395,7 +389,7 @@ export function StepTwo() {
           </div>
         </SectionCard>
 
-        <SectionCard title="结果确认" description="确认后将作为披露框架与报告大纲的输入" action={needsReview ? <StatusBadge tone="amber">待复核</StatusBadge> : undefined}>
+        <SectionCard title="结果确认" description="确认后的评估结果供报告大纲编制参考" action={needsReview ? <StatusBadge tone="amber">待复核</StatusBadge> : undefined}>
           <div className="flex items-end justify-between rounded-xl bg-[#f2f7f4] p-4">
             <div><div className="text-[10px] text-[#728078]">重点议题</div><div className="mt-1 text-2xl font-semibold text-[#173e30]">{priorityTopics.length}<span className="ml-1 text-[10px] font-medium text-[#7b8b83]">项</span></div></div>
             <BarChart3 className="size-8 text-[#70a38e]" />
@@ -496,8 +490,8 @@ function TopicRemovalDialog({ removal, saving, error, onCancel, onConfirm }: {
           <li>此议题将从当前项目的议题池移除，其他项目和公共模板保留。</li>
           {removal.included ? <li>此议题将退出本次评估，同步更新评分表、矩阵和重点议题排序。</li> : <li>此议题当前未纳入本次评估。</li>}
           {removal.assessmentNeedsReview ? <li>受影响的评估结果将标为待复核，原评分与确认信息保留在评估记录中。</li> : null}
-          {removal.requirements.length > 0 || removal.sections.length > 0 ? <li>将解除 {removal.requirements.length} 项披露条款和 {removal.sections.length} 个大纲章节的此议题关联，并标为待复核。</li> : null}
-          <li>已有披露条款、报告正文、资料和事实均会保留。</li>
+          {removal.sections.length > 0 ? <li>将解除 {removal.sections.length} 个大纲章节的此议题关联，并标为待复核。</li> : null}
+          <li>已有报告正文、资料和事实均会保留。</li>
         </ul>
         {error ? <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
@@ -518,7 +512,7 @@ function TopicRemovalHistory() {
       <ul className="space-y-3">
         {removals.map((impact) => {
           if (!impact.topicRemoval) return null;
-          const { topic, assessment, lastSavedConfirmation, requirements, sectionIds } = impact.topicRemoval;
+          const { topic, assessment, lastSavedConfirmation, sectionIds } = impact.topicRemoval;
           const wasIncluded = assessment.includedTopicIds.includes(topic.id);
           return (
             <li key={impact.id} className="rounded-lg border border-[#e5e9e7] px-3 py-2 text-xs leading-6 text-[#536159]">
@@ -526,7 +520,7 @@ function TopicRemovalHistory() {
               <div>{topic.category} · {assessment.method} · {wasIncluded ? "已纳入评估" : "未纳入评估"}{wasIncluded && assessment.confirmed ? " · 原评估已确认" : ""}</div>
               <div>财务重要性 {topic.financialScore || "未评分"} · 影响重要性 {topic.impactScore || "未评分"}</div>
               {lastSavedConfirmation ? <div>原已保存确认的评分：财务 {lastSavedConfirmation.topic.financialScore} · 影响 {lastSavedConfirmation.topic.impactScore}</div> : null}
-              <div>解除 {requirements.length} 项披露条款、{sectionIds.length} 个大纲章节的关联</div>
+              <div>解除 {sectionIds.length} 个大纲章节的关联</div>
             </li>
           );
         })}

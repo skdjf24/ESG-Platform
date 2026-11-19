@@ -17,7 +17,7 @@ import {
   FileSearch,
   LoaderCircle,
 } from "lucide-react";
-import { bseDisclosureRequirements, frameworks } from "@/lib/data/mock-data";
+import { frameworks } from "@/lib/data/mock-data";
 import type { ListingStatus, UploadedSource } from "@/lib/types/esg";
 import { projectFileRepository } from "@/lib/project/repository";
 import { useProjectData } from "@/components/project/project-data-provider";
@@ -45,19 +45,9 @@ export function StepOne() {
   const toggleFramework = (framework: string) => {
     editProject((current) => {
       const selected = current.report.frameworks.includes(framework);
-      const existingRequirementIds = new Set(current.disclosureRequirements.map((item) => item.id));
-      const topicNames = new Set(current.topics.map((topic) => topic.name));
       return {
         ...current,
         report: { ...current.report, frameworks: selected ? current.report.frameworks.filter((item) => item !== framework) : [...current.report.frameworks, framework] },
-        disclosureRequirements: !selected && framework === "北交所指引"
-          ? [...current.disclosureRequirements, ...bseDisclosureRequirements.filter((item) => !existingRequirementIds.has(item.id)).map((item) => ({
-            ...item,
-            revision: 1,
-            reviewStatus: "待复核" as const,
-            ...(topicNames.has(item.topic) ? {} : { originalTopic: item.topic, topic: "" }),
-          }))]
-          : current.disclosureRequirements,
       };
     });
   }
@@ -208,7 +198,7 @@ export function StepOne() {
             </div>
           </SectionCard>
 
-          <SectionCard title="披露框架" description="可多选。后续披露要求仍需逐条确认适用性。" action={<StatusBadge tone="teal">已选择 {selectedFrameworkCount} 项</StatusBadge>}>
+          <SectionCard title="披露框架" description="可多选，作为本年度报告的编制参考。" action={<StatusBadge tone="teal">已选择 {selectedFrameworkCount} 项</StatusBadge>}>
             <div className="scrollbar-subtle overflow-x-auto">
               <div className="grid min-w-[540px] grid-cols-3 gap-2">
                 {frameworks.map((framework) => {
@@ -225,8 +215,8 @@ export function StepOne() {
             </div>
             {legacyFrameworks.length ? (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900" role="alert">
-                <p>旧项目保留了 {legacyFrameworks.join("、")}。该选项不会自动转换为北交所指引；请重新确认参考框架与相关披露要求。</p>
-                <button type="button" className="mt-2 font-semibold underline" onClick={() => editProject((current) => ({ ...current, report: { ...current.report, frameworks: current.report.frameworks.filter((item) => !item.startsWith("CASS-ESG")) } }))}>移除旧框架选项并标记相关要求待复核</button>
+                <p>旧项目保留了 {legacyFrameworks.join("、")}。请核对本年度使用的编制参考。</p>
+                <button type="button" className="mt-2 font-semibold underline" onClick={() => editProject((current) => ({ ...current, report: { ...current.report, frameworks: current.report.frameworks.filter((item) => !item.startsWith("CASS-ESG")) } }))}>移除旧框架选项</button>
               </div>
             ) : null}
           </SectionCard>

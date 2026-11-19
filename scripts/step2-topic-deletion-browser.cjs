@@ -169,8 +169,8 @@ async function main() {
 
     await openStep(page, sampleId, 2);
     const presetDialog = await askDelete(page, energy.name);
-    check(await presetDialog.getByText(/将解除 1 项披露条款和 2 个大纲章节/).isVisible()
-      && await presetDialog.getByText(/原评分与确认信息保留/).isVisible(), "PRESET-IMPACT", "确认框指明已评分议题的 1 项披露条款、2 个章节和评估复核范围");
+    check(await presetDialog.getByText(/将解除 2 个大纲章节/).isVisible()
+      && await presetDialog.getByText(/原评分与确认信息保留/).isVisible(), "PRESET-IMPACT", "确认框指明已评分议题的 2 个章节和评估复核范围");
     await page.screenshot({ path: path.join(outputDir, "confirm-preset.png") });
     await confirmDelete(page, presetDialog, energy.name);
     const removed = await readProject(page, sampleId);
@@ -190,8 +190,7 @@ async function main() {
     const history = section(page, "议题删除记录");
     check(await history.getByText(energy.name, { exact: true }).isVisible()
       && await history.getByText(/财务重要性 4.2 · 影响重要性 4.5/).isVisible()
-      && energyRecord?.topicRemoval.assessment.confirmedAt === beforePreset.materiality.confirmedAt
-      && energyRecord?.topicRemoval.requirements[0]?.userConfirmed === true, "HISTORY", "可查看删除前两项评分，保存旧评估确认时间和条款确认快照");
+      && energyRecord?.topicRemoval.assessment.confirmedAt === beforePreset.materiality.confirmedAt, "HISTORY", "可查看删除前两项评分，保存旧评估确认时间");
     check(removed.quality.fullCheck?.runId === beforePreset.quality.fullCheck.runId
       && removed.quality.fullCheck.valid === false && removed.quality.stale
       && isDeepStrictEqual(removed.finalization, beforePreset.finalization), "QUALITY-HISTORY", "Step 7 旧检查记录保留并失效，定稿历史数据保留");
@@ -202,11 +201,8 @@ async function main() {
       && otherBefore.topics.some(({ id }) => id === energy.id), "PROJECT-ISOLATION", "另一企业项目的完整存档与预设议题未受影响");
 
     await openStep(page, sampleId, 3);
-    const requirement = page.locator("#requirement-req-gri-302-1");
-    check(await requirement.getByLabel("302-1 关联议题", { exact: true }).inputValue() === ""
-      && await requirement.getByText(`原议题：${energy.name}`, { exact: true }).isVisible()
-      && await requirement.getByText("待复核", { exact: true }).isVisible()
-      && await requirement.getByLabel("302-1 对应章节", { exact: true }).inputValue() === "4.2 资源与能源管理", "STEP3-DISCLOSURE", "条款仍存在，原名称可查，当前议题关联解除、适用性待复核、章节映射保留");
+    check(!await page.getByText("披露要求矩阵", { exact: true }).count()
+      && isDeepStrictEqual(removed.disclosureRequirements, beforePreset.disclosureRequirements), "ARCHIVED-DISCLOSURE", "矩阵已移除，历史条款、适用性和原章节映射完整保留");
     await page.getByRole("button", { name: /报告目录/ }).click();
     const chapter = section(page, "章节编辑");
     await chapter.getByRole("button", { name: "编辑关联", exact: true }).click();
@@ -227,7 +223,7 @@ async function main() {
     const restoredEnergy = restored.topics.find(({ id }) => id === energy.id);
     check(await pool.getByRole("button", { name: `纳入${energy.name}`, exact: true }).isVisible()
       && restoredEnergy?.financialScore === 0 && restoredEnergy.impactScore === 0 && restoredEnergy.confirmed === false
-      && restored.disclosureRequirements.find(({ id }) => id === "req-gri-302-1").topic === ""
+      && !restored.reportSections.find(({ id }) => id === "section-4-2").topics.includes(energy.name)
       && restored.impacts.some(({ id }) => id === energyRecord.id), "RESTORE-PRESET", "可从原模板重新添加，刷新后仍在池内，旧评分、确认及关联须重新填写或建立");
 
     await page.getByRole("button", { name: "确认评估结果", exact: true }).click();
@@ -239,14 +235,9 @@ async function main() {
     await chapter.getByRole("checkbox", { name: /能源管理/ }).check();
     await chapter.getByRole("button", { name: "确认议题关联", exact: true }).click();
     await chapter.getByRole("button", { name: "确认议题关联", exact: true }).waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: /披露要求矩阵/ }).click();
-    await requirement.getByLabel("302-1 关联议题", { exact: true }).selectOption(energy.name);
-    await requirement.getByRole("button", { name: "人工确认", exact: true }).click();
-    const relinked = await saveDraft(page, sampleId);
-    check(relinked.disclosureRequirements.find(({ id }) => id === "req-gri-302-1").userConfirmed
-      && relinked.disclosureRequirements.find(({ id }) => id === "req-gri-302-1").topic === energy.name
-      && relinked.reportSections.find(({ id }) => id === "section-4-2").topics.includes(energy.name)
-      && !relinked.reportSections.find(({ id }) => id === "section-4-2").topicReviewStatus, "STEP3-MANUAL-RELINK", "允许显式重建并确认条款和章节议题关联");
+    const relinked = await readProject(page, sampleId);
+    check(relinked.reportSections.find(({ id }) => id === "section-4-2").topics.includes(energy.name)
+      && !relinked.reportSections.find(({ id }) => id === "section-4-2").topicReviewStatus, "STEP3-MANUAL-RELINK", "允许显式重建并确认章节议题关联");
 
     await openStep(page, otherId, 2);
     await page.setViewportSize({ width: 390, height: 844 });

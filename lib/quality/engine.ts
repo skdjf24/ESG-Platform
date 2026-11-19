@@ -1,4 +1,4 @@
-import { summarizeQuality } from "@/lib/quality/state";
+import { isCurrentQualityIssue, summarizeQuality } from "@/lib/quality/state";
 import { runQualityRules, type QualityCheckOptions } from "@/lib/quality/rules";
 import { getStep8QualityGate, qualityInputFingerprint, qualityRuleSetFingerprint } from "@/lib/quality/validity";
 import type { ReportProjectData } from "@/lib/types/project-data";
@@ -15,7 +15,7 @@ function issueId(stableKey: string) {
   return `quality-${(result >>> 0).toString(36)}`;
 }
 
-function existingInScope(issue: QualityIssue, project: ReportProjectData, options: QualityCheckOptions) {
+function existingInScope(issue: QualityIssue, options: QualityCheckOptions) {
   if (options.scope === "full") return true;
   if (options.scope === "chapter") return issue.chapterId === options.chapterId
     || issue.locations.some((location) => location.chapterId === options.chapterId);
@@ -79,7 +79,7 @@ export function executeQualityCheck(
 
   for (const previous of project.quality.issues) {
     if (detectedKeys.has(previous.stableKey)) continue;
-    if (!existingInScope(previous, project, options)) {
+    if (!isCurrentQualityIssue(previous) || !existingInScope(previous, options)) {
       issues.push(previous);
       continue;
     }
@@ -128,14 +128,12 @@ export function executeQualityCheck(
     issueIds: result.findings.map((finding) => previousByKey.get(finding.stableKey)?.issueId ?? issueId(finding.stableKey)),
     status: "已完成",
   };
-  const coverage = result.coverage;
-  const summary = summarizeQuality(issues, coverage, runId, now);
+  const summary = summarizeQuality(issues, runId, now);
   const nextQuality = {
     ...project.quality,
     issues: issues.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     runs: [...project.quality.runs, run],
     actions: [...project.quality.actions, ...actions],
-    coverage,
     summary,
     checkedProjectRevision: scope === "full" ? project.revision + 1 : project.quality.checkedProjectRevision,
     fullCheck: scope === "full" ? {
@@ -168,7 +166,7 @@ export function updateQualityIssue(
 ): ReportProjectData {
   const now = new Date().toISOString();
   const target = project.quality.issues.find((issue) => issue.issueId === issueIdValue);
-  if (!target) return project;
+  if (!target || !isCurrentQualityIssue(target)) return project;
   if (status === "已接受例外" && target.severity === "阻断") return project;
   const issues = project.quality.issues.map((issue) => issue.issueId === issueIdValue ? {
     ...issue,
@@ -187,7 +185,7 @@ export function updateQualityIssue(
     createdAt: now,
     method,
   };
-  const summary = summarizeQuality(issues, project.quality.coverage, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt);
+  const summary = summarizeQuality(issues, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt);
   const nextProject: ReportProjectData = {
     ...project,
     quality: {
@@ -210,10 +208,11 @@ export function markQualityChecksStale(
 ): ReportProjectData {
   if (!project.quality.runs.length && !project.quality.fullCheck) return project;
   const now = new Date().toISOString();
-  const directlyAffected = project.quality.issues.filter((issue) => issueMatchesEntities(issue, affectedEntityIds));
+  const currentIssues = project.quality.issues.filter(isCurrentQualityIssue);
+  const directlyAffected = currentIssues.filter((issue) => issueMatchesEntities(issue, affectedEntityIds));
   // Project-level inputs (for example the enterprise name) may not have a direct
   // entity ID on an issue, but still affect terminology and formal report output.
-  const affectedIssues = directlyAffected.length || !affectedEntityIds.length ? directlyAffected : project.quality.issues;
+  const affectedIssues = directlyAffected.length || !affectedEntityIds.length ? directlyAffected : currentIssues;
   const affectedIssueIds = new Set(affectedIssues.map((issue) => issue.issueId));
   const invalidationActions: QualityActionRecord[] = affectedIssues
     .filter((issue) => issue.status === "已接受例外")
@@ -257,7 +256,7 @@ export function markQualityChecksStale(
       invalidations: [...project.quality.invalidations, invalidation],
       actions: [...project.quality.actions, ...invalidationActions],
       stale: true,
-      summary: summarizeQuality(issues, project.quality.coverage, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt),
+      summary: summarizeQuality(issues, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt),
     },
   };
   nextProject.quality.readiness = getStep8QualityGate(nextProject).readiness;
