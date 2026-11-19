@@ -1,7 +1,6 @@
 import { createReportPages } from "@/lib/presentation/pages";
 import type { ReportProjectData } from "@/lib/types/project-data";
 import type {
-  DisclosureCoverageRecord,
   QualityCategory,
   QualityCheckScope,
   QualityEvidence,
@@ -12,6 +11,7 @@ import type {
 } from "@/lib/types/quality";
 import type { ContentBlock, WritingChapter } from "@/lib/types/writing";
 import { plainText } from "@/lib/writing/document";
+import { isCurrentQualityIssue } from "@/lib/quality/state";
 
 export interface QualityCheckOptions {
   scope: QualityCheckScope;
@@ -24,14 +24,10 @@ type Finding = Omit<QualityIssue, "issueId" | "projectId" | "checkRunId" | "crea
 
 export interface QualityRuleResult {
   findings: Finding[];
-  coverage: DisclosureCoverageRecord[];
   rules: QualityRuleDefinition[];
 }
 
 const definitions: QualityRuleDefinition[] = [
-  { ruleId: "DISC-001", ruleVersion: "1.0.0", category: "disclosure", defaultSeverity: "阻断", description: "适用披露要求必须关联章节和有效正文。", inputDependencies: ["disclosureRequirements", "writing.chapters.blocks.mappings"] },
-  { ruleId: "DISC-002", ruleVersion: "1.0.0", category: "disclosure", defaultSeverity: "高", description: "标题映射不能直接视为充分披露。", inputDependencies: ["writing.chapters.blocks"] },
-  { ruleId: "DISC-003", ruleVersion: "1.0.0", category: "disclosure", defaultSeverity: "高", description: "披露映射、适用性和标准修订状态必须有效。", inputDependencies: ["disclosureRequirements", "writing.chapters.blocks.mappings"] },
   { ruleId: "SRC-001", ruleVersion: "1.0.0", category: "source", defaultSeverity: "高", description: "事实引用必须存在、已确认且修订一致。", inputDependencies: ["facts", "writing.chapters.blocks.citations"] },
   { ruleId: "SRC-002", ruleVersion: "1.0.0", category: "source", defaultSeverity: "高", description: "事实和正文引用必须保留可定位原始来源。", inputDependencies: ["facts.sourceReferences", "writing.chapters.blocks.sourceReferences"] },
   { ruleId: "SRC-003", ruleVersion: "1.0.0", category: "source", defaultSeverity: "提示", description: "未建立结构化事实引用的数值陈述需要人工核验。", inputDependencies: ["writing.chapters.blocks"] },
@@ -40,7 +36,7 @@ const definitions: QualityRuleDefinition[] = [
   { ruleId: "DATA-003", ruleVersion: "1.0.0", category: "data", defaultSeverity: "高", description: "图表必须使用已确认的当前指标快照。", inputDependencies: ["presentation.charts", "presentation.observations"] },
   { ruleId: "WRITE-001", ruleVersion: "1.0.0", category: "writing", defaultSeverity: "提示", description: "按 Writing Policy 识别需证据支持的空泛或绝对化表述。", inputDependencies: ["writing.policy", "writing.chapters.blocks"] },
   { ruleId: "WRITE-002", ruleVersion: "1.0.0", category: "writing", defaultSeverity: "提示", description: "识别跨章节重复表达。", inputDependencies: ["writing.chapters.blocks"] },
-  { ruleId: "WRITE-003", ruleVersion: "1.0.0", category: "writing", defaultSeverity: "高", description: "内部待办和未解决占位不得作为正式披露。", inputDependencies: ["writing.chapters.blocks"] },
+  { ruleId: "WRITE-003", ruleVersion: "1.1.0", category: "writing", defaultSeverity: "高", description: "内部待办和未解决占位不得作为正式披露。", inputDependencies: ["writing.chapters.blocks"] },
   { ruleId: "LAYOUT-001", ruleVersion: "1.0.0", category: "layout", defaultSeverity: "高", description: "目录、章节和正文顺序必须一致。", inputDependencies: ["reportSections", "writing.chapters"] },
   { ruleId: "LAYOUT-002", ruleVersion: "1.0.0", category: "layout", defaultSeverity: "高", description: "图表和版面待复核状态必须处理。", inputDependencies: ["presentation.charts", "presentation.layout", "writing.chapters"] },
   { ruleId: "LAYOUT-003", ruleVersion: "1.0.0", category: "layout", defaultSeverity: "高", description: "浏览器预览中不得静默裁切或隐藏内容。", inputDependencies: ["presentation.layout", "writing.chapters.blocks"] },
@@ -154,129 +150,6 @@ function mergeFindings(findings: Finding[]) {
   return [...merged.values()];
 }
 
-function requirementFingerprint(requirement: ReportProjectData["disclosureRequirements"][number]) {
-  return hash(JSON.stringify({
-    revision: requirement.revision,
-    framework: requirement.framework,
-    code: requirement.code,
-    topic: requirement.topic,
-    summary: requirement.summary,
-    applicability: requirement.applicability,
-    userConfirmed: requirement.userConfirmed,
-    reviewStatus: requirement.reviewStatus,
-    mappedSection: requirement.mappedSection,
-  }));
-}
-
-function validContentBlock(project: ReportProjectData, block: ContentBlock) {
-  if (["heading", "todo"].includes(block.kind)) return false;
-  if (block.kind === "chart") return project.presentation.charts.some((chart) => chart.blockId === block.id && chart.status === "已确认");
-  if (block.kind === "table") return block.rows.slice(1).some((row) => row.some((cell) => cell.trim()));
-  const text = plainText(block.html).replace(/【待[^】]*】/g, "").trim();
-  return text.length >= 12;
-}
-
-function disclosureRules(project: ReportProjectData, now: string) {
-  const findings: Finding[] = [];
-  const coverage: DisclosureCoverageRecord[] = [];
-  const allBlocks = project.writing.chapters.flatMap((chapter) => chapter.blocks.map((block) => ({ chapter, block })));
-
-  for (const requirement of project.disclosureRequirements) {
-    const mapped = allBlocks.filter(({ block }) => block.mappings.some((mapping) => mapping.requirementId === requirement.id));
-    const mappedChapterIds = unique(mapped.map(({ chapter }) => chapter.id));
-    const mappedBlockIds = mapped.map(({ block }) => block.id);
-    if (requirement.applicability !== "适用" || !requirement.userConfirmed) {
-      if (!requirement.userConfirmed || requirement.reviewStatus !== "有效") {
-        findings.push(makeFinding({
-          ruleId: "DISC-003", identity: requirement.id, title: `${requirement.code} 适用性结论待重新确认`,
-          description: "平台不会自动判断披露义务。当前适用性或标准版本状态尚未由用户有效确认。", sourceStep: 3,
-          requirementIds: [requirement.id], severity: "高",
-          evidence: [{ label: "适用性", value: requirement.applicability, entityType: "requirement", entityId: requirement.id }, { label: "确认状态", value: requirement.userConfirmed ? requirement.reviewStatus : "未确认" }],
-          suggestedAction: "返回 Step 3 核对标准版本、适用性和必要说明，并由用户确认。",
-        }));
-      }
-      continue;
-    }
-    const effective = mapped.filter(({ block }) => validContentBlock(project, block));
-    if (requirement.reviewStatus !== "有效") {
-      coverage.push({
-        requirementId: requirement.id,
-        requirementRevision: requirement.revision,
-        requirementFingerprint: requirementFingerprint(requirement),
-        status: "待核验",
-        reason: "披露要求适用性、标准版本、条款或章节映射发生变化，原覆盖结论已经失效",
-        chapterIds: mappedChapterIds,
-        blockIds: mappedBlockIds,
-        assessedAt: now,
-        method: "规则检查",
-      });
-      findings.push(makeFinding({
-        ruleId: "DISC-003", identity: requirement.id, title: `${requirement.code} 披露要求变更后待重新确认`,
-        description: "披露要求的适用性、reviewStatus、标准版本、条款内容或章节映射发生变化后，不能沿用历史覆盖结论。", sourceStep: 3,
-        requirementIds: [requirement.id], severity: "高",
-        evidence: [{ label: "披露要求状态", value: requirement.reviewStatus, entityType: "requirement", entityId: requirement.id }],
-        suggestedAction: "返回 Step 3 核对披露要求并重新确认，再复核正文覆盖情况。",
-      }));
-      continue;
-    }
-    const mappedOnlyHeading = mapped.length > 0 && mapped.every(({ block }) => block.kind === "heading");
-    const pending = effective.some(({ block }) => Boolean(block.pendingKind && !block.resolved) || block.reviewStatus === "待复核");
-    const partial = effective.some(({ block }) => block.mappings.find((item) => item.requirementId === requirement.id)?.coverage === "部分覆盖");
-    const verified = effective.length > 0 && effective.every(({ block }) => block.reviewStatus === "已审校" && block.mappings.find((item) => item.requirementId === requirement.id)?.coverage === "已覆盖");
-    const status: DisclosureCoverageRecord["status"] = !effective.length ? "未覆盖" : partial || pending ? "部分覆盖" : verified ? "已核验覆盖" : "待核验";
-    coverage.push({
-      requirementId: requirement.id,
-      requirementRevision: requirement.revision,
-      requirementFingerprint: requirementFingerprint(requirement),
-      status,
-      reason: !mapped.length ? "没有正文映射" : mappedOnlyHeading ? "仅关联标题" : pending ? "关联内容仍有待处理或待复核状态" : partial ? "正文映射标记为部分覆盖" : verified ? "正文映射与人工审校状态均已确认" : "存在正文，但充分性仍需人工核验",
-      chapterIds: mappedChapterIds,
-      blockIds: mappedBlockIds,
-      assessedAt: now,
-      method: "规则检查",
-    });
-    if (!mapped.length) {
-      findings.push(makeFinding({
-        ruleId: "DISC-001", identity: requirement.id, title: `${requirement.code} 尚未关联正文`,
-        description: `已确认适用的披露要求“${requirement.summary}”没有关联任何正文内容块。`, sourceStep: 3, severity: "阻断",
-        requirementIds: [requirement.id], evidence: [{ label: "预期章节", value: requirement.mappedSection, entityType: "requirement", entityId: requirement.id }],
-        suggestedAction: "在 Step 3 核对章节映射，并在 Step 5 将有效正文块关联到该披露要求。",
-      }));
-    } else if (!effective.length) {
-      findings.push(makeFinding({
-        ruleId: "DISC-002", identity: requirement.id, title: `${requirement.code} 仅有关联标题或无有效内容`,
-        description: "存在技术映射，但没有可作为披露内容的正文、表格、案例或已确认图表；不能据此判定为充分披露。", sourceStep: 5, severity: "高",
-        chapterId: mapped[0]?.chapter.id, blockId: mapped[0]?.block.id, requirementIds: [requirement.id],
-        evidence: mapped.slice(0, 4).map(({ block }) => ({ label: "映射内容块", value: `${block.title}（${block.kind}）`, entityType: "block", entityId: block.id })),
-        suggestedAction: "返回 Step 5 补充有来源的有效内容，并由用户核验披露充分性。",
-      }));
-    } else if (pending || partial || !verified) {
-      findings.push(makeFinding({
-        ruleId: "DISC-003", identity: `${requirement.id}:coverage`, title: `${requirement.code} 覆盖结论仍需人工核验`,
-        description: "规则引擎只能确认正文和状态是否存在，不能替用户判断披露是否充分。当前映射包含部分覆盖、待处理或尚未审校内容。", sourceStep: 5,
-        severity: partial || pending ? "高" : "提示", chapterId: effective[0]?.chapter.id, blockId: effective[0]?.block.id, requirementIds: [requirement.id],
-        evidence: [{ label: "规则覆盖状态", value: status, entityType: "requirement", entityId: requirement.id }],
-        suggestedAction: "核对披露要素、事实来源和正文表述后，由用户确认覆盖结论。",
-      }));
-    }
-  }
-
-  for (const { chapter, block } of allBlocks) {
-    for (const mapping of block.mappings) {
-      const requirement = project.disclosureRequirements.find((item) => item.id === mapping.requirementId);
-      if (requirement && requirement.applicability === "适用") continue;
-      findings.push(makeFinding({
-        ruleId: "DISC-003", identity: `orphan:${block.id}:${mapping.requirementId}`, title: "正文存在失效或孤立的披露映射",
-        description: requirement ? "正文仍关联到当前未确认适用的披露要求。" : "正文关联的披露要求已经不存在。", sourceStep: 5,
-        chapterId: chapter.id, blockId: block.id, requirementIds: [mapping.requirementId], severity: "高",
-        evidence: [{ label: "内容块", value: block.title, entityType: "block", entityId: block.id }],
-        suggestedAction: "核对 Step 3 适用性决定；保留正文的同时修复或解除失效映射。",
-      }));
-    }
-  }
-  return { findings, coverage };
-}
-
 function sentenceWithTerm(text: string, term: string) {
   return text.split(/(?<=[。！？!?；;])/).find((sentence) => sentence.includes(term))?.trim() ?? text.slice(0, 140);
 }
@@ -384,8 +257,8 @@ function writingRules(project: ReportProjectData) {
           findings.push(makeFinding({ ruleId: "WRITE-001", identity: `${block.id}:${term}`, title: `“${term}”需要说明具体依据`, description: unsupported ? "该表述所在内容块没有结构化事实或来源支持，可能属于空泛、绝对化或无依据的绩效评价。" : "该表述已有来源关联，但仍需人工判断证据是否足以支持评价性结论；规则命中不等同于表述错误。", sourceStep: 5, severity: unsupported && ["显著提升", "行业领先", "绝对领先", "零风险"].includes(term) ? "高" : "提示", chapterId: chapter.id, blockId: block.id, factIds: block.citations.map((item) => item.factId), sourceReferences: block.sourceReferences, evidence: [{ label: "问题句子", value: sentence, entityType: "block", entityId: block.id }, { label: "现有证据", value: block.citations.length || block.sourceReferences.length ? "有关联，充分性待人工核验" : "未关联结构化证据", entityType: "policy", entityId: project.writing.policy.id }], suggestedAction: "改为有来源的具体行动、范围、时间和结果；证据不足时删除评价性措辞。" }));
         }
       }
-      if ((block.kind === "todo" || (block.pendingKind && !block.resolved)) && block.kind !== "heading") {
-        findings.push(makeFinding({ ruleId: "WRITE-003", identity: block.id, title: `内部事项“${block.title}”尚未解决`, description: `内容块仍处于${block.pendingKind ?? "内部待办"}状态；正式阅读必须排除该内容，且定稿前需要处理。`, sourceStep: 5, chapterId: chapter.id, blockId: block.id, requirementIds: block.mappings.map((item) => item.requirementId), factIds: block.citations.map((item) => item.factId), sourceReferences: block.sourceReferences, evidence: [{ label: "内部状态", value: block.pendingKind ?? "待办", entityType: "block", entityId: block.id }], suggestedAction: "返回 Step 5 补充、确认或更新内容；不得将内部占位作为正式披露。" }));
+      if (block.kind !== "heading" && !block.resolved && (block.kind === "todo" || block.pendingKind)) {
+        findings.push(makeFinding({ ruleId: "WRITE-003", identity: block.id, title: `内部事项“${block.title}”尚未解决`, description: `内容块仍处于${block.pendingKind ?? "内部待办"}状态；正式阅读必须排除该内容，且定稿前需要处理。`, sourceStep: 5, chapterId: chapter.id, blockId: block.id, factIds: block.citations.map((item) => item.factId), sourceReferences: block.sourceReferences, evidence: [{ label: "内部状态", value: block.pendingKind ?? "待办", entityType: "block", entityId: block.id }], suggestedAction: "返回 Step 5 补充、确认或更新内容；不得将内部占位作为正式披露。" }));
       }
       for (const sentence of plainText(block.html).split(/(?<=[。！？!?；;])/).map((item) => item.trim()).filter((item) => item.length >= 28)) {
         const key = normalize(sentence);
@@ -434,7 +307,7 @@ function inScope(finding: Finding, project: ReportProjectData, options: QualityC
     || project.quality.issues.some((issue) => issue.stableKey === finding.stableKey
       && issue.locations.some((location) => location.chapterId === options.chapterId))
   ));
-  const pending = project.quality.issues.filter((issue) => issue.status === "待复检");
+  const pending = project.quality.issues.filter((issue) => isCurrentQualityIssue(issue) && issue.status === "待复检");
   if (!pending.length) return false;
   return pending.some((issue) => issue.stableKey === finding.stableKey
     || Boolean(finding.blockId && finding.blockId === issue.blockId)
@@ -445,9 +318,7 @@ function inScope(finding: Finding, project: ReportProjectData, options: QualityC
 }
 
 export function runQualityRules(project: ReportProjectData, options: QualityCheckOptions): QualityRuleResult {
-  const disclosure = disclosureRules(project, options.now);
   const all = [
-    ...disclosure.findings,
     ...sourceRules(project),
     ...dataRules(project),
     ...writingRules(project),
@@ -456,11 +327,10 @@ export function runQualityRules(project: ReportProjectData, options: QualityChec
   const merged = mergeFindings(all);
   return {
     findings: merged.filter((finding) => inScope(finding, project, options)),
-    coverage: options.scope === "full" ? disclosure.coverage : project.quality.coverage,
     rules: definitions,
   };
 }
 
 export function qualityCategoryLabel(category: QualityCategory) {
-  return ({ disclosure: "披露完整性", source: "事实与来源", data: "数据一致性", writing: "文字与 Writing Policy", layout: "版式与结构" } satisfies Record<QualityCategory, string>)[category];
+  return ({ disclosure: "历史条款检查", source: "事实与来源", data: "数据一致性", writing: "文字与 Writing Policy", layout: "版式与结构" } satisfies Record<QualityCategory, string>)[category];
 }

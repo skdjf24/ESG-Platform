@@ -217,7 +217,7 @@ export function reconcileCitations(doc: WritingDocument): WritingDocument {
         });
         if (!invalid) return block;
         stale = true;
-        return { ...block, reviewStatus: '待复核' as const, pendingKind: '待更新' as const, mappings: block.mappings.map((mapping) => ({ ...mapping, coverage: '待核验' as const })) };
+        return { ...block, reviewStatus: '待复核' as const, pendingKind: '待更新' as const };
       });
       return stale ? { ...chapter, blocks, status: '待完善', reviewStatus: '待复核' } : { ...chapter, blocks };
     }),

@@ -46,11 +46,11 @@ export const reportProject: ReportProject = {
 export const reportSteps: ReportStep[] = [
   { number: 1, shortTitle: "创建与画像", title: "创建报告与企业基础画像", description: "确认企业信息、报告范围与参考框架", state: "completed" },
   { number: 2, shortTitle: "议题评估", title: "ESG 实质性议题评估", description: "开展双重重要性评估并由用户确认", state: "completed" },
-  { number: 3, shortTitle: "框架与大纲", title: "构建披露框架与报告大纲", description: "映射披露要求并形成资料清单", state: "completed" },
+  { number: 3, shortTitle: "大纲与资料", title: "构建报告大纲与年度资料清单", description: "组织章节、关联议题并维护资料清单", state: "completed" },
   { number: 4, shortTitle: "资料收集", title: "ESG 资料收集、汇总与规整", description: "分工、收集并建立可追溯事实库", state: "in-progress" },
   { number: 5, shortTitle: "内容生成与编辑", title: "报告内容生成与编辑", description: "关联资料、编辑正文与人工审校", state: "not-started" },
   { number: 6, shortTitle: "可视化排版", title: "可视化与报告排版", description: "图表、版式与品牌样式编辑", state: "not-started" },
-  { number: 7, shortTitle: "质量检查", title: "质量与合规检查", description: "一致性、完整性与披露要求检查", state: "not-started" },
+  { number: 7, shortTitle: "质量检查", title: "报告质量检查", description: "检查正文、事实来源、数据一致性与版式", state: "not-started" },
   { number: 8, shortTitle: "定稿导出", title: "定稿与导出", description: "版本确认并导出最终报告", state: "not-started" },
 ];
 
@@ -104,20 +104,6 @@ export const disclosureRequirements: DisclosureRequirement[] = [
   { id: "req-sse-4", framework: "上交所", code: "第四章", topic: "气候变化", summary: "应对气候变化相关治理与行动", systemSuggestion: "适用", applicability: "适用", mappedSection: "4.1 应对气候变化", userConfirmed: true },
   { id: "req-gri-403", framework: "GRI", code: "403-9", topic: "职业健康与安全", summary: "工伤相关指标与管理措施", systemSuggestion: "适用", applicability: "适用", mappedSection: "5.1 员工健康与安全", userConfirmed: true },
   { id: "req-gri-2-27", framework: "GRI", code: "2-27", topic: "商业道德", summary: "遵守法律法规", systemSuggestion: "适用", applicability: "适用", mappedSection: "6.2 合规经营", userConfirmed: true },
-];
-
-// Source: 北京证券交易所上市公司持续监管指引第11号——可持续发展报告（试行）
-// 2024-04-12 published; 2025-04-25 first revision. These are independent BSE
-// article references, never aliases for historical CASS-ESG requirements.
-const bseSource = {
-  sourceTitle: "北京证券交易所上市公司持续监管指引第11号——可持续发展报告（试行）",
-  sourceVersion: "2025-04-25 第一次修订",
-  sourceUrl: "https://www.bse.cn/uploads/6/file/public/202504/20250426144813_oajv33m1es.pdf",
-};
-
-export const bseDisclosureRequirements: DisclosureRequirement[] = [
-  { id: "req-bse-35", framework: "北交所", code: "第三十五条", topic: "能源管理", summary: "披露报告期内能源使用、清洁能源及节能目标与措施等情况。", systemSuggestion: "待确认", applicability: "待确认", mappedSection: "", userConfirmed: false, ...bseSource },
-  { id: "req-bse-36", framework: "北交所", code: "第三十六条", topic: "水资源管理", summary: "披露报告期内水资源使用、节水目标与措施及回收利用等情况。", systemSuggestion: "待确认", applicability: "待确认", mappedSection: "", userConfirmed: false, ...bseSource },
 ];
 
 export const reportSections: ReportSection[] = [
@@ -197,11 +183,3 @@ export const enterpriseFacts: EnterpriseFact[] = [
 export const departments = ["安全环保部", "生产运营部", "人力资源部", "法务合规部", "董事会办公室", "财务部"];
 
 export const frameworks = ["上交所指引", "深交所指引", "北交所指引", "GRI Standards", "ISSB S1/S2", "港交所 ESG 指引"];
-export const frameworkRequirementNames: Record<string, string> = {
-  "上交所指引": "上交所",
-  "深交所指引": "深交所",
-  "北交所指引": "北交所",
-  "GRI Standards": "GRI",
-  "ISSB S1/S2": "ISSB",
-  "港交所 ESG 指引": "港交所",
-};

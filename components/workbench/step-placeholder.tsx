@@ -35,7 +35,7 @@ const placeholderContent: Record<
   }
 > = {
   5: {
-    summary: "基于已确认的企业事实与披露要求，辅助形成可审阅的章节初稿。",
+    summary: "基于已确认的企业事实与资料，辅助形成可审阅的章节初稿。",
     supportingText: "本步骤将在后续版本开放。当前原型不会生成、改写或保存任何报告正文。",
     icon: PenLine,
     features: [
@@ -55,11 +55,11 @@ const placeholderContent: Record<
     ],
   },
   7: {
-    summary: "在定稿前检查报告的一致性、可追溯性与披露要求覆盖情况。",
+    summary: "在定稿前检查报告正文、数据一致性、事实来源与版式。",
     supportingText: "本步骤将在后续版本开放。当前原型不会自动给出质量或合规结论。",
     icon: ShieldCheck,
     features: [
-      { title: "披露覆盖检查", description: "核对适用要求与报告章节的映射情况。", icon: SearchCheck },
+      { title: "报告结构检查", description: "核对报告目录、正文与版式。", icon: SearchCheck },
       { title: "事实一致性检查", description: "核对正文、指标与已确认事实的引用。", icon: ShieldCheck },
       { title: "问题清单复核", description: "汇总待人工判断的问题并记录处理结果。", icon: FileText },
     ],

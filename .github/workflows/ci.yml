@@ -40,6 +40,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:step2:topic-deletion
+      - run: npm run test:step3:planning
       - run: npm run test:phase2
       - run: npm run test:phase3
       - run: npm run test:phase4

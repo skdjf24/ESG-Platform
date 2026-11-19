@@ -267,12 +267,12 @@ async function main() {
   const blockCountBeforeTopicChange = project.writing.chapters.flatMap((item) => item.blocks).length;
 
   await openStep(page, 2);
-  const includedTopic = project.topics.find((item) => project.materiality.includedTopicIds.includes(item.id) && project.disclosureRequirements.some((requirement) => requirement.topic === item.name));
+  const includedTopic = project.topics.find((item) => project.materiality.includedTopicIds.includes(item.id) && project.reportSections.some((section) => section.topics.includes(item.name)));
   await page.getByRole("button", { name: `移出${includedTopic.name}` }).click();
   await page.getByRole("button", { name: "确认评估结果" }).click();
   await saveFooter(page);
   project = await waitForStored(page, (value) => value.quality.stale === true);
-  record(project.disclosureRequirements.some((item) => item.topic === includedTopic.name && item.reviewStatus === "待复核"), "CHAIN-B-STEP2-3", "Step 2 议题变化使相关披露要求待复核");
+  record(project.reportSections.some((item) => item.topics.includes(includedTopic.name) && item.topicReviewStatus === "待复核"), "CHAIN-B-STEP2-3", "Step 2 议题变化使相关目录关联待复核");
   record(project.writing.chapters.flatMap((item) => item.blocks).length === blockCountBeforeTopicChange, "STEP2-NO-DELETE", "议题变化不删除既有正文");
   record(project.quality.fullCheck?.valid === false && project.quality.fullCheck?.runId === fullCheckRunId, "STEP2-INVALIDATE-QA", "议题变化保留历史并使原全面检查失效");
 
@@ -289,12 +289,9 @@ async function main() {
   record(project.topics.length === topicCount + 1 && addedTopic?.financialScore === 4.1 && addedTopic?.impactScore === 4.4, "STEP2-ADD-TOPIC", "议题池支持新增议题并保存双重重要性评分");
 
   await openStep(page, 3);
-  const requirement = project.disclosureRequirements[0];
-  const applicability = page.getByLabel(`${requirement.code} 用户确认适用性`);
-  await applicability.selectOption(requirement.applicability === "不适用" ? "适用" : "不适用");
-  const confirm = page.getByRole("button", { name: "人工确认" }).first();
-  if (await confirm.count()) await confirm.click();
-  await page.getByRole("button", { name: "报告目录" }).click();
+  const archivedDisclosure = structuredClone(project.disclosureRequirements);
+  const modules = page.getByRole("group", { name: "Step 3 模块" }).getByRole("button");
+  record(await modules.count() === 2 && await modules.first().getAttribute("aria-pressed") === "true", "STEP3-MODULES", "Step 3 仅有目录与年度资料模块，默认打开目录");
   const originalSectionCount = project.reportSections.length;
   const originalTitle = await page.locator("#section-title").inputValue();
   const renamedTitle = `${originalTitle} E2E`;
@@ -302,7 +299,7 @@ async function main() {
   await page.getByRole("button", { name: "保存章节" }).click();
   project = await waitForStored(page, (value) => value.reportSections.some((item) => item.title === renamedTitle));
   record(project.writing.chapters.some((item) => item.title === renamedTitle), "CHAIN-D-STEP3-5", "Step 3 章节改名同步 Step 5 目录");
-  record(project.disclosureRequirements.filter((item) => item.mappedSection.endsWith(renamedTitle)).length > 0, "CHAIN-B-STEP3-MAPPING", "Step 3 章节改名同步披露要求映射");
+  record(project.dataRequirements.some((item) => item.section.endsWith(renamedTitle)) && JSON.stringify(project.disclosureRequirements) === JSON.stringify(archivedDisclosure), "CHAIN-B-STEP3-MATERIALS", "章节改名同步年度资料且保留历史披露记录");
   await page.getByRole("button", { name: "新增章节" }).click();
   await page.locator("#new-section-order").fill("8");
   await page.locator("#new-section-title-input").fill("E2E 新增章节");
@@ -438,7 +435,7 @@ async function main() {
   record(project.quality.runs.length >= 2, "STEP7-RECHECK", "修订后可重新执行全面检查并保留运行历史");
   record(project.quality.issues.some((item) => item.status !== "已复检解决"), "STEP7-UNRESOLVED-PRESERVED", "未解决问题未在复检时消失");
   record(project.quality.issues.some((item) => item.severity === "阻断") ? project.quality.readiness !== "可提交定稿审核" : true, "STEP7-BLOCKER-GATE", "阻断问题不能放行 Step 8 Gate");
-  record(["DISC", "SRC", "WRITE"].every((prefix) => [...ruleIds].some((id) => id.startsWith(prefix))), "STEP7-CURRENT-FINDINGS", "当前 E2E 数据真实触发披露、来源和 Writing Policy 问题", [...ruleIds].join(","));
+  record(["SRC", "WRITE"].every((prefix) => [...ruleIds].some((id) => id.startsWith(prefix))) && ![...ruleIds].some((id) => id.startsWith("DISC-")), "STEP7-CURRENT-FINDINGS", "当前检查识别来源与正文问题，无旧版条款规则", [...ruleIds].join(","));
   const gateLabelBeforeAi = await page.getByText(/定稿准备：/).innerText();
   await page.getByRole("button", { name: "AI 语义审校" }).click();
   await page.getByText(/AI 语义审校 · 1 项建议/).waitFor({ timeout: 10_000 });

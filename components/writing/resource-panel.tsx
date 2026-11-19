@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Check, CheckCircle2, ChevronRight, ClipboardList, Database, ExternalLink, FileText, Link2, PanelRightClose, Plus, RefreshCw, Search, ShieldCheck, Unlink, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronRight, ClipboardList, Database, ExternalLink, FileText, Link2, PanelRightClose, Plus, RefreshCw, Search, ShieldCheck, Unlink, X } from "lucide-react";
 import { useProjectData } from "@/components/project/project-data-provider";
 import type { SourceReference } from "@/lib/types/esg";
-import type { ContentBlock, CoverageStatus, WritingChapter, WritingFact, WritingResource } from "@/lib/types/writing";
+import type { ContentBlock, WritingChapter, WritingFact, WritingResource } from "@/lib/types/writing";
 import { StatusBadge } from "@/components/ui/status-badge";
 
-type Tab = "facts" | "requirements" | "resources" | "pending";
+type Tab = "facts" | "resources" | "pending";
 interface ResourcePanelProps {
   chapter: WritingChapter;
   block: ContentBlock | undefined;
@@ -28,19 +28,17 @@ function uniqueReferences(references: SourceReference[]) {
 
 export function ResourcePanel({ chapter, block, facts, resources, onBlockChange, onFactChange, onResourceChange, onFocusBlock, onClose }: ResourcePanelProps) {
   const { project } = useProjectData();
-  const disclosureRequirements = project.disclosureRequirements;
   const reportSections = project.reportSections;
   const [tab, setTab] = useState<Tab>("facts");
   const [allFacts, setAllFacts] = useState(false);
-  const [allRequirements, setAllRequirements] = useState(false);
   const [factQuery, setFactQuery] = useState("");
   const [confirmedChecks, setConfirmedChecks] = useState<Record<string, boolean>>({});
   const [resourceChecks, setResourceChecks] = useState<Record<string, boolean>>({});
   const [sourceView, setSourceView] = useState<{ title: string; sources: SourceReference[] } | null>(null);
-  const [expandedRequirement, setExpandedRequirement] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const topicNames = reportSections.find((section) => section.id === chapter.id)?.topics ?? [];
-  const relatedRequirements = disclosureRequirements.filter((item) => topicNames.includes(item.topic) || chapter.blocks.some((itemBlock) => itemBlock.mappings.some((mapping) => mapping.requirementId === item.id)));
+  const section = reportSections.find((item) => item.id === chapter.id);
+  const topicNames = section?.topics ?? [];
+  const materialTasks = section ? project.dataRequirements.filter((item) => item.section === `${section.order} ${section.title}`) : [];
   const relatedFacts = facts.filter((fact) => topicNames.includes(fact.topic) || chapter.blocks.some((itemBlock) => itemBlock.citations.some((citation) => citation.factId === fact.id)));
   const visibleFacts = (allFacts ? facts : relatedFacts).filter((fact) => `${fact.name}${fact.topic}${fact.period}`.includes(factQuery.trim()));
   const pendingBlocks = chapter.blocks.filter((item) => (item.pendingKind && !item.resolved) || item.reviewStatus === "待复核");
@@ -68,13 +66,6 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
     setMessage(cited ? "已解除资料来源引用；被其他事实使用的来源将保留。" : "已关联资料来源，请在正文中核对引用的时间与范围。");
   }
 
-  function toggleMapping(id: string) {
-    if (!block) return;
-    const mapped = block.mappings.some((mapping) => mapping.requirementId === id);
-    onBlockChange({ ...block, mappings: mapped ? block.mappings.filter((mapping) => mapping.requirementId !== id) : [...block.mappings, { requirementId: id, coverage: "待核验" }], reviewStatus: "待复核" });
-    setMessage(mapped ? "已解除当前正文块的披露映射。" : "已添加披露映射，覆盖情况待用户核验。");
-  }
-
   return (
     <aside id="writing-resource-panel" className="min-w-0 overflow-hidden rounded-2xl border border-[#dfe7e2] bg-white" aria-label="章节资料包">
       <div className="flex items-center justify-between border-b border-[#e9efeb] px-4 py-4">
@@ -82,8 +73,8 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
         <button className="grid size-8 place-items-center rounded-lg text-[#819086] hover:bg-[#f0f5f2]" onClick={onClose} aria-label="折叠章节资料包"><PanelRightClose className="size-4" /></button>
       </div>
       <div className="border-b border-[#e8eeea] bg-[#f8fbf9] px-4 py-3"><p className="text-[10px] text-[#809085]">当前引用目标</p><p className="mt-1 truncate text-xs font-semibold text-[#41604d]">{block ? block.title || "未命名内容块" : "请先选中正文块"}</p></div>
-      <div className="grid grid-cols-4 gap-1 border-b border-[#e8eeea] p-2" role="tablist" aria-label="资料包分类">
-        {([{ id: "facts", label: "事实指标", icon: Database }, { id: "requirements", label: "披露要求", icon: BookOpen }, { id: "resources", label: "相关资料", icon: FileText }, { id: "pending", label: "待处理", icon: ClipboardList }] as const).map((item, index, tabs) => <button key={item.id} id={`resource-tab-${item.id}`} data-resource-tab={item.id} type="button" role="tab" aria-selected={tab === item.id} aria-controls={`resource-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={(event) => {
+      <div className="grid grid-cols-3 gap-1 border-b border-[#e8eeea] p-2" role="tablist" aria-label="资料包分类">
+        {([{ id: "facts", label: "事实指标", icon: Database }, { id: "resources", label: "相关资料", icon: FileText }, { id: "pending", label: "待处理", icon: ClipboardList }] as const).map((item, index, tabs) => <button key={item.id} id={`resource-tab-${item.id}`} data-resource-tab={item.id} type="button" role="tab" aria-selected={tab === item.id} aria-controls={`resource-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           event.preventDefault();
           const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
@@ -113,21 +104,13 @@ export function ResourcePanel({ chapter, block, facts, resources, onBlockChange,
           })}
           {visibleFacts.length === 0 ? <EmptyState text="本章暂无匹配事实，可从已有事实库选择。" /> : null}
         </> : null}
-        {tab === "requirements" ? <>
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-[#4b6052]">关联披露要求</span><button className="text-[11px] font-semibold text-[#176b52]" onClick={() => setAllRequirements(!allRequirements)}>{allRequirements ? "本章要求" : "添加映射"}</button></div>
-          <p className="text-[10px] leading-5 text-[#869389]">将要求关联至选中的内容块。覆盖状态由用户核验，不代表合规结论。</p>
-          {(allRequirements ? disclosureRequirements : relatedRequirements).map((requirement) => {
-            const mapping = block?.mappings.find((item) => item.requirementId === requirement.id);
-            return <article key={requirement.id} className="rounded-xl border border-[#e0e8e2] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-[#28513a]">{requirement.framework} {requirement.code}</span>{mapping ? <Link2 className="size-3.5 text-[#3d9971]" /> : null}</div><p className="mt-2 text-xs leading-5 text-[#536d5c]">{requirement.summary}</p><p className="mt-1 text-[10px] text-[#8c9b90]">{requirement.topic} · {requirement.userConfirmed ? "用户已确认适用性" : "适用性待确认"}</p>
-              <button className="mt-2 flex items-center gap-1 text-[11px] text-[#176b52]" onClick={() => setExpandedRequirement(expandedRequirement === requirement.id ? null : requirement.id)}><ChevronRight className={`size-3 transition ${expandedRequirement === requirement.id ? "rotate-90" : ""}`} />查看对应要求</button>
-              {expandedRequirement === requirement.id ? <div className="mt-2 rounded-lg bg-[#f4f8f5] p-2.5 text-[10px] leading-5 text-[#6c8072]">映射章节：{requirement.mappedSection}<br />适用性：{requirement.applicability}<br />本项为第一版披露要求示例，正式编制时须复核原始标准条文。</div> : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2"><button className={buttonClass} disabled={!block} onClick={() => toggleMapping(requirement.id)}>{mapping ? <Unlink className="size-3" /> : <Plus className="size-3" />}{mapping ? "解除映射" : "关联正文块"}</button>{mapping ? <select aria-label={`${requirement.code} 覆盖状态`} value={mapping.coverage} onChange={(event) => block && onBlockChange({ ...block, mappings: block.mappings.map((item) => item.requirementId === requirement.id ? { ...item, coverage: event.target.value as CoverageStatus } : item), reviewStatus: "待复核" })} className="h-8 rounded-lg border border-[#dce5df] bg-white px-2 text-[11px] text-[#657b6c]"><option>部分覆盖</option><option>已覆盖</option><option>待核验</option></select> : null}</div>
-            </article>;
-          })}
-          {(allRequirements ? disclosureRequirements : relatedRequirements).length === 0 ? <EmptyState text="暂无本章要求，可从现有披露矩阵添加映射。" /> : null}
-        </> : null}
         {tab === "resources" ? <>
-          <p className="text-[10px] leading-5 text-[#869389]">案例、制度与历史资料来自已有资料清单。未提供正文的资料仅显示待补充提示。</p>
+          {materialTasks.length ? (
+            <div className="rounded-xl border border-[#e0e8e2] bg-[#f7faf8] p-3">
+              <h3 className="text-xs font-semibold text-[#4c6555]">本章资料任务</h3>
+              <ul className="mt-2 space-y-2 text-[11px] text-[#536d5c]">{materialTasks.map((item) => <li key={item.id} className="flex items-center justify-between gap-2"><span className="break-words">{item.itemName}</span><StatusBadge tone="gray">{item.state}</StatusBadge></li>)}</ul>
+            </div>
+          ) : null}
           {chapterResources.map((resource) => {
             const confirmed = resource.confirmed;
             const cited = Boolean(block && resource.sourceReferences.length > 0 && resource.sourceReferences.every((source) => block.sourceReferences.some((item) => item.id === source.id)));

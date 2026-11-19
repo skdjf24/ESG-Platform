@@ -33,6 +33,7 @@ import { createAiEvidence } from "@/lib/ai/evidence";
 import { useAiStatus } from "@/lib/ai/use-ai-status";
 import { plainText } from "@/lib/writing/document";
 import { qualityCategoryLabel } from "@/lib/quality/rules";
+import { isCurrentQualityIssue, summarizeQuality } from "@/lib/quality/state";
 import { getStep8QualityGate } from "@/lib/quality/validity";
 import type {
   QualityAiSemanticReviewRun,
@@ -46,7 +47,6 @@ import type {
 
 const categories: Array<{ id: QualityCategory | "all"; label: string; icon: typeof ShieldCheck }> = [
   { id: "all", label: "全部检查", icon: ListChecks },
-  { id: "disclosure", label: "披露完整性", icon: ClipboardCheck },
   { id: "source", label: "事实与来源", icon: Link2 },
   { id: "data", label: "数据一致性", icon: FileSearch },
   { id: "writing", label: "文字与 Writing Policy", icon: FileCheck2 },
@@ -77,7 +77,7 @@ export function StepSeven() {
   const [chapterId, setChapterId] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"severity" | "updated">("severity");
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(() => project.quality.issues.find((issue) => issue.status !== "已复检解决")?.issueId ?? null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [running, setRunning] = useState<QualityCheckScope | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -88,7 +88,8 @@ export function StepSeven() {
   const [sourceOpen, setSourceOpen] = useState(false);
   const aiStatus = useAiStatus();
 
-  const issues = useMemo(() => project.quality.issues.filter((issue) => {
+  const currentIssues = useMemo(() => project.quality.issues.filter(isCurrentQualityIssue), [project.quality.issues]);
+  const issues = useMemo(() => currentIssues.filter((issue) => {
     const text = `${issue.title}${issue.description}${issue.suggestedAction}`.toLowerCase();
     return (category === "all" || issue.category === category)
       && (severity === "all" || issue.severity === severity)
@@ -97,9 +98,9 @@ export function StepSeven() {
       && (!query.trim() || text.includes(query.trim().toLowerCase()));
   }).sort((left, right) => sort === "severity"
     ? severityRank[left.severity] - severityRank[right.severity] || right.updatedAt.localeCompare(left.updatedAt)
-    : right.updatedAt.localeCompare(left.updatedAt)), [category, chapterId, project.quality.issues, query, severity, sort, status]);
-  const selected = project.quality.issues.find((issue) => issue.issueId === selectedIssueId) ?? issues[0] ?? null;
-  const summary = project.quality.summary;
+    : right.updatedAt.localeCompare(left.updatedAt)), [category, chapterId, currentIssues, query, severity, sort, status]);
+  const selected = issues.find((issue) => issue.issueId === selectedIssueId) ?? issues[0] ?? null;
+  const summary = summarizeQuality(currentIssues, project.quality.summary.lastRunId, project.quality.summary.lastCheckedAt);
   const latestRun = project.quality.runs.at(-1);
   const qualityGate = getStep8QualityGate(project);
   const stale = !qualityGate.validFullCheck && Boolean(project.quality.runs.length);
@@ -112,7 +113,7 @@ export function StepSeven() {
   }
 
   async function runCheck(scope: QualityCheckScope, targetChapterId?: string) {
-    if (scope === "changed" && !project.quality.issues.some((issue) => issue.status === "待复检")) {
+    if (scope === "changed" && !currentIssues.some((issue) => issue.status === "待复检")) {
       setMessage("当前没有待复检问题；如需重新评估全部内容，请开始全面检查。");
       return;
     }
@@ -123,9 +124,9 @@ export function StepSeven() {
     const next = executeQualityCheck(project, scope, scope === "chapter" ? chapter : undefined);
     const saved = await persist(next, scope === "full" ? "Step 7 全面质量检查" : scope === "chapter" ? "Step 7 当前章节检查" : "Step 7 修改项复检");
     if (saved) {
-      const first = next.quality.issues.find((issue) => issue.checkRunId === next.quality.summary.lastRunId && issue.status !== "已复检解决");
+      const first = next.quality.issues.find((issue) => isCurrentQualityIssue(issue) && issue.checkRunId === next.quality.summary.lastRunId && issue.status !== "已复检解决");
       setSelectedIssueId(first?.issueId ?? selectedIssueId);
-      setMessage(`确定性规则检查已完成：本次发现 ${next.quality.runs.at(-1)?.issueIds.length ?? 0} 项；披露充分性和事实真实性仍由用户确认。`);
+      setMessage(`确定性规则检查已完成，本次发现 ${next.quality.runs.at(-1)?.issueIds.length ?? 0} 项。请结合原始资料复核。`);
     }
     setRunning(null);
   }
@@ -159,7 +160,6 @@ export function StepSeven() {
     const target = location ?? issue.locations[0];
     if (target?.chapterId ?? issue.chapterId) params.set("chapterId", target?.chapterId ?? issue.chapterId ?? "");
     if (target?.blockId ?? issue.blockId) params.set("blockId", target?.blockId ?? issue.blockId ?? "");
-    if (target?.requirementId ?? issue.requirementIds[0]) params.set("requirementId", target?.requirementId ?? issue.requirementIds[0] ?? "");
     if (target?.factId ?? issue.factIds[0]) params.set("factId", target?.factId ?? issue.factIds[0] ?? "");
     if (target?.chartId ?? issue.chartIds[0]) params.set("chartId", target?.chartId ?? issue.chartIds[0] ?? "");
     return `/reports/${project.projectId}/step/${target?.sourceStep ?? issue.sourceStep}${params.size ? `?${params.toString()}` : ""}`;
@@ -212,7 +212,7 @@ export function StepSeven() {
   return (
     <div className="animate-fade-up">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 07 · Quality assurance</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">报告质量与披露完整性检查</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">读取披露要求、正文、事实来源、指标快照和预览页面；平台流程状态不代表法律合规认证或外部鉴证。</p></div>
+        <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 07 · Quality assurance</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">报告质量检查</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">检查正文、事实来源、数据一致性和版式。披露框架覆盖和法规合规性需另行核验。</p></div>
         <div className="flex flex-wrap gap-2">
           <button className={button} onClick={() => setHistoryOpen(true)}><History className="size-3.5" />查看检查历史</button>
           <button className={button} onClick={() => setReportOpen(true)}><FileCheck2 className="size-3.5" />生成检查报告</button>
@@ -230,7 +230,7 @@ export function StepSeven() {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-9">
           {[
-            ["已检查要求", summary.applicableRequirementCount, "text-[#176b52]"], ["覆盖/待核验", summary.verifiedCoverageCount + summary.pendingVerificationCount, "text-emerald-700"], ["问题总数", summary.unresolvedCount, "text-[#25352c]"], ["阻断", summary.blockerCount, "text-rose-700"], ["高优先级", summary.highCount, "text-amber-700"], ["提示", summary.noticeCount, "text-blue-700"], ["已解决", summary.resolvedCount, "text-emerald-700"], ["待复检", summary.pendingRecheckCount, "text-amber-700"], ["接受例外", summary.acceptedExceptionCount, "text-slate-600"],
+            ["未解决问题", summary.unresolvedCount, "text-[#25352c]"], ["阻断", summary.blockerCount, "text-rose-700"], ["高优先级", summary.highCount, "text-amber-700"], ["提示", summary.noticeCount, "text-blue-700"], ["已解决", summary.resolvedCount, "text-emerald-700"], ["待复检", summary.pendingRecheckCount, "text-amber-700"], ["接受例外", summary.acceptedExceptionCount, "text-slate-600"],
           ].map(([label, value, color]) => <div key={String(label)} className="rounded-xl bg-[#f7f9f8] px-3 py-2"><p className="text-[9px] text-[#87938c]">{label}</p><p className={`mt-1 text-lg font-semibold ${color}`}>{value}</p></div>)}
         </div>
       </section>
@@ -254,7 +254,7 @@ export function StepSeven() {
       <div className="quality-grid">
         <aside className="quality-sidebar self-start overflow-hidden rounded-2xl border border-[#dfe7e2] bg-white">
           <div className="border-b border-[#edf1ef] p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#2d4736]"><Filter className="size-4 text-[#176b52]" />检查分类与筛选</div></div>
-          <div className="space-y-1 p-2">{categories.map((item) => { const Icon = item.icon; const count = item.id === "all" ? project.quality.issues.length : project.quality.issues.filter((issue) => issue.category === item.id).length; return <button key={item.id} onClick={() => setCategory(item.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-[10px] font-semibold ${category === item.id ? "bg-[#eaf4ef] text-[#176b52]" : "text-[#65756b] hover:bg-[#f5f8f6]"}`}><Icon className="size-3.5" /><span className="min-w-0 flex-1">{item.label}</span><span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px]">{count}</span></button>; })}</div>
+          <div className="space-y-1 p-2">{categories.map((item) => { const Icon = item.icon; const count = item.id === "all" ? currentIssues.length : currentIssues.filter((issue) => issue.category === item.id).length; return <button key={item.id} onClick={() => setCategory(item.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-[10px] font-semibold ${category === item.id ? "bg-[#eaf4ef] text-[#176b52]" : "text-[#65756b] hover:bg-[#f5f8f6]"}`}><Icon className="size-3.5" /><span className="min-w-0 flex-1">{item.label}</span><span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px]">{count}</span></button>; })}</div>
           <div className="space-y-3 border-t border-[#edf1ef] p-3">
             <FilterField label="严重程度"><select aria-label="按严重程度筛选" value={severity} onChange={(event) => setSeverity(event.target.value as QualitySeverity | "all")}><option value="all">全部严重程度</option><option>阻断</option><option>高</option><option>提示</option></select></FilterField>
             <FilterField label="处理状态"><select aria-label="按处理状态筛选" value={status} onChange={(event) => setStatus(event.target.value as QualityIssueStatus | "all")}><option value="all">全部状态</option>{["待处理", "处理中", "待复检", "已复检解决", "已接受例外"].map((item) => <option key={item}>{item}</option>)}</select></FilterField>
@@ -280,7 +280,7 @@ export function StepSeven() {
             <div className="scrollbar-subtle max-h-[590px] space-y-4 overflow-y-auto p-4 text-[10px] leading-5">
               <Detail title="具体问题"><p>{selected.description}</p></Detail>
               <Detail title="触发依据"><div className="space-y-2">{selected.evidence.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-lg bg-[#f6f8f7] p-2"><span className="font-semibold text-[#506159]">{item.label}</span><p className="mt-0.5 text-[#68766e]">{item.value}</p></div>)}</div></Detail>
-              <Detail title="关联对象"><div className="flex flex-wrap gap-1.5">{selected.requirementIds.map((id) => <Tag key={id}>要求 {id}</Tag>)}{selected.factIds.map((id) => <Tag key={id}>事实 {id}</Tag>)}{selected.chartIds.map((id) => <Tag key={id}>图表 {id}</Tag>)}{selected.blockId ? <Tag>内容块 {selected.blockId}</Tag> : null}</div></Detail>
+              <Detail title="关联对象"><div className="flex flex-wrap gap-1.5">{selected.factIds.map((id) => <Tag key={id}>事实 {id}</Tag>)}{selected.chartIds.map((id) => <Tag key={id}>图表 {id}</Tag>)}{selected.blockId ? <Tag>内容块 {selected.blockId}</Tag> : null}</div></Detail>
               <Detail title={`定位位置（${selected.locations.length}）`}><div className="space-y-1.5">{selected.locations.map((location, index) => <button key={`${location.sourceStep}-${location.chapterId}-${location.blockId}-${index}`} onClick={() => router.push(locationUrl(selected, location))} className="flex w-full items-center gap-1.5 rounded-lg border border-[#e1e8e3] p-2 text-left font-semibold text-[#176b52]"><MapPin className="size-3" />{location.label}</button>)}</div></Detail>
               <Detail title="修改建议"><p>{selected.suggestedAction}</p></Detail>
               {selected.sourceReferences.length ? <Detail title="原始资料来源"><button onClick={() => setSourceOpen(!sourceOpen)} className="inline-flex items-center gap-1 font-semibold text-[#176b52]"><ExternalLink className="size-3" />{sourceOpen ? "收起来源" : `查看 ${selected.sourceReferences.length} 个来源`}</button>{sourceOpen ? <div className="mt-2 space-y-2">{selected.sourceReferences.map((source) => <div key={source.id} className="rounded-lg border border-[#e1e8e3] p-2"><p className="font-semibold">{source.fileName}</p><p className="text-[#7b8981]">{source.locator} · {source.excerpt}</p></div>)}</div> : null}</Detail> : null}
@@ -301,7 +301,7 @@ export function StepSeven() {
       </div>
 
       {historyOpen ? <Modal title="检查历史" onClose={() => setHistoryOpen(false)}><div className="space-y-2">{[...project.quality.runs].reverse().map((run) => <div key={run.runId} className="rounded-xl border border-[#e1e8e3] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">{run.scope === "full" ? "全面检查" : run.scope === "chapter" ? "章节检查" : "修改项复检"}</span><span className="text-[9px] text-[#176b52]">{run.status}</span></div><p className="mt-1 text-[10px] text-[#78867e]">输入项目 v{run.inputProjectRevision} · {run.issueIds.length} 项命中 · {Object.keys(run.ruleVersions).length} 条规则</p><p className="mt-1 text-[9px] text-[#99a19d]">{new Date(run.completedAt ?? run.startedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}</p></div>)}{!project.quality.runs.length ? <p className="py-10 text-center text-xs text-[#89958e]">尚无检查运行记录</p> : null}</div></Modal> : null}
-      {reportOpen ? <Modal title="质量检查报告（内部流程摘要）" onClose={() => setReportOpen(false)}><div className="rounded-xl bg-[#f5f8f6] p-4 text-xs leading-6"><p className="font-semibold">{project.report.title}</p><p>最近检查：{summary.lastCheckedAt ? new Date(summary.lastCheckedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "未检查"}</p><p>披露覆盖：未覆盖 {summary.uncoveredCount} / 部分覆盖 {summary.partialCoverageCount} / 待核验 {summary.pendingVerificationCount} / 已核验覆盖 {summary.verifiedCoverageCount}</p><p>未解决问题：{summary.unresolvedCount}（阻断 {summary.blockerCount}、高 {summary.highCount}、提示 {summary.noticeCount}）</p><p>定稿准备状态：{qualityGate.readiness}</p>{qualityGate.reasons.map((reason) => <p key={reason} className="text-amber-700">· {reason}</p>)}</div><p className="mt-4 text-[10px] leading-5 text-amber-700">本摘要来自平台内部规则检查，不代表法律合规认证、外部鉴证或 Step 8 最终定稿结论。</p></Modal> : null}
+      {reportOpen ? <Modal title="质量检查报告（内部流程摘要）" onClose={() => setReportOpen(false)}><div className="rounded-xl bg-[#f5f8f6] p-4 text-xs leading-6"><p className="font-semibold">{project.report.title}</p><p>最近检查：{summary.lastCheckedAt ? new Date(summary.lastCheckedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "未检查"}</p><p>未解决问题：{summary.unresolvedCount}（阻断 {summary.blockerCount}、高 {summary.highCount}、提示 {summary.noticeCount}）</p><p>定稿准备状态：{qualityGate.readiness}</p>{qualityGate.reasons.map((reason) => <p key={reason} className="text-amber-700">· {reason}</p>)}</div><p className="mt-4 text-[10px] leading-5 text-amber-700">本摘要来自平台内部规则检查，不代表法律合规认证、外部鉴证或 Step 8 最终定稿结论。</p></Modal> : null}
     </div>
   );
 }

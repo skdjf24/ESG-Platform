@@ -6,12 +6,11 @@ import { createBlankProjectData, createSampleProjectData } from "@/lib/project/s
 import { synchronizeProjectData } from "@/lib/project/synchronize";
 import { availableTopicPresets, describeTopicRemoval, unscoredPresetTopic } from "@/lib/project/topics";
 
-test("removes a scored topic and clears only its live links while archiving the original assessment", () => {
+test("removes a scored topic and clears outline links while retaining archived disclosures and assessment", () => {
   const before = createSampleProjectData("legacy-topic-removal");
   delete before.projectKind;
   const other = createSampleProjectData("other-project");
   const originalTopic = before.topics.find((topic) => topic.id === "topic-energy")!;
-  const originalClause = before.disclosureRequirements.find(({ id }) => id === "req-gri-302-1")!;
   const originalChapters = before.writing.chapters;
 
   const { project: after, impacts } = synchronizeProjectData(before, before, 2, originalTopic.id);
@@ -23,12 +22,7 @@ test("removes a scored topic and clears only its live links while archiving the 
   assert.equal(after.materiality.reviewStatus, "待复核");
   assert.equal(after.materiality.revision, before.materiality.revision + 1);
 
-  const clause = after.disclosureRequirements.find(({ id }) => id === originalClause.id)!;
-  assert.deepEqual(clause, {
-    ...originalClause, topic: "", originalTopic: originalTopic.name,
-    userConfirmed: false, reviewStatus: "待复核", revision: originalClause.revision + 1,
-  });
-  assert.deepEqual(after.disclosureRequirements.filter(({ id }) => id !== clause.id), before.disclosureRequirements.filter(({ id }) => id !== clause.id));
+  assert.deepEqual(after.disclosureRequirements, before.disclosureRequirements);
   assert.deepEqual(after.reportSections.map(({ id }) => id), before.reportSections.map(({ id }) => id));
   assert.deepEqual(after.reportSections.filter(({ topicReviewStatus }) => topicReviewStatus === "待复核").map(({ id }) => id), ["section-4", "section-4-2"]);
   assert.ok(after.reportSections.every(({ topics }) => !topics.includes(originalTopic.name)));
@@ -45,7 +39,6 @@ test("removes a scored topic and clears only its live links while archiving the 
   assert.equal(impacts[0].entityId, originalTopic.id);
   assert.deepEqual(impacts[0].topicRemoval?.topic, originalTopic);
   assert.deepEqual(impacts[0].topicRemoval?.assessment, before.materiality);
-  assert.equal(impacts[0].topicRemoval?.requirements[0].userConfirmed, true);
   assert.deepEqual(impacts[0].topicRemoval?.sectionIds, ["section-4", "section-4-2"]);
   assert.deepEqual(normalizeProjectData(JSON.parse(JSON.stringify(after)), before.projectId).impacts, JSON.parse(JSON.stringify(after.impacts)));
   assert.equal(before.topics.length, other.topics.length);
@@ -99,7 +92,7 @@ test("an excluded topic used downstream is still detached and reviewed", () => {
   assert.equal(describeTopicRemoval(before, topic.id, before)?.included, false);
   const { project: after } = synchronizeProjectData(before, before, 2, topic.id);
   assert.equal(after.materiality.reviewStatus, "待复核");
-  assert.equal(after.disclosureRequirements.find(({ id }) => id === "req-gri-302-1")?.topic, "");
+  assert.deepEqual(after.disclosureRequirements, before.disclosureRequirements);
   assert.equal(after.reportSections.find(({ id }) => id === "section-4-2")?.topicReviewStatus, "待复核");
 });
 

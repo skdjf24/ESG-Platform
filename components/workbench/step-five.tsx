@@ -49,9 +49,8 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
   const router = useRouter();
   const store = useWritingDocument();
   const { doc } = store;
-  const validInitialChapter = doc.chapters.find(item => item.id === initialChapterId);
-  const [chapterId, setChapterId] = useState(validInitialChapter?.id ?? 'section-4-2');
-  const [blockId, setBlockId] = useState(validInitialChapter?.blocks.find(item => item.id === initialBlockId)?.id ?? (validInitialChapter ? validInitialChapter.blocks[0]?.id : 'section-4-2-paragraph') ?? '');
+  const [chapterId, setChapterId] = useState(initialChapterId ?? 'section-4-2');
+  const [blockId, setBlockId] = useState(initialBlockId ?? (initialChapterId ? `${initialChapterId}-heading` : 'section-4-2-paragraph'));
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const desktopResource = useSyncExternalStore(subscribeDesktopResource, getDesktopResource, getServerDesktopResource);
@@ -70,7 +69,8 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
   const issues = scanWriting(chapter, doc.policy);
   const pending = chapter.blocks.filter(b => (b.pendingKind && !b.resolved) || b.reviewStatus === '待复核');
   const versions = doc.versions.filter(v => v.chapterId === chapter.id).slice().reverse();
-  const upstreamImpacts = store.project.impacts.filter(impact => impact.status === '待复核' && impact.targetSteps.includes(5));
+  const upstreamImpacts = store.project.impacts.filter(impact => impact.status === '待复核' && impact.targetSteps.includes(5)
+    && impact.entityType !== 'requirement' && impact.entityType !== 'framework');
 
   useEffect(() => {
     requestAnimationFrame(() => document.getElementById(`block-${blockId}`)?.scrollIntoView({ block: 'center' }));
@@ -110,7 +110,7 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     const resources = getChapterResources(doc.resources, chapter.id);
     setAiRequest({ taskId: crypto.randomUUID(), operation, chapter: structuredClone(chapter), blockId: operation === 'draft' ? undefined : selectedBlock?.id,
       selectedText: operation === 'rewrite' ? text : undefined, sourceText: operation === 'draft' ? chapter.blocks.map(b => plainText(b.html)).join('\n') : plainText(selectedBlock?.html ?? ''),
-      facts: structuredClone(facts), evidence: createAiEvidence(facts, resources), requirementIds: [...new Set(chapter.blocks.flatMap(b => b.mappings.map(m => m.requirementId)))], policy: structuredClone(doc.policy) });
+      facts: structuredClone(facts), evidence: createAiEvidence(facts, resources), requirementIds: [], policy: structuredClone(doc.policy) });
   }
   function acceptAi(response: AiTaskResponse) {
     const request = aiRequest;
@@ -138,14 +138,13 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
     const next: ContentBlock = { ...newBlock, title: request.operation === 'draft' ? '章节初稿 · AI 建议（待人工确认）' : newBlock.title, html,
       citations: [...newBlock.citations.filter(c => !facts.some(f => f.id === c.factId)), ...facts.map(f => ({ factId: f.id, factRevision: f.revision }))],
       sourceReferences: [...new Map([...newBlock.sourceReferences, ...facts.flatMap(f => f.sourceReferences), ...citedSources].map(s => [s.id, s])).values()],
-      mappings: request.operation === 'draft' ? request.requirementIds.map(requirementId => ({ requirementId, coverage: '待核验' })) : newBlock.mappings,
       aiProvenance: { taskId: response.taskId, providerId: response.providerId, model: response.model, responseId: response.responseId, generatedAt: response.generatedAt, acceptedAt: new Date().toISOString(), citations: structuredClone(response.citations) },
       reviewStatus: '待复核', pendingKind: '待确认', resolved: false, revision: newBlock.revision + 1, updatedAt: new Date().toISOString() };
     changeChapter({ ...chapter, status: '待完善', reviewStatus: '待复核', blocks: request.operation === 'draft' ? [...chapter.blocks, next] : chapter.blocks.map(b => b.id === next.id ? next : b) });
     setBlockId(next.id); setAiRequest(null); setSelection(null); store.setMessage('已人工接受 AI 建议并保留来源引用；请继续复核后保存。');
   }
   function setStatus(status: WritingChapter['status']) {
-    if (status === '已审校' && (pending.length || chapter.blocks.some(b => b.mappings.some(m => m.coverage === '待核验')))) { store.setMessage('请先处理内部标记、待复核引用及待核验的披露映射，再确认已审校。'); return; }
+    if (status === '已审校' && pending.length) { store.setMessage('请先处理内部标记并复核正文及引用，再确认已审校。'); return; }
     changeChapter({ ...chapter, status, reviewStatus: status === '已审校' ? '已审校' : status === '待审校' ? '待审校' : chapter.reviewStatus });
   }
 
@@ -168,12 +167,12 @@ export function StepFive({ initialChapterId, initialBlockId }: { initialChapterI
   if (!store.ready) return <div className="p-12 text-center text-sm text-[#63776a]">正在读取本地编制草稿…</div>;
   return <div className="writing-workbench">
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-      <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 05 · Report writing</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">报告内容生成与编辑</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">连接披露要求、企业事实与正文，让每一项披露有据可查。</p></div>
+      <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d8275]">Step 05 · Report writing</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight">报告内容生成与编辑</h1><p className="mt-2 text-xs leading-5 text-[#78877e]">编辑报告正文并引用企业事实与原始资料。</p></div>
       <div className="flex flex-wrap gap-2"><button className={button} onClick={() => setPolicyOpen(true)}><Settings2 className="size-3.5" />Writing Policy</button><button className={button} onClick={() => setVersionsOpen(true)}><FileClock className="size-3.5" />版本记录</button><button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white hover:bg-[#10543e]" onClick={() => store.save()}><Save className="size-3.5" />保存报告草稿</button></div>
     </div>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#dbe7df] bg-[#eff6f2] px-4 py-2.5 text-[11px] text-[#587463]"><span>当前企业：{store.project.enterprise.name} · 真实 AI 仅使用已确认证据 · 建议须人工接受</span><span role="status">{store.dirty ? '● 有未保存更改' : doc.savedAt ? `已本地保存 ${new Date(doc.savedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' })}` : store.project.projectKind !== 'blank' ? '初始示例 · 尚未保存' : '尚未保存'}</span></div>
     <div aria-label="AI 服务状态" className={`mb-4 rounded-xl border px-4 py-3 text-[11px] leading-5 ${aiStatus.configured ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>{aiStatus.loading ? '正在检查 AI 服务状态…' : aiStatus.configured ? `AI 服务已配置：${aiStatus.provider}${aiStatus.model ? ` · ${aiStatus.model}` : ''}。建议仍须人工接受。` : 'AI 服务暂未启用。当前仍可使用资料解析、事实确认、正文编辑、图表、质量规则检查及正式报告导出功能。'}</div>
-    {upstreamImpacts.length ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-amber-900"><AlertTriangle className="size-4" />上游数据有 {upstreamImpacts.length} 项变化，正文未被自动覆盖</div><div className="mt-2 space-y-2">{upstreamImpacts.slice(-3).map(impact => <div key={impact.id} className="flex items-start justify-between gap-3 rounded-lg bg-white/75 px-3 py-2 text-[11px] leading-5 text-amber-900"><span>{impact.message}</span><button onClick={() => store.acknowledgeImpact(impact.id)} className="shrink-0 font-semibold text-[#176b52]">已知悉</button></div>)}</div></div> : null}
+    {upstreamImpacts.length ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-amber-900"><AlertTriangle className="size-4" />上游数据有 {upstreamImpacts.length} 项变化，正文未被自动覆盖</div><div className="mt-2 space-y-2">{upstreamImpacts.slice(-3).map(impact => <div key={impact.id} className="flex items-start justify-between gap-3 rounded-lg bg-white/75 px-3 py-2 text-[11px] leading-5 text-amber-900"><span>{impact.entityType === 'topic' ? '重要性议题有更新，请核对当前章节的议题与资料引用。' : impact.message}</span><button onClick={() => store.acknowledgeImpact(impact.id)} className="shrink-0 font-semibold text-[#176b52]">已知悉</button></div>)}</div></div> : null}
     {store.message && <div role="status" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{store.message}<button aria-label="关闭提示" onClick={() => store.setMessage('')}><X className="size-4" /></button></div>}
     <div className={`writing-grid ${panelOpen ? '' : 'writing-grid-closed'}`}>
       <aside className="writing-tree self-start rounded-xl border border-[#e1e7e3] bg-white">

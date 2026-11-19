@@ -214,7 +214,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
       <StepPageHeader
         eyebrow="Step 04 · Data collection"
         title="ESG 资料收集、汇总与规整"
-        description="基于已确认的资料清单分配责任部门，收集文件或在线补充内容，并在人工确认后沉淀为可追溯的企业事实。"
+        description="基于已保存的资料清单分配责任部门，收集文件或在线补充内容，并在人工确认后沉淀为可追溯的企业事实。"
         action={
           <div className="flex gap-2">
             <button
@@ -326,12 +326,14 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                               onChange={(event) => editProject((current) => ({ ...current, dataRequirements: current.dataRequirements.map((requirement) => requirement.id === item.id ? { ...requirement, responsibleDepartment: event.target.value, adjustedByUser: event.target.value !== requirement.suggestedDepartment, reviewStatus: "有效" } : requirement) }))}
                               className="h-8 w-full appearance-none rounded-lg border border-[#dfe5e2] bg-white pl-8 pr-7 text-[10px] font-medium text-[#4c5952] outline-none focus:border-[#78a28f]"
                             >
+                              <option value="">待分工</option>
+                              {item.responsibleDepartment && !departments.includes(item.responsibleDepartment) ? <option>{item.responsibleDepartment}</option> : null}
                               {departments.map((department) => <option key={department}>{department}</option>)}
                             </select>
                             <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 size-3 text-[#8d9691]" />
                           </div>
                           <p className="mt-1.5 text-[9px] text-[#929c97]">
-                            系统建议：{item.suggestedDepartment}
+                            {item.suggestedDepartment ? `原建议：${item.suggestedDepartment}` : "按资料任务分工"}
                             {wasAdjusted ? <span className="ml-1 text-[#ad7424]">· 已人工调整</span> : null}
                           </p>
                         </td>
@@ -341,7 +343,7 @@ export function StepFour({ initialFactId }: { initialFactId?: string }) {
                             {item.collectionMethod === "现有Excel" ? "沿用现有 Excel" : item.collectionMethod}
                           </span>
                         </td>
-                        <td className="px-4 py-4 align-top text-[11px] text-[#66736c]">{item.dueDate.slice(5).replace("-", ".")}</td>
+                        <td className="px-4 py-4 align-top text-[11px] text-[#66736c]">{item.dueDate ? item.dueDate.slice(5).replace("-", ".") : "—"}</td>
                         <td className="px-4 py-4 align-top"><StatusBadge tone={statusTone[item.state]} dot>{item.state}</StatusBadge></td>
                         <td className="px-4 py-4 text-right align-top">
                           <button className="rounded-lg p-1.5 text-[#7e8983] hover:bg-[#eef2f0]" aria-label={`${item.itemName}更多操作`}><MoreHorizontal className="size-4" /></button>

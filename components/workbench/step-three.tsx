@@ -1,299 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  BookOpen,
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  GripVertical,
-  Layers3,
-  Link2,
-  ListFilter,
-  PencilLine,
-  Plus,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
-import type { Applicability } from "@/lib/types/esg";
-import { frameworkRequirementNames } from "@/lib/data/mock-data";
+import { useState, type FormEvent } from "react";
+import { BookOpen, ChevronRight, ClipboardList, PencilLine, Plus, X } from "lucide-react";
+import type { DataRequirement } from "@/lib/types/esg";
+import type { ProjectDataRequirement } from "@/lib/types/project-data";
+import { departments } from "@/lib/data/mock-data";
 import { useProjectData } from "@/components/project/project-data-provider";
-import { Notice } from "@/components/ui/notice";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StepFooter } from "@/components/workbench/step-footer";
 import { StepPageHeader } from "@/components/workbench/step-page-header";
 
-type Tab = "requirements" | "outline" | "materials";
+type Tab = "outline" | "materials";
 
-function TabNavigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
-  const { project } = useProjectData();
-  const tabs: Array<{ id: Tab; label: string; detail: string; icon: typeof Layers3 }> = [
-    { id: "requirements", label: "披露要求矩阵", detail: `${project.disclosureRequirements.length} 项要求`, icon: Layers3 },
-    { id: "outline", label: "报告目录", detail: `${project.reportSections.filter((item) => item.sourceState === "active").length} 个章节`, icon: BookOpen },
-    { id: "materials", label: "年度资料清单", detail: `${project.dataRequirements.length} 项资料`, icon: ClipboardList },
-  ];
-  return (
-    <div className="mb-5 overflow-x-auto rounded-xl border border-[#e0e6e2] bg-white p-1.5">
-      <div className="grid min-w-[650px] grid-cols-3 gap-1">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = active === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onChange(tab.id)}
-              className={`flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-left transition ${selected ? "bg-[#edf5f1] text-[#176b52] shadow-[inset_0_0_0_1px_rgba(23,107,82,.06)]" : "text-[#67736d] hover:bg-[#f6f8f7]"}`}
-            >
-              <Icon className="size-4 shrink-0" />
-              <span>
-                <span className="block text-xs font-semibold">{tab.label}</span>
-                <span className={`mt-0.5 block text-[10px] ${selected ? "text-[#548574]" : "text-[#9aa29e]"}`}>{tab.detail}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+const tabs = [
+  { id: "outline", label: "报告目录", icon: BookOpen },
+  { id: "materials", label: "年度资料清单", icon: ClipboardList },
+] as const;
 
-function RequirementsMatrix({ initialRequirementId }: { initialRequirementId?: string }) {
-  const { project, editProject } = useProjectData();
-  const requirements = project.disclosureRequirements;
-  const availableFrameworks = [...new Set([...project.report.frameworks.map((item) => frameworkRequirementNames[item] ?? item), ...requirements.map((item) => item.framework)])];
-  const withoutCatalog = project.report.frameworks.filter((item) => !requirements.some((requirement) => requirement.framework === (frameworkRequirementNames[item] ?? item)));
-  const hasLegacyCass = project.report.frameworks.some((item) => item.startsWith("CASS-ESG")) || requirements.some((item) => item.framework === "CASS-ESG");
-  const sections = project.reportSections.filter((item) => item.sourceState === "active");
-  const topicNames = [...new Set(project.topics.map((topic) => topic.name))];
-  const [search, setSearch] = useState(() => requirements.find((item) => item.id === initialRequirementId)?.code ?? "");
-  const [framework, setFramework] = useState("全部框架");
-
-  useEffect(() => {
-    if (!initialRequirementId) return;
-    const requirement = requirements.find((item) => item.id === initialRequirementId);
-    if (requirement) {
-      requestAnimationFrame(() => document.getElementById(`requirement-${initialRequirementId}`)?.scrollIntoView({ block: "center" }));
-    }
-  }, [initialRequirementId, requirements]);
-
-  const filteredRequirements = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return requirements.filter((item) => {
-      const frameworkMatches = framework === "全部框架" || item.framework === framework;
-      const queryMatches = !query || `${item.framework}${item.code}${item.topic}${item.originalTopic ?? ""}${item.summary}${item.mappedSection}`.toLowerCase().includes(query);
-      return frameworkMatches && queryMatches;
-    });
-  }, [framework, requirements, search]);
-
-  const updateDecision = (id: string, value: Applicability) => {
-    editProject((current) => ({ ...current, disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? { ...item, applicability: value, userConfirmed: false, reviewStatus: "待复核" } : item) }));
-  };
-
-  const confirmDecision = (id: string) => {
-    editProject((current) => ({ ...current, disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? { ...item, userConfirmed: true, reviewStatus: "有效" } : item) }));
-  };
-
-  const updateTopic = (id: string, topic: string) => {
-    editProject((current) => ({
-      ...current,
-      disclosureRequirements: current.disclosureRequirements.map((item) => item.id === id ? {
-        ...item, topic, userConfirmed: false, reviewStatus: "待复核",
-      } : item),
-    }));
-  };
-
-  const updateMapping = (id: string, mappedSection: string) => {
-    editProject((current) => {
-      const nextRequirements = current.disclosureRequirements.map((item) => item.id === id ? { ...item, mappedSection, userConfirmed: false, reviewStatus: "待复核" as const } : item);
-      return {
-        ...current,
-        disclosureRequirements: nextRequirements,
-        reportSections: current.reportSections.map((section) => ({
-          ...section,
-          requirementCount: nextRequirements.filter((item) => item.mappedSection === `${section.order} ${section.title}`).length,
-        })),
-      };
-    });
-  };
-
-  const pendingCount = requirements.filter((item) => !item.userConfirmed || item.reviewStatus !== "有效").length;
-
-  return (
-    <div className="space-y-5 animate-fade-up">
-      <Notice tone="warning" title="适用性须由用户确认">
-        系统仅根据已选框架和企业画像提供适用性建议，不会替企业作出结论；请逐项核对并确认。
-      </Notice>
-      {hasLegacyCass ? <Notice tone="warning" title="旧版 CASS 条款需要复核">旧项目中的 CASS 条款与原有确认、章节映射和正文均已保留，不会转换为北交所条款。请回到 Step 1 重新选择参考框架，并逐条复核历史披露要求。</Notice> : null}
-      {withoutCatalog.length ? <Notice tone="warning" title="部分已选框架尚无经核对条款">{withoutCatalog.join("、")} 当前没有可用的条款库；本矩阵与确认进度仅覆盖已建档条款，不代表这些框架无需披露或已经合规。</Notice> : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "披露要求", value: String(requirements.length), note: `来自 ${new Set(requirements.map((item) => item.framework)).size} 项框架`, icon: Layers3, tone: "bg-[#edf5f1] text-[#176b52]" },
-          { label: "建议适用", value: String(requirements.filter((item) => item.systemSuggestion === "适用").length), note: "系统建议，非最终结论", icon: Sparkles, tone: "bg-violet-50 text-violet-600" },
-          { label: "待用户确认", value: String(pendingCount), note: "需人工作出适用性判断", icon: PencilLine, tone: "bg-amber-50 text-amber-600" },
-          { label: "已映射章节", value: String(requirements.filter((item) => item.mappedSection.trim()).length), note: "可由用户调整对应目录", icon: Link2, tone: "bg-blue-50 text-blue-600" },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center gap-4 rounded-xl border border-[#e3e8e5] bg-white p-4">
-            <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.tone}`}><item.icon className="size-[18px]" /></span>
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2"><span className="text-xl font-semibold text-[#1c2922]">{item.value}</span><span className="text-xs font-semibold text-[#526159]">{item.label}</span></div>
-              <p className="mt-0.5 truncate text-[10px] text-[#8b9590]">{item.note}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <SectionCard
-        title="披露要求矩阵"
-        description="核对每项要求的适用性，并确认与报告章节的映射关系。"
-        flush
-        action={
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#dce3df] bg-white px-3 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f6f8f7]">
-            <Download className="size-3.5" />导出矩阵
-          </button>
-        }
-      >
-        <div className="flex flex-col gap-3 border-b border-[#edf0ee] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="relative w-full sm:max-w-[320px]">
-            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#98a19c]" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索条款、议题或章节"
-              aria-label="搜索披露要求"
-              className="h-9 w-full rounded-lg border border-[#dfe5e1] bg-[#fafcfb] pl-9 pr-3 text-xs text-[#2e3d35] outline-none placeholder:text-[#9ba49f] focus:border-[#6f9f8c] focus:bg-white"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <ListFilter className="size-3.5 text-[#8a948f]" />
-            <select
-              value={framework}
-              onChange={(event) => setFramework(event.target.value)}
-              aria-label="筛选披露框架"
-              className="h-9 rounded-lg border border-[#dfe5e1] bg-white px-3 text-xs text-[#536159] outline-none focus:border-[#6f9f8c]"
-            >
-              <option>全部框架</option>
-              {availableFrameworks.map((item) => <option key={item} value={item}>{item === "CASS-ESG" ? "CASS-ESG（旧项目）" : item}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="scrollbar-subtle overflow-x-auto">
-          <table className="workbench-data-table">
-            <thead className="bg-[#fafbf9] text-[10px] font-semibold uppercase tracking-wide text-[#7a8580]">
-              <tr>
-                <th className="sticky left-0 z-10 w-[125px] border-b border-[#e7ebe9] bg-[#fafbf9] px-6 py-3.5">框架 / 条款</th>
-                <th className="w-[130px] border-b border-[#e7ebe9] px-4 py-3.5">关联议题</th>
-                <th className="border-b border-[#e7ebe9] px-4 py-3.5">披露要求</th>
-                <th className="w-[126px] border-b border-[#e7ebe9] px-4 py-3.5">系统建议</th>
-                <th className="w-[150px] border-b border-[#e7ebe9] px-4 py-3.5">用户确认适用性</th>
-                <th className="w-[180px] border-b border-[#e7ebe9] px-4 py-3.5">对应章节</th>
-                <th className="w-[102px] border-b border-[#e7ebe9] px-4 py-3.5">确认状态</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#edf0ee] text-xs">
-              {filteredRequirements.length === 0 ? <tr><td colSpan={7} className="px-6 py-8 text-center text-[#65736b]">当前筛选没有已建档条款；请核对正式指引后再作披露判断。</td></tr> : null}
-              {filteredRequirements.map((item) => {
-                const confirmed = item.userConfirmed && item.reviewStatus === "有效";
-                return (
-                  <tr id={`requirement-${item.id}`} key={item.id} className={`group scroll-mt-24 hover:bg-[#fbfcfb] ${initialRequirementId === item.id ? "bg-amber-50/60" : ""}`}>
-                    <td className="sticky left-0 z-10 bg-white px-6 py-4 group-hover:bg-[#fbfcfb]">
-                      <span className="font-semibold text-[#26362d]">{item.framework}</span>
-                      <span className="ml-2 text-[11px] text-[#708078]">{item.code}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      {item.originalTopic !== undefined ? (
-                        <div className="flex items-center gap-2">
-                          <select aria-label={`${item.code} 关联议题`} value={item.topic} onChange={(event) => updateTopic(item.id, event.target.value)} className="h-8 min-w-[112px] rounded-lg border border-[#dce3df] bg-white px-2 text-xs text-[#536159]">
-                            <option value="">未关联</option>
-                            {topicNames.map((name) => <option key={name} value={name}>{name}</option>)}
-                          </select>
-                          <span className="text-[#65736b]">原议题：{item.originalTopic}</span>
-                        </div>
-                      ) : <StatusBadge tone="teal">{item.topic || "未关联"}</StatusBadge>}
-                    </td>
-                    <td className="px-4 py-4 leading-5 text-[#4d5b54]">
-                      <span className="block">{item.summary}</span>
-                      {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block text-[#176b52] underline">来源：{item.sourceTitle} · {item.sourceVersion}</a> : null}
-                      {item.framework === "CASS-ESG" ? <span className="mt-1 block text-amber-700">旧项目条款，需人工复核；不会视为北交所要求</span> : null}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-700"><Sparkles className="size-3" />{item.systemSuggestion === "待确认" ? "待用户确认" : `建议${item.systemSuggestion}`}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <select
-                        value={item.applicability}
-                        onChange={(event) => updateDecision(item.id, event.target.value as Applicability)}
-                        aria-label={`${item.code} 用户确认适用性`}
-                        className={`h-8 min-w-[112px] rounded-lg border bg-white px-2 text-[11px] font-medium outline-none ${item.applicability === "待确认" ? "border-amber-200 text-amber-700" : "border-[#dce3df] text-[#3d554a]"}`}
-                      >
-                        <option>适用</option>
-                        <option>不适用</option>
-                        <option>待确认</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="relative">
-                        <Link2 className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-[#176b52]" />
-                        <select aria-label={`${item.code} 对应章节`} value={item.mappedSection} onChange={(event) => updateMapping(item.id, event.target.value)} className="h-8 min-w-[190px] rounded-lg border border-[#dce3df] bg-white pl-7 pr-2 text-xs font-medium text-[#176b52] outline-none focus:border-[#6f9f8c]">
-                          <option value="">未映射</option>
-                          {sections.map((section) => <option key={section.id} value={`${section.order} ${section.title}`}>{section.order} {section.title}</option>)}
-                        </select>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      {confirmed ? (
-                        <StatusBadge tone="green"><Check className="size-3" />已确认</StatusBadge>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          {item.originalTopic !== undefined && item.reviewStatus === "待复核" ? <StatusBadge tone="amber">待复核</StatusBadge> : null}
-                          <button
-                            disabled={item.applicability === "待确认"}
-                            onClick={() => confirmDecision(item.id)}
-                            className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-55"
-                          >
-                            人工确认
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between border-t border-[#edf0ee] px-6 py-3 text-[10px] text-[#88928d]">
-          <span>显示 {filteredRequirements.length} 条 · 当前项目共 {requirements.length} 条</span>
-          <span>适用性结论以用户确认为准</span>
-        </div>
-      </SectionCard>
-    </div>
-  );
-}
-
-function ReportOutline() {
+function ReportOutline({ initialChapterId }: { initialChapterId?: string }) {
   const { project, savedProject, editProject, saveProject, saving } = useProjectData();
-  const sections = project.reportSections;
-  const [selectedId, setSelectedId] = useState("section-4-2");
+  const sections = project.reportSections.filter((section) => section.sourceState !== "upstream-removed");
+  const [selectedId, setSelectedId] = useState(initialChapterId ?? "section-4-2");
   const [addingSection, setAddingSection] = useState(false);
   const [newSection, setNewSection] = useState({ order: "", title: "", level: 1 as 1 | 2, description: "" });
   const [sectionError, setSectionError] = useState("");
   const [editingTopics, setEditingTopics] = useState(false);
-  const [showMappings, setShowMappings] = useState(false);
   const selectedSection = sections.find((item) => item.id === selectedId) ?? sections[0];
   const updateSection = (patch: Partial<typeof selectedSection>) => {
     if (!selectedSection) return;
     editProject((current) => ({ ...current, reportSections: current.reportSections.map((item) => item.id === selectedSection.id ? { ...item, ...patch } : item) }));
   };
-  const selectedMappingKey = `${selectedSection.order} ${selectedSection.title}`;
-  const mappedRequirements = project.disclosureRequirements.filter((item) => item.mappedSection === selectedMappingKey);
 
   function addSection() {
     const order = newSection.order.trim();
@@ -306,7 +43,7 @@ function ReportOutline() {
       setSectionError("章节编号或名称已存在。");
       return;
     }
-    const id = `section-user-${Date.now()}`;
+    const id = `section-user-${globalThis.crypto.randomUUID()}`;
     editProject((current) => ({ ...current, reportSections: [...current.reportSections, { id, order, title, level: newSection.level, description: newSection.description.trim(), topics: [], requirementCount: 0, state: "待完善", revision: 1, sourceState: "active" }] }));
     setSelectedId(id);
     setAddingSection(false);
@@ -315,11 +52,13 @@ function ReportOutline() {
   }
 
   function toggleSectionTopic(topicName: string) {
+    if (!selectedSection) return;
     updateSection({ topics: selectedSection.topics.includes(topicName) ? selectedSection.topics.filter((item) => item !== topicName) : [...selectedSection.topics, topicName] });
   }
 
   function confirmSectionTopics() {
-    const reportSections = sections.map((item) => item.id === selectedSection.id ? { ...item, topicReviewStatus: undefined } : item);
+    if (!selectedSection) return;
+    const reportSections = project.reportSections.map((item) => item.id === selectedSection.id ? { ...item, topicReviewStatus: undefined } : item);
     return saveProject(3, "确认章节议题关联", { ...project, reportSections });
   }
 
@@ -327,25 +66,24 @@ function ReportOutline() {
     <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(480px,1.35fr)] animate-fade-up">
       <SectionCard
         title="报告目录"
-        description="拖动调整章节顺序，选择章节后编辑内容规划。"
+        description="选择章节后编辑内容规划，可通过章节编号调整顺序。"
         flush
         action={<button onClick={() => setAddingSection(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-[11px] font-semibold text-[#176b52]"><Plus className="size-3.5" />新增章节</button>}
       >
         <div className="border-b border-[#edf0ee] px-5 py-3 text-[10px] text-[#84908a]">共 {sections.filter((item) => item.level === 1).length} 个一级章节 · {sections.filter((item) => item.level === 2).length} 个二级章节</div>
         <div className="scrollbar-subtle max-h-[555px] overflow-y-auto p-3">
+          {sections.length === 0 ? <p className="p-3 text-xs text-[#7c8981]">暂无章节，请先新增章节。</p> : null}
           {sections.map((section) => {
-            const active = section.id === selectedId;
+            const active = section.id === selectedSection?.id;
             return (
               <button
                 key={section.id}
                 onClick={() => setSelectedId(section.id)}
                 className={`mb-1 flex w-full items-center gap-2 rounded-xl border px-3 py-3 text-left transition ${section.level === 2 ? "pl-8" : ""} ${active ? "border-[#bbd7cc] bg-[#edf5f1]" : "border-transparent hover:border-[#e4e9e6] hover:bg-[#fafcfb]"}`}
               >
-                <GripVertical className="size-3.5 shrink-0 text-[#b0b8b4]" />
                 <span className={`grid size-7 shrink-0 place-items-center rounded-lg text-[10px] font-semibold ${active ? "bg-[#176b52] text-white" : "bg-[#f0f3f1] text-[#6c7872]"}`}>{section.order}</span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-xs font-semibold ${active ? "text-[#174e3d]" : "text-[#344239]"}`}>{section.title}</span>
-                  <span className="mt-0.5 block text-[9px] text-[#929c97]">{section.requirementCount} 项披露要求</span>
                 </span>
                 <ChevronRight className={`size-3.5 shrink-0 ${active ? "text-[#176b52]" : "text-[#b3bbb7]"}`} />
               </button>
@@ -354,7 +92,7 @@ function ReportOutline() {
         </div>
       </SectionCard>
 
-      <SectionCard
+      {selectedSection ? <SectionCard
         title="章节编辑"
         description={`正在编辑 ${selectedSection.order} ${selectedSection.title}`}
         action={selectedSection.topicReviewStatus ? <StatusBadge tone="amber">待复核</StatusBadge> : <StatusBadge tone={selectedSection.state === "已就绪" ? "green" : "amber"}>{selectedSection.state}</StatusBadge>}
@@ -386,27 +124,10 @@ function ReportOutline() {
             </div>
             {selectedSection.topicReviewStatus ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                <p>上游议题已移除，请复核此章节的议题关联。</p>
+                <p>评估的议题范围、名称或评分有变化，请复核此章节的议题关联。</p>
                 <button type="button" disabled={saving} onClick={() => void confirmSectionTopics()} className="font-semibold hover:underline disabled:opacity-50">确认议题关联</button>
               </div>
             ) : null}
-          </div>
-
-          <div className="rounded-xl border border-[#e5e9e7] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-semibold text-[#425148]">披露要求覆盖</div>
-                <p className="mt-1 text-[10px] text-[#8a948f]">该章节已映射的框架条款</p>
-              </div>
-              <div className="text-right"><span className="text-lg font-semibold text-[#1f3329]">{selectedSection.requirementCount}</span><span className="ml-1 text-[10px] text-[#8a948f]">项</span></div>
-            </div>
-            {selectedSection.requirementCount > 0 ? (
-              <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f2f7f5] px-3 py-2.5 text-[10px] text-[#567066]">
-                <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-[#27825f]" />已与披露要求矩阵同步</span>
-                <button onClick={() => setShowMappings((value) => !value)} className="font-semibold text-[#176b52]">{showMappings ? "收起映射" : "查看映射"}</button>
-              </div>
-            ) : null}
-            {showMappings ? <div className="mt-3 space-y-2">{mappedRequirements.length ? mappedRequirements.map((item) => <div key={item.id} className="rounded-lg border border-[#e4e9e6] bg-[#fafcfb] px-3 py-2 text-[10px] text-[#536159]"><span className="font-semibold text-[#315244]">{item.framework} {item.code}</span><span className="ml-2">{item.summary}</span></div>) : <p className="text-[10px] text-[#8a948f]">当前章节尚无披露要求映射。</p>}</div> : null}
           </div>
 
           <div className="flex justify-end gap-2 border-t border-[#edf0ee] pt-5">
@@ -414,7 +135,7 @@ function ReportOutline() {
             <button disabled={saving} onClick={() => void saveProject(3, `保存章节 ${selectedSection.order}`)} className="h-9 rounded-lg bg-[#176b52] px-4 text-[11px] font-semibold text-white hover:bg-[#105c46] disabled:opacity-50">保存章节</button>
           </div>
         </div>
-      </SectionCard>
+      </SectionCard> : null}
 
       {addingSection ? (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-[#10241c]/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-section-title" onMouseDown={(event) => event.target === event.currentTarget && setAddingSection(false)}>
@@ -429,104 +150,141 @@ function ReportOutline() {
   );
 }
 
-function MaterialsList() {
-  const { project } = useProjectData();
-  const dataRequirements = project.dataRequirements;
-  return (
-    <div className="space-y-5 animate-fade-up">
-      <Notice>
-        本清单由已确认的适用披露要求与报告目录汇总形成。责任部门为系统建议，下一步可由用户进行分工与调整。
-      </Notice>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "本年度所需资料", value: String(dataRequirements.length), note: `覆盖 ${new Set(dataRequirements.map((item) => item.section)).size} 个章节`, icon: ClipboardList },
-          { label: "定量数据", value: String(dataRequirements.filter((item) => item.type === "定量数据").length), note: "含能源、排放与员工指标", icon: FileSpreadsheet },
-          { label: "定性与制度资料", value: String(dataRequirements.filter((item) => item.type !== "定量数据").length), note: "含管理制度、说明与案例", icon: FileText },
-        ].map((item) => (
-          <div key={item.label} className="rounded-xl border border-[#e3e8e5] bg-white p-4">
-            <div className="flex items-start justify-between">
-              <span className="grid size-9 place-items-center rounded-lg bg-[#edf5f1] text-[#176b52]"><item.icon className="size-4" /></span>
-              <span className="text-xl font-semibold text-[#1d2c24]">{item.value}</span>
-            </div>
-            <p className="mt-3 text-xs font-semibold text-[#3b4941]">{item.label}</p>
-            <p className="mt-1 text-[10px] text-[#8a948f]">{item.note}</p>
-          </div>
-        ))}
-      </div>
+type MaterialDraft = Pick<DataRequirement, "itemName" | "section" | "type" | "responsibleDepartment" | "collectionMethod" | "dueDate"> & { id?: string };
 
-      <SectionCard
-        title="本年度 ESG 报告所需资料清单"
-        description="从披露要求自动汇总的资料项；此处不生成独立模板，支持后续沿用企业现有 Excel。"
-        flush
-        action={<button className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#dce3df] bg-white px-3 text-[11px] font-semibold text-[#5a6860] hover:bg-[#f6f8f7]"><Download className="size-3.5" />导出清单</button>}
-      >
-        <div className="scrollbar-subtle overflow-x-auto">
-          <table className="workbench-data-table">
-            <thead className="bg-[#fafbf9] text-[10px] font-semibold text-[#7a8580]">
-              <tr>
-                <th className="border-b border-[#e7ebe9] px-6 py-3.5">资料名称</th>
-                <th className="w-[190px] border-b border-[#e7ebe9] px-4 py-3.5">对应章节</th>
-                <th className="w-[105px] border-b border-[#e7ebe9] px-4 py-3.5">资料类型</th>
-                <th className="w-[135px] border-b border-[#e7ebe9] px-4 py-3.5">建议责任部门</th>
-                <th className="w-[120px] border-b border-[#e7ebe9] px-4 py-3.5">收集方式</th>
-                <th className="w-[90px] border-b border-[#e7ebe9] px-4 py-3.5">清单状态</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#edf0ee] text-xs">
-              {dataRequirements.map((item) => (
-                <tr key={item.id} className="hover:bg-[#fbfcfb]">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-[#304038]">{item.itemName}</div>
-                    <div className="mt-1 text-[10px] text-[#929c97]">资料项 {item.id.replace("data-", "").toUpperCase()}</div>
-                  </td>
-                  <td className="px-4 py-4 text-[11px] text-[#5a6860]">{item.section}</td>
-                  <td className="px-4 py-4"><StatusBadge tone="gray">{item.type}</StatusBadge></td>
-                  <td className="px-4 py-4">
-                    <div className="text-[11px] font-medium text-[#3c4c43]">{item.suggestedDepartment}</div>
-                    <div className="mt-1 inline-flex items-center gap-1 text-[9px] text-violet-600"><Sparkles className="size-2.5" />系统建议</div>
-                  </td>
-                  <td className="px-4 py-4 text-[11px] text-[#5a6860]">{item.collectionMethod}</td>
-                  <td className="px-4 py-4"><StatusBadge tone="green"><Check className="size-3" />已生成</StatusBadge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex flex-col gap-2 border-t border-[#edf0ee] px-6 py-3 text-[10px] text-[#88928d] sm:flex-row sm:items-center sm:justify-between">
-          <span>当前项目共 {dataRequirements.length} 条资料项</span>
-          <span>责任部门将在 Step 4 由用户最终确认</span>
-        </div>
-      </SectionCard>
-    </div>
+const materialTypes: DataRequirement["type"][] = ["定量数据", "定性说明", "制度文件", "案例"];
+const collectionMethods: DataRequirement["collectionMethod"][] = ["文件上传", "在线补充", "现有Excel"];
+const materialField = "h-9 w-full min-w-0 rounded-lg border border-[#dce3df] bg-white px-3 text-xs text-[#36453c] outline-none focus:border-[#6f9f8c]";
+
+function MaterialsList() {
+  const { project, ready, saving, saveProject } = useProjectData();
+  const [draft, setDraft] = useState<MaterialDraft | null>(null);
+  const [error, setError] = useState("");
+  const items = project.dataRequirements;
+  const sectionLabels = [...new Set(project.reportSections.filter((item) => item.sourceState !== "upstream-removed").map((item) => `${item.order} ${item.title}`))];
+
+  function openEditor(item?: ProjectDataRequirement) {
+    setError("");
+    setDraft(item ? {
+      id: item.id, itemName: item.itemName, section: item.section, type: item.type,
+      responsibleDepartment: item.responsibleDepartment, collectionMethod: item.collectionMethod, dueDate: item.dueDate,
+    } : { itemName: "", section: "", type: "定性说明", responsibleDepartment: "", collectionMethod: "文件上传", dueDate: "" });
+  }
+
+  async function saveMaterial(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft || saving || !ready) return;
+    const { id, ...fields } = draft;
+    const itemName = fields.itemName.trim();
+    if (!itemName) { setError("请填写资料名称。"); return; }
+    const existing = items.find((item) => item.id === id);
+    const suggestedDepartment = existing?.suggestedDepartment ?? "";
+    const state = existing?.state ?? "待分工";
+    const next: ProjectDataRequirement = {
+      ...existing, ...fields, itemName, id: existing?.id ?? `data-user-${globalThis.crypto.randomUUID()}`,
+      suggestedDepartment, adjustedByUser: Boolean(fields.responsibleDepartment && fields.responsibleDepartment !== suggestedDepartment),
+      state: state === "待分工" && fields.responsibleDepartment ? "待收集" : state,
+      revision: existing?.revision ?? 1, reviewStatus: existing?.reviewStatus ?? "待复核",
+    };
+    const dataRequirements = existing ? items.map((item) => item.id === existing.id ? next : item) : [...items, next];
+    setError("");
+    if (await saveProject(3, "保存年度资料清单", { ...project, dataRequirements })) setDraft(null);
+    else setError("资料项未保存，请查看项目提示后重试。");
+  }
+
+  return (
+    <SectionCard
+      title="年度资料清单"
+      description="按报告目录整理本年度所需资料。保存后，Step 4 会读取这些资料任务。"
+      action={<button type="button" disabled={!ready || saving || Boolean(draft)} onClick={() => openEditor()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#edf5f1] px-3 text-xs font-semibold text-[#176b52] disabled:opacity-50"><Plus className="size-4" />新增资料项</button>}
+      flush
+    >
+      {draft ? (
+        <form onSubmit={(event) => void saveMaterial(event)} aria-label={draft.id ? "编辑资料项" : "新增资料项"} className="border-b border-[#e5e9e7] bg-[#f8fbf9] p-5 sm:p-6">
+          <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1">
+              <label htmlFor="material-name" className="block text-xs font-semibold">资料名称</label>
+              <input id="material-name" required value={draft.itemName} onChange={(event) => setDraft({ ...draft, itemName: event.target.value })} className={materialField} />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="material-section" className="block text-xs font-semibold">对应章节</label>
+              <select id="material-section" value={draft.section} onChange={(event) => setDraft({ ...draft, section: event.target.value })} className={materialField}>
+                <option value="">未关联章节</option>
+                {draft.section && !sectionLabels.includes(draft.section) ? <option value={draft.section}>{draft.section}（历史记录）</option> : null}
+                {sectionLabels.map((label) => <option key={label}>{label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="material-type" className="block text-xs font-semibold">资料类型</label>
+              <select id="material-type" value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as DataRequirement["type"] })} className={materialField}>
+                {materialTypes.map((type) => <option key={type}>{type}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="material-department" className="block text-xs font-semibold">责任部门</label>
+              <select id="material-department" value={draft.responsibleDepartment} onChange={(event) => setDraft({ ...draft, responsibleDepartment: event.target.value })} className={materialField}>
+                <option value="">待分工</option>
+                {draft.responsibleDepartment && !departments.includes(draft.responsibleDepartment) ? <option>{draft.responsibleDepartment}</option> : null}
+                {departments.map((department) => <option key={department}>{department}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="material-method" className="block text-xs font-semibold">收集方式</label>
+              <select id="material-method" value={draft.collectionMethod} onChange={(event) => setDraft({ ...draft, collectionMethod: event.target.value as DataRequirement["collectionMethod"] })} className={materialField}>
+                {collectionMethods.map((method) => <option key={method}>{method}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="material-due" className="block text-xs font-semibold">截止日期</label>
+              <input id="material-due" type="date" value={draft.dueDate} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} className={materialField} />
+            </div>
+          </fieldset>
+          {error ? <p role="alert" className="mt-3 text-xs text-rose-700">{error}</p> : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" disabled={saving} onClick={() => setDraft(null)} className="h-9 rounded-lg border border-[#dce3df] bg-white px-4 text-xs font-semibold text-[#5a6860] disabled:opacity-50">取消</button>
+            <button type="submit" disabled={saving} className="h-9 rounded-lg bg-[#176b52] px-4 text-xs font-semibold text-white disabled:opacity-50">{saving ? "保存中…" : "保存资料项"}</button>
+          </div>
+        </form>
+      ) : null}
+      <div className="scrollbar-subtle overflow-x-auto">
+        <table className="workbench-data-table">
+          <thead className="bg-[#fafbf9] text-[#536159]"><tr>
+            {['资料名称', '对应章节', '资料类型', '责任部门', '收集方式', '截止日期', '状态', '操作'].map((label) => <th key={label} scope="col" className="border-b border-[#e7ebe9] px-4 py-3.5">{label}</th>)}
+          </tr></thead>
+          <tbody className="divide-y divide-[#edf0ee] text-[#4d5b54]">
+            {items.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center">暂无资料项，可按报告需要新增。</td></tr> : null}
+            {items.map((item) => <tr key={item.id}>
+              <td className="px-4 py-4 font-semibold">{item.itemName}</td>
+              <td className="px-4 py-4">{item.section || "未关联章节"}</td>
+              <td className="px-4 py-4">{item.type}</td>
+              <td className="px-4 py-4">{item.responsibleDepartment || "待分工"}</td>
+              <td className="px-4 py-4">{item.collectionMethod}</td>
+              <td className="px-4 py-4 tabular-nums">{item.dueDate || "—"}</td>
+              <td className="px-4 py-4"><StatusBadge tone="gray">{item.state}</StatusBadge></td>
+              <td className="px-4 py-4"><button type="button" disabled={saving || Boolean(draft)} aria-label={`编辑${item.itemName}`} onClick={() => openEditor(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dce3df] px-3 py-1.5 text-xs font-semibold text-[#176b52] disabled:opacity-50"><PencilLine className="size-3.5" />编辑</button></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
   );
 }
 
-export function StepThree({ initialRequirementId }: { initialRequirementId?: string }) {
-  const [activeTab, setActiveTab] = useState<Tab>(initialRequirementId ? "requirements" : "requirements");
-  const { project } = useProjectData();
-  const requirementCount = project.disclosureRequirements.length;
-  const confirmedCount = project.disclosureRequirements.filter((item) => item.userConfirmed && item.reviewStatus === "有效").length;
-  const completion = requirementCount ? Math.round(confirmedCount / requirementCount * 100) : 0;
-  const outlineNeedsReview = project.reportSections.some((item) => item.topicReviewStatus === "待复核");
+export function StepThree({ initialChapterId }: { initialChapterId?: string }) {
+  const { saving } = useProjectData();
+  const [activeTab, setActiveTab] = useState<Tab>("outline");
 
   return (
     <>
       <StepPageHeader
-        eyebrow="Step 3 · 框架与大纲"
-        title="构建披露框架与报告大纲"
-        description="将已选披露框架映射到报告章节，逐项确认适用性，并形成可执行的本年度资料清单。"
-        completed={requirementCount > 0 && confirmedCount === requirementCount && !outlineNeedsReview}
-        action={
-          <div className="rounded-xl border border-[#dfe6e2] bg-white px-4 py-3 text-right">
-            <div className="text-[10px] text-[#8a948f]">已建档条款确认度</div>
-            <div className="mt-0.5 text-lg font-semibold tabular-nums text-[#176b52]">{completion}%</div>
-          </div>
-        }
+        eyebrow="Step 3 · 大纲与资料"
+        title="构建报告大纲与年度资料清单"
+        description="组织报告章节、关联重要性议题，并维护本年度需要收集的资料。"
       />
-      <TabNavigation active={activeTab} onChange={setActiveTab} />
-      {activeTab === "requirements" ? <RequirementsMatrix initialRequirementId={initialRequirementId} /> : null}
-      {activeTab === "outline" ? <ReportOutline /> : null}
-      {activeTab === "materials" ? <MaterialsList /> : null}
+      <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl border border-[#e0e6e2] bg-white p-1.5" aria-label="Step 3 模块" role="group">
+        {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={id === activeTab} disabled={saving} onClick={() => setActiveTab(id)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold ${id === activeTab ? "bg-[#edf5f1] text-[#176b52]" : "text-[#67736d] hover:bg-[#f6f8f7]"}`}><Icon className="size-4" />{label}</button>)}
+      </div>
+      {activeTab === "outline" ? <ReportOutline initialChapterId={initialChapterId} /> : <MaterialsList />}
       <StepFooter currentStep={3} />
     </>
   );

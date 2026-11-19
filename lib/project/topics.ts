@@ -16,8 +16,7 @@ export function describeTopicRemoval(project: ReportProjectData, id: string, sav
   if (!topic) return undefined;
   // Legacy associations are by name. Keep them if another topic still owns that name.
   const sharedName = project.topics.some((item) => item.id !== id && item.name === topic.name);
-  const requirements = sharedName ? [] : project.disclosureRequirements.filter((item) => item.topic === topic.name);
-  const sections = sharedName ? [] : project.reportSections.filter((item) => item.topics.includes(topic.name));
+  const sections = sharedName ? [] : project.reportSections.filter((item) => item.sourceState !== "upstream-removed" && item.topics.includes(topic.name));
   const included = project.materiality.includedTopicIds.includes(id);
   const scored = topic.financialScore >= 1 || topic.impactScore >= 1;
   const savedTopic = savedProject.topics.find((item) => item.id === id);
@@ -26,6 +25,6 @@ export function describeTopicRemoval(project: ReportProjectData, id: string, sav
     ? { topic: savedTopic, assessment: savedProject.materiality }
     : undefined;
   const assessmentNeedsReview = included || scored || topic.confirmed || Boolean(lastSavedConfirmation)
-    || requirements.length > 0 || sections.length > 0;
-  return { topic, requirements, sections, included, lastSavedConfirmation, assessmentNeedsReview };
+    || sections.length > 0;
+  return { topic, sections, included, lastSavedConfirmation, assessmentNeedsReview };
 }

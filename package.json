@@ -19,6 +19,8 @@
     "test:step1-3:browser": "node scripts/step1-3-ui-materiality-regression.cjs",
     "test:step2:topic-deletion": "node --import tsx --test --test-isolation=none scripts/step2-topic-deletion.test.ts",
     "test:step2:topic-deletion:browser": "node scripts/step2-topic-deletion-browser.cjs",
+    "test:step3:planning": "node --import tsx --test --test-isolation=none scripts/step3-planning.test.ts",
+    "test:step3:planning:browser": "node scripts/step3-planning-browser.cjs",
     "test:phase1:browser": "node scripts/phase1-local-persistence-regression.cjs",
     "test:phase2": "node --import tsx scripts/phase2-document-parsing-regression.ts",
     "test:phase2:browser": "node scripts/phase2-document-parsing-browser.cjs",

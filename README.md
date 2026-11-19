@@ -168,7 +168,7 @@ Step 5 类型位于 `lib/types/writing.ts`，核心关联为：
 ContentBlock.revision ──> ChapterVersion + ReviewStatus
 ```
 
-内容块保存稳定 `id`、所属章节、披露映射、事实引用快照、原始来源、修订号和审校状态。事实修订号变化或失去人工确认时，已有引用会转为“待复核/待更新”，披露覆盖状态同步转为“待核验”。
+内容块保存稳定 `id`、所属章节、事实引用快照、原始来源、修订号和审校状态。事实修订号变化或失去人工确认时，已有引用会转为“待复核/待更新”。旧项目的披露映射随项目备份保留。
 
 Step 6 类型位于 `lib/types/presentation.ts`，核心关联为：
 
@@ -186,7 +186,7 @@ ReportPresentationState ──> ReportTheme / layout / charts / preview
 Step 7 类型位于 `lib/types/quality.ts`，核心关联为：
 
 ```text
-DisclosureRequirement ──> WritingChapter / ContentBlock ──> FactCitation
+ReportSection ──> WritingChapter / ContentBlock ──> FactCitation
 WritingFact / MetricObservation ──> SourceReference
 ContentBlock(chart) ──> ReportChart / PreviewPage
 上述稳定 ID ──> QualityIssue ──> QualityCheckRun / QualityActionRecord
@@ -217,9 +217,8 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 
 - 企业基本信息和 GB/T 4754 行业信息
 - A 股、H 股、A+H、未上市身份选择
-- 披露框架多选、报告边界、边界说明
+- 披露框架多选作为编制参考，设置报告边界和边界说明
 - 历史报告上传区及文件记录
-- 按 E/S/G 分类的初始议题池与调整交互
 
 ### Step 2：ESG 实质性议题评估
 
@@ -229,13 +228,10 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 双重重要性矩阵
 - 重点议题结果及用户确认交互
 
-### Step 3：构建披露框架与报告大纲
+### Step 3：构建报告大纲与年度资料清单
 
-- 披露要求矩阵、框架筛选和搜索
-- 系统建议与用户适用性确认分离
-- 报告目录、章节选择与章节编辑区
-- 本年度 ESG 报告所需资料清单
-- 企业现有 Excel 收集方式展示
+- 默认打开报告目录，支持新增章节、编辑编号和说明、关联 Step 2 议题
+- 年度资料清单支持新增和编辑，保存后同步到 Step 4 资料任务和 Step 5 章节资料包
 
 ### Step 4：ESG 资料收集、汇总与规整
 
@@ -254,7 +250,7 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 三栏工作台：章节树、结构化内容编辑器、可折叠章节资料包
 - 标题、富文本段落、指标表格、案例、图表占位、待处理事项六类真实可编辑内容块
 - 保存、撤销、重做、章节状态、独立审校状态、本地版本记录与版本恢复
-- 披露要求映射的添加/解除，以及“部分覆盖、已覆盖、待核验”状态调整
+- 查看章节资料任务及 Step 4 收集的关联资料
 - 企业事实/ESG 指标引用、解除引用、人工确认、来源文件与具体定位查看
 - 案例、制度和历史资料的人工确认状态随本地草稿持久化
 - 事实来源修订后的正文“待复核/待更新”联动
@@ -279,12 +275,12 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 预览内容保留 `blockId`；正文可返回 Step 5 精确编辑位置，图表占位可直接进入配置
 - 主题、图表、版式及预览偏好保存到同一项目 Repository，刷新后恢复
 
-### Step 7：报告质量与披露完整性检查
+### Step 7：报告质量检查
 
 - 三栏工作台：检查分类与筛选、可搜索排序的问题清单、证据和处理详情
-- 顶部概览：披露覆盖、问题严重程度、解决/复检/例外数量、检查版本和定稿准备状态
-- 五类真实确定性规则：披露完整性、事实与来源、数据一致性、Writing Policy、版式与结构
-- 覆盖状态区分“未覆盖、部分覆盖、待核验、已核验覆盖”；正文映射存在不等于充分披露
+- 顶部概览展示问题严重程度、解决/复检/例外数量、检查版本和定稿准备状态
+- 确定性规则覆盖事实与来源、数据一致性、Writing Policy、版式与结构
+- 旧版条款问题和覆盖记录随项目存档保留，不计入当前质量门禁。旧规则的全面检查需重新运行
 - 事实存在性、人工确认、引用修订、报告期、来源文件和具体位置检查
 - 仅在指标定义、单位、期间和已核验统计边界均一致时自动判断数据冲突
 - 表格未建立指标级引用时明确标记“无法自动核验”，不虚构匹配结果
@@ -292,7 +288,7 @@ Step 8 类型位于 `lib/types/finalization.ts`。`FinalReportVersion` 保存 St
 - 复用 Writing Policy 的可复现词语规则；命中词语只生成带上下文的人工复核提示
 - 稳定问题身份、完整检查/章节检查/修改项复检、检查历史和处理记录
 - “认可问题、返回修改、标记已处理、接受例外、重新检查”流程；阻断问题不能普通例外绕过
-- 通过稳定 ID 定位 Step 3 披露要求、Step 4 事实、Step 5 内容块和 Step 6 图表
+- 通过稳定 ID 定位 Step 3 章节、Step 4 事实、Step 5 内容块和 Step 6 图表
 - 上游保存后旧检查结果进入待复检，正文、来源、图表快照和旧问题历史均保留
 - 内部质量报告摘要和定稿准备状态只代表平台流程，不构成合规认证或外部鉴证
 
@@ -336,9 +332,9 @@ Step 5 的真实 AI 弹窗保留原文与建议对照，接受前必须勾选人
                                                       ↓
 Step 1 企业画像 / 年度 / 框架               Fact / Metric / Resource
              ↓
-Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需求
+Step 2 议题与人工确认 ──→ Step 3 目录 / 年度资料清单
                                       ↓                 ↓
-                          Step 5 章节与披露映射 ←── Step 4 事实 / 指标 / 来源
+                          Step 5 章节与资料包 ←── Step 4 资料任务 / 事实 / 来源
                                       ↓                         ↓
                               内容块 / 引用 / 版本 ──→ Step 6 页面 / 图表 / 版式
                                       └──────────────→ Step 7 规则 / 问题 / 复检
@@ -347,7 +343,7 @@ Step 2 议题与人工确认 ──→ Step 3 披露要求 / 目录 / 资料需�
 ```
 
 - 所有跨步骤对象使用稳定 ID；保存时对比上一已保存快照并生成 `ChangeImpact`。
-- Step 3 章节名称和顺序会同步到 Step 5；被上游移除的章节仍保留正文并标记“上游已移除”。
+- Step 3 章节名称和顺序会同步到资料清单与 Step 5 目录。被上游移除的章节保留正文及历史版本。
 - Step 4 事实值、确认状态或来源修订变化后，引用块进入“待复核/待更新”，正文文本不变。
 - Step 5 仍保留章节版本；旧键 `esg:{projectId}:writing:v1` 可读入新快照，旧键不会被删除或覆盖。
 - Step 6 的图表保存指标版本快照；上游数值变化只标记“需更新”，不会覆盖旧图或 Step 5 正文。
